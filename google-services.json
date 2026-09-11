@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "152654631502",
+    "project_id": "pitch-booking-fc1fd",
+    "storage_bucket": "pitch-booking-fc1fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:152654631502:android:e78e9511c0d2c66a56691f",
+        "android_client_info": {
+          "package_name": "com.example.football"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPrXRHlL1XlJLe2H0z_E2SLo8PO0C4Eyw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
