@@ -34,7 +34,7 @@ class PitchBookingApp extends StatelessWidget {
           surface: const Color(0xFFF8FBF8),
         ),
         scaffoldBackgroundColor: const Color(0xFFF4F7F4),
-        cardTheme: CardThemeData(
+        cardTheme: CardTheme(
           elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: Colors.white,
