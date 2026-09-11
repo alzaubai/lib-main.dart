@@ -26,7 +26,15 @@ jobs:
           cache: true
 
       - name: Recreate Android Project Files
-        run: flutter create . --platforms=android
+        run: |
+          flutter create . --platforms=android --org com.example
+          mkdir -p android/app
+          cp google-services.json android/app/
+
+      - name: Configure Firebase Android Gradle
+        run: |
+          sed -i '/plugins {/a \    id "com.google.gms.google-services" version "4.4.1" apply false' android/settings.gradle || true
+          echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
       - name: Install dependencies
         run: flutter pub get
