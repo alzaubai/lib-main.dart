@@ -29,15 +29,13 @@ jobs:
       - name: Create Clean Android Platform
         run: |
           rm -rf android
-          flutter create . --platforms=android --org com.example
+          flutter create . --project-name football --platforms=android --org com.example
           mkdir -p android/app
           cp google-services.json android/app/
 
       - name: Inject Firebase Gradle Config
         run: |
-          # إضافة إضافة google-services إلى android/settings.gradle
           sed -i '/id "org.jetbrains.kotlin.android"/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
-          # إضافة تفعيل الإضافة داخل android/app/build.gradle
           sed -i '/id "dev.flutter.flutter-gradle-plugin"/a \    id "com.google.gms.google-services"' android/app/build.gradle
 
       - name: Install dependencies
