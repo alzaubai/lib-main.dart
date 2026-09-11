@@ -22,19 +22,23 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.24.5'
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android Project Files
+      - name: Create Clean Android Platform
         run: |
+          rm -rf android
           flutter create . --platforms=android --org com.example
           mkdir -p android/app
           cp google-services.json android/app/
 
-      - name: Configure Firebase Android Gradle
+      - name: Inject Firebase Gradle Config
         run: |
-          sed -i '/plugins {/a \    id "com.google.gms.google-services" version "4.4.1" apply false' android/settings.gradle || true
-          echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
+          # إضافة إضافة google-services إلى android/settings.gradle
+          sed -i '/id "org.jetbrains.kotlin.android"/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
+          # إضافة تفعيل الإضافة داخل android/app/build.gradle
+          sed -i '/id "dev.flutter.flutter-gradle-plugin"/a \    id "com.google.gms.google-services"' android/app/build.gradle
 
       - name: Install dependencies
         run: flutter pub get
