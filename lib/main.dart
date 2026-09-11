@@ -23,7 +23,7 @@ class PitchBookingApp extends StatelessWidget {
           surface: const Color(0xFFF8FBF8),
         ),
         scaffoldBackgroundColor: const Color(0xFFF4F7F4),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: Colors.white,
@@ -74,43 +74,8 @@ class PitchHomeScreen extends StatefulWidget {
 }
 
 class _PitchHomeScreenState extends State<PitchHomeScreen> {
-  // قائمة الحجوزات الأولية التجريبية
-  final List<MatchBooking> _bookings = [
-    MatchBooking(
-      id: '1',
-      teamOne: 'نجوم بغداد',
-      teamTwo: 'أسود الرافدين',
-      date: DateTime.now(),
-      startTime: const TimeOfDay(hour: 19, minute: 0),
-      endTime: const TimeOfDay(hour: 20, minute: 30),
-      phone: '07701234567',
-      price: 35000,
-      notes: 'دفعوا عربون 10 آلاف',
-      status: MatchStatus.upcoming,
-    ),
-    MatchBooking(
-      id: '2',
-      teamOne: 'فريق الصقور',
-      teamTwo: 'شباب الكرخ',
-      date: DateTime.now(),
-      startTime: const TimeOfDay(hour: 21, minute: 0),
-      endTime: const TimeOfDay(hour: 22, minute: 30),
-      phone: '07809876543',
-      price: 35000,
-      status: MatchStatus.upcoming,
-    ),
-    MatchBooking(
-      id: '3',
-      teamOne: 'أبطال الدورة',
-      teamTwo: 'شباب الجامعة',
-      date: DateTime.now().add(const Duration(days: 1)),
-      startTime: const TimeOfDay(hour: 18, minute: 0),
-      endTime: const TimeOfDay(hour: 19, minute: 30),
-      phone: '07505554433',
-      price: 40000,
-      status: MatchStatus.upcoming,
-    ),
-  ];
+  // قائمة الحجوزات فارغة للبدء من جديد بدون مباريات وهمية
+  final List<MatchBooking> _bookings = [];
 
   String _filter = 'الكل'; // 'الكل' | 'اليوم' | 'القادمة' | 'المكتملة'
 
