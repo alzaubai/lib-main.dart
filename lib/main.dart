@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -13,11 +14,12 @@ class PitchBookingApp extends StatelessWidget {
     return MaterialApp(
       title: 'إدارة حجوزات الملعب',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('ar'),
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Tajawal',
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1B5E20), // لون أخضر عشبي رياضي
+          seedColor: const Color(0xFF1B5E20),
           primary: const Color(0xFF2E7D32),
           secondary: const Color(0xFFF57F17),
           surface: const Color(0xFFF8FBF8),
@@ -29,9 +31,8 @@ class PitchBookingApp extends StatelessWidget {
           color: Colors.white,
         ),
       ),
-      // ضبط اتجاه التطبيق كاملاً ليكون من اليمين لليسار
       home: const Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: ui.TextDirection.rtl,
         child: PitchHomeScreen(),
       ),
     );
@@ -74,10 +75,9 @@ class PitchHomeScreen extends StatefulWidget {
 }
 
 class _PitchHomeScreenState extends State<PitchHomeScreen> {
-  // قائمة الحجوزات فارغة للبدء من جديد بدون مباريات وهمية
   final List<MatchBooking> _bookings = [];
 
-  String _filter = 'الكل'; // 'الكل' | 'اليوم' | 'القادمة' | 'المكتملة'
+  String _filter = 'الكل';
 
   List<MatchBooking> get _filteredBookings {
     return _bookings.where((booking) {
@@ -345,8 +345,6 @@ class _PitchHomeScreenState extends State<PitchHomeScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-
-              // بطاقة الخصمين
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -387,8 +385,6 @@ class _PitchHomeScreenState extends State<PitchHomeScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-
-              // التوقيت والسعر
               Row(
                 children: [
                   const Icon(Icons.access_time_rounded, size: 18, color: Colors.blueGrey),
@@ -409,7 +405,6 @@ class _PitchHomeScreenState extends State<PitchHomeScreen> {
                     ),
                 ],
               ),
-
               if (match.phone != null && match.phone!.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Row(
@@ -423,7 +418,6 @@ class _PitchHomeScreenState extends State<PitchHomeScreen> {
                   ],
                 ),
               ],
-
               if (match.notes != null && match.notes!.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Row(
@@ -441,10 +435,7 @@ class _PitchHomeScreenState extends State<PitchHomeScreen> {
                   ],
                 ),
               ],
-
               const Divider(height: 20),
-
-              // الإجراءات (تغيير الحالة وحذف)
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -499,7 +490,7 @@ class _PitchHomeScreenState extends State<PitchHomeScreen> {
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
           title: const Text('حذف الحجز'),
           content: Text('هل أنت متأكد من حذف مباراة (${match.teamOne} ضد ${match.teamTwo})؟'),
@@ -529,7 +520,7 @@ class _PitchHomeScreenState extends State<PitchHomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: ui.TextDirection.rtl,
           child: AddBookingBottomSheet(onAdd: _addNewBooking),
         );
       },
@@ -655,8 +646,6 @@ class _AddBookingBottomSheetState extends State<AddBookingBottomSheet> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
               ),
               const SizedBox(height: 16),
-
-              // أسماء الفريقين
               Row(
                 children: [
                   Expanded(
@@ -688,8 +677,6 @@ class _AddBookingBottomSheetState extends State<AddBookingBottomSheet> {
                 ],
               ),
               const SizedBox(height: 14),
-
-              // التاريخ
               InkWell(
                 onTap: _pickDate,
                 borderRadius: BorderRadius.circular(12),
@@ -714,8 +701,6 @@ class _AddBookingBottomSheetState extends State<AddBookingBottomSheet> {
                 ),
               ),
               const SizedBox(height: 14),
-
-              // التوقيت
               Row(
                 children: [
                   Expanded(
@@ -762,8 +747,6 @@ class _AddBookingBottomSheetState extends State<AddBookingBottomSheet> {
                 ],
               ),
               const SizedBox(height: 14),
-
-              // الهاتف والمبلغ
               Row(
                 children: [
                   Expanded(
@@ -792,8 +775,6 @@ class _AddBookingBottomSheetState extends State<AddBookingBottomSheet> {
                 ],
               ),
               const SizedBox(height: 14),
-
-              // الملاحظات
               TextFormField(
                 controller: _notesController,
                 maxLines: 2,
@@ -804,8 +785,6 @@ class _AddBookingBottomSheetState extends State<AddBookingBottomSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // زر الحفظ
               SizedBox(
                 width: double.infinity,
                 height: 50,
