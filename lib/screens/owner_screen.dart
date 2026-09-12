@@ -7,7 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
 import 'tournaments/tournament_screen.dart';
-import 'owner_analytics_screen.dart';
+import 'owner/owner_analytics_screen.dart';
 
 class OwnerDashboardScreen extends StatefulWidget {
   final String pitchName;
