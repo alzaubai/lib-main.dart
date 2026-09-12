@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
+import 'tournaments/tournament_screen.dart';
 
 class PlayerMainScreen extends StatefulWidget {
   final String playerPhone;
@@ -150,6 +151,23 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
         title: const Text('ملاعب كرة القدم', style: TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.emoji_events, color: Colors.amberAccent),
+            tooltip: 'البطولات الشعبية المتاحة',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TournamentScreen(
+                    userPhone: widget.playerPhone,
+                    isOwner: false,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
