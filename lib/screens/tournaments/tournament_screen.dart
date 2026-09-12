@@ -184,8 +184,8 @@ class _TournamentScreenState extends State<TournamentScreen> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800),
-                    onPressed: () => _startTournamentAndSchedule(doc.reference, data),
-                    child: const Text('إطلاق القرعة وتثبيت المواعيد 📅', style: TextStyle(color: Colors.white)),
+                    onPressed: () => _startTournamentMatches(doc.reference, data),
+                    child: const Text('إطلاق القرعة 🏆', style: TextStyle(color: Colors.white)),
                   ),
                 ],
                 TextButton.icon(
@@ -263,7 +263,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('إطلاق بطولة جديدة وجدولتها 🏆', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                          Text('حدد المواعيد لربطها بجدول الحجوزات تلقائياً', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text('حدد المواعيد لحجز الساعات في الجدول فوراً', style: TextStyle(fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                     ],
@@ -307,7 +307,6 @@ class _TournamentScreenState extends State<TournamentScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // تاريخ ووقت الانطلاق
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(color: const Color(0xFFF1F8F1), borderRadius: BorderRadius.circular(14)),
@@ -419,15 +418,16 @@ class _TournamentScreenState extends State<TournamentScreen> {
                                 final pName = widget.pitchName ?? 'ملعب عام';
                                 final fee = double.tryParse(feeCtrl.text.trim()) ?? 25000.0;
                                 final prize = prizeCtrl.text.trim().isEmpty ? 'كأس وميداليات' : prizeCtrl.text.trim();
+                                final sDateFormatted = DateFormat('yyyy-MM-dd').format(startDate);
 
-                                await _firestore.collection('tournaments').add({
+                                final tourDoc = await _firestore.collection('tournaments').add({
                                   'name': name,
                                   'prize': prize,
                                   'fee': fee,
                                   'maxTeams': maxTeams,
                                   'tournamentSystem': tournamentSystem,
                                   'pitchName': pName,
-                                  'startDate': DateFormat('yyyy-MM-dd').format(startDate),
+                                  'startDate': sDateFormatted,
                                   'startTimeSlot': startTimeSlot,
                                   'matchesPerDay': matchesPerDay,
                                   'teams': [],
@@ -437,9 +437,45 @@ class _TournamentScreenState extends State<TournamentScreen> {
                                   'createdAt': FieldValue.serverTimestamp(),
                                 });
 
+                                // حجز المواعيد مبدئياً فور إنشاء البطولة لتظهر في جدول المالك وتُقفل عند الكباتن
+                                final List<String> slotsPool = ['07:00 م', '08:00 م', '09:00 م', '10:00 م', '11:00 م', '12:00 ص'];
+                                int slotIndexBase = slotsPool.indexOf(startTimeSlot);
+                                if (slotIndexBase == -1) slotIndexBase = 1;
+
+                                DateTime currentDay = startDate;
+                                int totalFirstRoundMatches = maxTeams ~/ 2;
+                                int matchCounter = 0;
+
+                                for (int m = 0; m < totalFirstRoundMatches; m++) {
+                                  String sTime = slotsPool[(slotIndexBase + matchCounter) % slotsPool.length];
+                                  String eTime = slotsPool[(slotIndexBase + matchCounter + 1) % slotsPool.length];
+                                  String dayStr = DateFormat('yyyy-MM-dd').format(currentDay);
+
+                                  await _firestore.collection('bookings').add({
+                                    'pitchName': pName,
+                                    'tournamentId': tourDoc.id,
+                                    'teamOne': 'مباراة بطولة (${m + 1})',
+                                    'teamTwo': name,
+                                    'date': dayStr,
+                                    'startTime': sTime,
+                                    'endTime': eTime,
+                                    'price': 0.0,
+                                    'status': 'tournament_match',
+                                    'createdAt': FieldValue.serverTimestamp(),
+                                  });
+
+                                  matchCounter++;
+                                  if (matchCounter >= matchesPerDay) {
+                                    matchCounter = 0;
+                                    currentDay = currentDay.add(const Duration(days: 1));
+                                  }
+                                }
+
                                 if (mounted) {
                                   Navigator.pop(ctx);
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نشر البطولة وحفظ جدولها بنجاح 🏆'), backgroundColor: Colors.green));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('تم نشر البطولة وتثبيت ساعاتها بالجدول 🏆'), backgroundColor: Colors.green),
+                                  );
                                 }
                               } catch (e) {
                                 setModalState(() => isSubmitting = false);
@@ -447,7 +483,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
                             },
                       child: isSubmitting
                           ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text('نشر البطولة وفتح التسجيل 🚀', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                          : const Text('نشر البطولة وتثبيت المواعيد 🚀', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                     ),
                   ),
                 ],
@@ -490,32 +526,28 @@ class _TournamentScreenState extends State<TournamentScreen> {
     );
   }
 
-  // إطلاق القرعة وحجز الساعات تلقائياً في مجموعة bookings
-  Future<void> _startTournamentAndSchedule(DocumentReference docRef, Map<String, dynamic> data) async {
+  Future<void> _startTournamentMatches(DocumentReference docRef, Map<String, dynamic> data) async {
     final teams = List<String>.from(data['teams'] ?? []);
     if (teams.length < 2) return;
 
     teams.shuffle();
     final pName = data['pitchName'] ?? '';
     final tourName = data['name'] ?? 'البطولة';
-    final sDateStr = data['startDate'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final matchesPerDay = (data['matchesPerDay'] as num?)?.toInt() ?? 2;
-    DateTime currentMatchDay = DateTime.tryParse(sDateStr) ?? DateTime.now();
 
-    final List<String> slotsPool = ['07:00 م', '08:00 م', '09:00 م', '10:00 م', '11:00 م', '12:00 ص'];
-    int slotIndexBase = 1; // 08:00 م
+    // جلب حجوزات البطولة السابقة لتحديث أسماء الفرق الحقيقية
+    final prevBookings = await _firestore
+        .collection('bookings')
+        .where('pitchName', isEqualTo: pName)
+        .where('tournamentId', isEqualTo: docRef.id)
+        .get();
 
     List<Map<String, dynamic>> matches = [];
-    int matchCounterOnDay = 0;
+    int matchIdx = 0;
 
     for (int i = 0; i < teams.length; i += 2) {
       if (i + 1 < teams.length) {
         final t1 = teams[i];
         final t2 = teams[i + 1];
-
-        String sTime = slotsPool[(slotIndexBase + matchCounterOnDay) % slotsPool.length];
-        String eTime = slotsPool[(slotIndexBase + matchCounterOnDay + 1) % slotsPool.length];
-        String mDate = DateFormat('yyyy-MM-dd').format(currentMatchDay);
 
         matches.add({
           'team1': t1,
@@ -524,28 +556,15 @@ class _TournamentScreenState extends State<TournamentScreen> {
           'score2': null,
           'winner': '',
           'round': teams.length == 16 ? 'ثمن النهائي' : (teams.length == 8 ? 'ربع النهائي' : 'نصف النهائي'),
-          'matchDate': mDate,
-          'matchSlot': '$sTime - $eTime',
         });
 
-        // حجز الموعد تلقائياً في السيرفر ليظهر أحمر للكباتن
-        await _firestore.collection('bookings').add({
-          'pitchName': pName,
-          'teamOne': '$t1 (🏆 $tourName)',
-          'teamTwo': t2,
-          'date': mDate,
-          'startTime': sTime,
-          'endTime': eTime,
-          'price': 0.0,
-          'status': 'tournament_match', // حالة مميزة للبطولة
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        matchCounterOnDay++;
-        if (matchCounterOnDay >= matchesPerDay) {
-          matchCounterOnDay = 0;
-          currentMatchDay = currentMatchDay.add(const Duration(days: 1));
+        if (matchIdx < prevBookings.docs.length) {
+          await prevBookings.docs[matchIdx].reference.update({
+            'teamOne': '$t1 (🏆 $tourName)',
+            'teamTwo': t2,
+          });
         }
+        matchIdx++;
       }
     }
 
@@ -643,8 +662,6 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                       final s1 = m['score1'];
                       final s2 = m['score2'];
                       final winner = m['winner'] ?? '';
-                      final mDate = m['matchDate'] ?? '';
-                      final mSlot = m['matchSlot'] ?? '';
 
                       return Card(
                         elevation: 2,
@@ -654,14 +671,7 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                           padding: const EdgeInsets.all(14.0),
                           child: Column(
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(m['round'] ?? 'مباراة', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                                  if (mDate.isNotEmpty)
-                                    Text('📅 $mDate ($mSlot)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                                ],
-                              ),
+                              Text(m['round'] ?? 'مباراة', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
