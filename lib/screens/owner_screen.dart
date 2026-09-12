@@ -205,9 +205,22 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     final phoneCtrl = TextEditingController(text: data['phone'] ?? '');
     final rateCtrl = TextEditingController(text: '${data['hourlyRate']?.toInt() ?? 15000}');
     final pinCtrl = TextEditingController(text: data['pin'] ?? '');
+    
     String currentType = data['pitchType'] ?? 'سباعي (7 ضد 7)';
-    if (!pitchTypesList.contains(currentType) || currentType == 'الكل') {
-      currentType = 'سباعي (7 ضد 7)';
+    if (!pitchTypesList.contains(currentType) || currentType == 'الكل') currentType = 'سباعي (7 ضد 7)';
+
+    String currentSurface = data['surfaceType'] ?? 'ثيل 🌿';
+    if (!pitchSurfaceTypesList.contains(currentSurface) || currentSurface == 'الكل') currentSurface = 'ثيل 🌿';
+
+    String currentGov = data['governorate'] ?? 'بغداد';
+    if (!iraqLocations.keys.contains(currentGov)) currentGov = 'بغداد';
+
+    String currentArea = data['area'] ?? 'الكل';
+    if (!(iraqLocations[currentGov]?.contains(currentArea) ?? false)) currentArea = 'الكل';
+
+    String currentSubArea = data['subArea'] ?? 'الكل';
+    if (subLocationsMap.containsKey(currentArea) && !subLocationsMap[currentArea]!.contains(currentSubArea)) {
+      currentSubArea = 'الكل';
     }
 
     double? currentLat = (data['latitude'] as num?)?.toDouble();
@@ -262,18 +275,73 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     ),
                   ),
                   const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: currentType,
+                          decoration: InputDecoration(
+                            labelText: 'حجم الملعب',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          items: pitchTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
+                          onChanged: (val) {
+                            if (val != null) setModalState(() => currentType = val);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: currentSurface,
+                          decoration: InputDecoration(
+                            labelText: 'الأرضية',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          items: pitchSurfaceTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
+                          onChanged: (val) {
+                            if (val != null) setModalState(() => currentSurface = val);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: currentType,
-                    decoration: InputDecoration(
-                      labelText: 'نوع وحجم الملعب',
-                      prefixIcon: const Icon(Icons.aspect_ratio_rounded, color: Color(0xFF1B5E20)),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    items: pitchTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                    value: currentGov,
+                    decoration: InputDecoration(labelText: 'المحافظة', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                    items: iraqLocations.keys.map((gov) => DropdownMenuItem(value: gov, child: Text(gov))).toList(),
                     onChanged: (val) {
-                      if (val != null) setModalState(() => currentType = val);
+                      if (val != null) setModalState(() {
+                        currentGov = val;
+                        currentArea = 'الكل';
+                        currentSubArea = 'الكل';
+                      });
                     },
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: (iraqLocations[currentGov]?.contains(currentArea) ?? false) ? currentArea : 'الكل',
+                    decoration: InputDecoration(labelText: 'المنطقة / القضاء', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                    items: (iraqLocations[currentGov] ?? ['الكل']).map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setModalState(() {
+                        currentArea = val;
+                        currentSubArea = 'الكل';
+                      });
+                    },
+                  ),
+                  if (subLocationsMap.containsKey(currentArea)) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: subLocationsMap[currentArea]!.contains(currentSubArea) ? currentSubArea : 'الكل',
+                      decoration: InputDecoration(labelText: 'الحي / المنطقة الدقيقة', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                      items: ['الكل', ...subLocationsMap[currentArea]!].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => currentSubArea = val);
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: pinCtrl,
@@ -367,6 +435,10 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                           'phone': phone,
                           'hourlyRate': rate,
                           'pitchType': currentType,
+                          'surfaceType': currentSurface,
+                          'governorate': currentGov,
+                          'area': currentArea,
+                          'subArea': currentSubArea,
                           'pin': pin,
                           if (currentLat != null && currentLng != null) ...{
                             'latitude': currentLat,
