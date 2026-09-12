@@ -39,9 +39,7 @@ jobs:
 
       - name: Inject Android Queries And Permissions
         run: |
-          # إضافة تصاريح فحص التطبيقات (الاتصال والويب وويز)
           sed -i '/<\/manifest>/i \    <queries>\n        <intent>\n            <action android:name="android.intent.action.DIAL" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n        <package android:name="com.waze" />\n    </queries>' android/app/src/main/AndroidManifest.xml
-          # إضافة أذونات الـ GPS
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
       - name: Generate Football Icon
@@ -59,7 +57,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          flutter pub add geolocator
           flutter pub get
 
       - name: Build APK
