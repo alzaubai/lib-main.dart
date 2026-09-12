@@ -208,10 +208,11 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 
   Widget _buildConfirmedTab(NumberFormat currencyFormatter) {
     return StreamBuilder<QuerySnapshot>(
+      // شمول مباريات البطولة tournament_match في استعلام الجدول للمالك
       stream: _firestore
           .collection('bookings')
           .where('pitchName', isEqualTo: widget.pitchName)
-          .where('status', whereIn: ['upcoming', 'completed'])
+          .where('status', whereIn: ['upcoming', 'completed', 'tournament_match'])
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -315,7 +316,9 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                       itemBuilder: (context, index) {
                         final doc = docs[index];
                         final data = doc.data() as Map<String, dynamic>;
-                        final isDone = data['status'] == 'completed';
+                        final status = data['status'];
+                        final isDone = status == 'completed';
+                        final isTour = status == 'tournament_match';
                         final phone = data['phone'] ?? '';
 
                         return Card(
@@ -324,8 +327,10 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(18),
                             side: BorderSide(
-                              color: isDone ? Colors.green.shade300 : Colors.grey.shade300,
-                              width: 1.2,
+                              color: isTour
+                                  ? Colors.amber.shade400
+                                  : (isDone ? Colors.green.shade300 : Colors.grey.shade300),
+                              width: isTour ? 1.8 : 1.2,
                             ),
                           ),
                           margin: const EdgeInsets.only(bottom: 14),
@@ -348,16 +353,26 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                       decoration: BoxDecoration(
-                                        color: isDone ? Colors.green.shade50 : Colors.amber.shade50,
+                                        color: isTour
+                                            ? Colors.amber.shade50
+                                            : (isDone ? Colors.green.shade50 : Colors.blue.shade50),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: isDone ? Colors.green : Colors.amber.shade700),
+                                        border: Border.all(
+                                          color: isTour
+                                              ? Colors.amber.shade700
+                                              : (isDone ? Colors.green : Colors.blue.shade300),
+                                        ),
                                       ),
                                       child: Text(
-                                        isDone ? 'مكتملة ومقبوضة ✔️' : 'مؤكدة (بانتظار اللعب) ⏳',
+                                        isTour
+                                            ? '🏆 مباراة بطولة رسمية'
+                                            : (isDone ? 'مكتملة ومقبوضة ✔️' : 'مؤكدة (بانتظار اللعب) ⏳'),
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
-                                          color: isDone ? Colors.green.shade900 : Colors.brown.shade800,
+                                          color: isTour
+                                              ? Colors.amber.shade900
+                                              : (isDone ? Colors.green.shade900 : Colors.blue.shade900),
                                         ),
                                       ),
                                     ),
@@ -367,7 +382,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                 Container(
                                   padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF4F7F4),
+                                    color: isTour ? Colors.amber.shade50.withOpacity(0.5) : const Color(0xFFF4F7F4),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Row(
@@ -376,7 +391,11 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                         child: Text(
                                           '${data['teamOne']}',
                                           textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: isTour ? Colors.amber.shade900 : const Color(0xFF1B5E20),
+                                          ),
                                         ),
                                       ),
                                       const Padding(
@@ -387,7 +406,11 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                         child: Text(
                                           '${data['teamTwo']}',
                                           textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: isTour ? Colors.amber.shade900 : const Color(0xFF1B5E20),
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -402,8 +425,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                                     const Spacer(),
                                     Text(
-                                      '${currencyFormatter.format(data['price'] ?? 0)} د.ع',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal, fontSize: 15),
+                                      isTour
+                                          ? 'محجوزة بالبطولة'
+                                          : '${currencyFormatter.format(data['price'] ?? 0)} د.ع',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: isTour ? Colors.amber.shade900 : Colors.teal,
+                                        fontSize: 14,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -435,7 +464,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                       onPressed: () => _confirmDeleteMatch(context, doc.reference),
                                     ),
                                     const SizedBox(width: 8),
-                                    if (!isDone)
+                                    if (!isDone && !isTour)
                                       ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF1B5E20),
@@ -447,7 +476,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                         label: const Text('إنهاء وتثبيت', style: TextStyle(fontWeight: FontWeight.bold)),
                                         onPressed: () => _confirmMatchCompletion(context, doc.reference, data),
                                       )
-                                    else
+                                    else if (isDone)
                                       const Row(
                                         children: [
                                           Icon(Icons.verified_rounded, color: Colors.green, size: 18),
