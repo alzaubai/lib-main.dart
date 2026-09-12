@@ -92,3 +92,73 @@ Future<void> launchWhatsAppDirect(String phone) async {
     debugPrint('Error launching WhatsApp: $e');
   }
 }
+
+Future<void> launchWaze(double lat, double lng) async {
+  final url = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
+  try {
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  } catch (e) {
+    debugPrint('Error opening Waze: $e');
+  }
+}
+
+Future<void> launchGoogleMaps(double lat, double lng) async {
+  final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+  try {
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  } catch (e) {
+    debugPrint('Error opening Google Maps: $e');
+  }
+}
+
+void showMapChooserSheet(BuildContext context, double lat, double lng, String pitchName) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (ctx) => Directionality(
+      textDirection: ui.TextDirection.rtl,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('الانتقال لموقع $pitchName', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+            const SizedBox(height: 8),
+            const Text('اختر تطبيق الخرائط والملاحة المفضل لديك:', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF33CCFF),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.navigation, size: 22),
+              label: const Text('فتح عبر Waze (الموصى به للطرق والزحام)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                launchWaze(lat, lng);
+              },
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red.shade700,
+                side: BorderSide(color: Colors.red.shade700, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.map, size: 22),
+              label: const Text('فتح عبر Google Maps', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                launchGoogleMaps(lat, lng);
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
