@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'auth_screen.dart'; // تأكد من مسار الاستدعاء الصحيح
+import 'screens/auth_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,13 +38,10 @@ class PitchBookingApp extends StatelessWidget {
           color: Colors.white,
         ),
       ),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const Directionality(
-              textDirection: ui.TextDirection.rtl,
-              child: AuthScreen(), 
-            ),
-      },
+      home: const Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AuthScreen(),
+      ),
     );
   }
 }
