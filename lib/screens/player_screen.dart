@@ -270,38 +270,62 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                     final duration = data['matchDurationMinutes'] ?? 60;
                     final isFav = widget.favPitches.contains(pitchName);
 
+                    final lat = (data['latitude'] as num?)?.toDouble();
+                    final lng = (data['longitude'] as num?)?.toDouble();
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.sports_soccer, color: Color(0xFF1B5E20))),
-                        title: Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('$gov - $area  |  النوع: $pitchType', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                            Text('مدة المباراة: $duration دقيقة  |  السعر: ${rate.toInt()} د.ع', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: isFav ? Colors.red : Colors.grey),
-                          onPressed: () => widget.onToggleFav(pitchName),
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => Directionality(
-                                textDirection: ui.TextDirection.rtl,
-                                child: PitchScheduleViewScreen(
-                                  pitchName: pitchName,
-                                  hourlyRate: rate,
-                                  durationMinutes: duration,
-                                  playerPhone: widget.playerPhone,
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.sports_soccer, color: Color(0xFF1B5E20))),
+                            title: Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('$gov - $area  |  النوع: $pitchType', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                                Text('مدة المباراة: $duration دقيقة  |  السعر: ${rate.toInt()} د.ع', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
+                              ],
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: isFav ? Colors.red : Colors.grey),
+                              onPressed: () => widget.onToggleFav(pitchName),
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => Directionality(
+                                    textDirection: ui.TextDirection.rtl,
+                                    child: PitchScheduleViewScreen(
+                                      pitchName: pitchName,
+                                      hourlyRate: rate,
+                                      durationMinutes: duration,
+                                      playerPhone: widget.playerPhone,
+                                      latitude: lat,
+                                      longitude: lng,
+                                    ),
+                                  ),
                                 ),
+                              );
+                            },
+                          ),
+                          if (lat != null && lng != null) ...[
+                            const Divider(height: 1),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                              child: Row(
+                                children: [
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.location_on, size: 18, color: Colors.blue),
+                                    label: const Text('موقع الملعب والاتجاهات (Waze / Maps)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
+                                    onPressed: () => showMapChooserSheet(context, lat, lng, pitchName),
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        },
+                          ],
+                        ],
                       ),
                     );
                   },
@@ -320,8 +344,18 @@ class PitchScheduleViewScreen extends StatefulWidget {
   final double hourlyRate;
   final int durationMinutes;
   final String playerPhone;
+  final double? latitude;
+  final double? longitude;
 
-  const PitchScheduleViewScreen({super.key, required this.pitchName, required this.hourlyRate, required this.durationMinutes, required this.playerPhone});
+  const PitchScheduleViewScreen({
+    super.key,
+    required this.pitchName,
+    required this.hourlyRate,
+    required this.durationMinutes,
+    required this.playerPhone,
+    this.latitude,
+    this.longitude,
+  });
 
   @override
   State<PitchScheduleViewScreen> createState() => _PitchScheduleViewScreenState();
@@ -340,6 +374,14 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
         title: Text('جدول ${widget.pitchName}', style: const TextStyle(color: Colors.white)),
+        actions: [
+          if (widget.latitude != null && widget.longitude != null)
+            IconButton(
+              icon: const Icon(Icons.navigation, color: Colors.white),
+              tooltip: 'طريق الملعب (Waze / Maps)',
+              onPressed: () => showMapChooserSheet(context, widget.latitude!, widget.longitude!, widget.pitchName),
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -683,6 +725,8 @@ class PlayerFavoritesTab extends StatelessWidget {
                     final pitchType = data['pitchType'] ?? 'ملعب سباعي';
                     final rate = (data['hourlyRate'] as num?)?.toDouble() ?? 15000.0;
                     final duration = data['matchDurationMinutes'] ?? 60;
+                    final lat = (data['latitude'] as num?)?.toDouble();
+                    final lng = (data['longitude'] as num?)?.toDouble();
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -705,6 +749,8 @@ class PlayerFavoritesTab extends StatelessWidget {
                                   hourlyRate: rate,
                                   durationMinutes: duration,
                                   playerPhone: playerPhone,
+                                  latitude: lat,
+                                  longitude: lng,
                                 ),
                               ),
                             ),
