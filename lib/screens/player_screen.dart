@@ -83,6 +83,10 @@ class _PlayerMainScreenState extends State<PlayerMainScreen> {
             onToggleFav: _toggleFavorite,
             playerPhone: widget.playerPhone,
           ),
+          TournamentScreen(
+            userPhone: widget.playerPhone,
+            isOwner: false,
+          ),
           PlayerFavoritesTab(
             favPitches: _favPitches,
             onToggleFav: _toggleFavorite,
@@ -97,27 +101,32 @@ class _PlayerMainScreenState extends State<PlayerMainScreen> {
           bottomNavigationBar: BottomNavigationBar(
             currentIndex: _currentIndex,
             type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
             selectedItemColor: const Color(0xFF1B5E20),
-            unselectedItemColor: Colors.grey,
+            unselectedItemColor: Colors.grey.shade500,
+            selectedFontSize: 12,
+            unselectedFontSize: 11,
+            elevation: 10,
             onTap: (idx) {
               setState(() => _currentIndex = idx);
-              if (idx == 2 && updatesCount > 0) {
+              if (idx == 3 && updatesCount > 0) {
                 _markPlayerUpdatesSeen(updatesCount);
               }
             },
             items: [
-              const BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'استكشاف'),
-              const BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'المفضلة'),
+              const BottomNavigationBarItem(icon: Icon(Icons.explore_rounded), label: 'استكشاف'),
+              const BottomNavigationBarItem(icon: Icon(Icons.emoji_events_rounded), label: 'البطولات 🏆'),
+              const BottomNavigationBarItem(icon: Icon(Icons.favorite_rounded), label: 'المفضلة'),
               BottomNavigationBarItem(
                 icon: Badge(
                   isLabelVisible: showMatchBadge,
                   label: Text('$unreadCount', style: const TextStyle(color: Colors.white)),
-                  backgroundColor: Colors.red,
-                  child: const Icon(Icons.sports_soccer),
+                  backgroundColor: Colors.redAccent,
+                  child: const Icon(Icons.sports_soccer_rounded),
                 ),
                 label: 'مبارياتي',
               ),
-              const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'بروفايلي'),
+              const BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'بروفايلي'),
             ],
           ),
         );
@@ -142,38 +151,30 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
   String _selectedArea = 'الكل';
   String _selectedPitchType = 'الكل';
   String _search = '';
+  final currencyFormatter = NumberFormat('#,###');
 
   @override
   Widget build(BuildContext context) {
     final areas = iraqLocations[_selectedGov] ?? ['الكل'];
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
-        title: const Text('ملاعب كرة القدم', style: TextStyle(color: Colors.white)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.emoji_events, color: Colors.amberAccent),
-            tooltip: 'البطولات الشعبية المتاحة',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TournamentScreen(
-                    userPhone: widget.playerPhone,
-                    isOwner: false,
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.sports_soccer_rounded, color: Colors.white, size: 24),
+            SizedBox(width: 8),
+            Text('استكشف ملاعب العراق', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
       body: Column(
         children: [
           Container(
             color: Colors.white,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Column(
               children: [
                 Row(
@@ -181,7 +182,12 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _selectedGov,
-                        decoration: const InputDecoration(labelText: 'المحافظة', isDense: true, border: OutlineInputBorder()),
+                        decoration: InputDecoration(
+                          labelText: 'المحافظة',
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.location_city, size: 18, color: Color(0xFF1B5E20)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
                         items: iraqLocations.keys.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                         onChanged: (val) {
                           if (val != null) {
@@ -197,7 +203,12 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _selectedArea,
-                        decoration: const InputDecoration(labelText: 'المنطقة', isDense: true, border: OutlineInputBorder()),
+                        decoration: InputDecoration(
+                          labelText: 'المنطقة',
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.place, size: 18, color: Color(0xFF1B5E20)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
                         items: areas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
                         onChanged: (val) {
                           if (val != null) setState(() => _selectedArea = val);
@@ -213,8 +224,12 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                       flex: 5,
                       child: DropdownButtonFormField<String>(
                         value: _selectedPitchType,
-                        decoration: const InputDecoration(labelText: 'نوع الملعب', isDense: true, border: OutlineInputBorder()),
-                        items: pitchTypesList.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
+                        decoration: InputDecoration(
+                          labelText: 'حجم الملعب',
+                          isDense: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: pitchTypesList.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
                         onChanged: (val) {
                           if (val != null) setState(() => _selectedPitchType = val);
                         },
@@ -225,8 +240,8 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                       flex: 5,
                       child: TextField(
                         decoration: InputDecoration(
-                          hintText: 'اسم الملعب...',
-                          prefixIcon: const Icon(Icons.search, size: 20),
+                          hintText: 'بحث باسم الملعب...',
+                          prefixIcon: const Icon(Icons.search_rounded, size: 20),
                           isDense: true,
                           filled: true,
                           fillColor: Colors.grey.shade100,
@@ -265,11 +280,18 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                 if (filtered.isEmpty) {
                   return Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Text(
-                        'لا توجد ملاعب مطابقة للبحث في\n$_selectedGov - $_selectedArea (${_selectedPitchType == 'الكل' ? 'جميع الأحجام' : _selectedPitchType})',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.grey, height: 1.5),
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.sports_soccer_outlined, size: 70, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          Text(
+                            'لا توجد ملاعب مطابقة لبحثك في\n$_selectedGov - $_selectedArea',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.grey, height: 1.5, fontSize: 14),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -286,6 +308,7 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                     final pitchType = data['pitchType'] ?? 'ملعب سباعي';
                     final rate = (data['hourlyRate'] as num?)?.toDouble() ?? 15000.0;
                     final duration = data['matchDurationMinutes'] ?? 60;
+                    final pitchPhone = data['phone'] ?? '';
                     final isFav = widget.favPitches.contains(pitchName);
 
                     final lat = (data['latitude'] as num?)?.toDouble();
@@ -295,40 +318,13 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                     final ratingCount = data['ratingCount'] ?? 0;
 
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      margin: const EdgeInsets.only(bottom: 14),
                       child: Column(
                         children: [
-                          ListTile(
-                            leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.sports_soccer, color: Color(0xFF1B5E20))),
-                            title: Row(
-                              children: [
-                                Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.amber.shade300)),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.star, size: 14, color: Colors.amber),
-                                      const SizedBox(width: 2),
-                                      Text(ratingCount > 0 ? rating.toStringAsFixed(1) : 'جديد', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('$gov - $area  |  النوع: $pitchType', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                                Text('مدة المباراة: $duration دقيقة  |  السعر: ${rate.toInt()} د.ع', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
-                              ],
-                            ),
-                            trailing: IconButton(
-                              icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: isFav ? Colors.red : Colors.grey),
-                              onPressed: () => widget.onToggleFav(pitchName),
-                            ),
+                          InkWell(
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -340,6 +336,7 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                                       hourlyRate: rate,
                                       durationMinutes: duration,
                                       playerPhone: widget.playerPhone,
+                                      pitchPhone: pitchPhone,
                                       latitude: lat,
                                       longitude: lng,
                                     ),
@@ -347,22 +344,112 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                                 ),
                               );
                             },
-                          ),
-                          if (lat != null && lng != null) ...[
-                            const Divider(height: 1),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14.0),
                               child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  TextButton.icon(
-                                    icon: const Icon(Icons.location_on, size: 18, color: Colors.blue),
-                                    label: const Text('موقع الملعب والاتجاهات (Waze / Maps)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
-                                    onPressed: () => showMapChooserSheet(context, lat, lng, pitchName),
+                                  CircleAvatar(
+                                    radius: 26,
+                                    backgroundColor: const Color(0xFFE8F5E9),
+                                    child: const Icon(Icons.stadium, color: Color(0xFF1B5E20), size: 30),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                              decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amber.shade300)),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.star_rounded, size: 15, color: Colors.amber),
+                                                  const SizedBox(width: 3),
+                                                  Text(ratingCount > 0 ? rating.toStringAsFixed(1) : 'جديد', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                                            const SizedBox(width: 2),
+                                            Text('$gov - $area  •  $pitchType', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(6)),
+                                          child: Text(
+                                            'سعر المباراة: ${currencyFormatter.format(rate)} د.ع ($duration دقيقة)',
+                                            style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: isFav ? Colors.red : Colors.grey.shade400),
+                                    onPressed: () => widget.onToggleFav(pitchName),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
+                          const Divider(height: 1),
+                          Container(
+                            color: Colors.grey.shade50,
+                            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                            child: Row(
+                              children: [
+                                if (lat != null && lng != null) ...[
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.blue.shade800,
+                                      side: BorderSide(color: Colors.blue.shade300),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    ),
+                                    icon: const Icon(Icons.navigation_rounded, size: 16, color: Colors.blue),
+                                    label: const Text('الموقع (Waze)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    onPressed: () => showMapChooserSheet(context, lat, lng, pitchName),
+                                  ),
+                                ],
+                                const Spacer(),
+                                if (pitchPhone.toString().isNotEmpty) ...[
+                                  IconButton(
+                                    style: IconButton.styleFrom(backgroundColor: Colors.green.shade50),
+                                    icon: const Icon(Icons.phone_rounded, color: Colors.green, size: 18),
+                                    tooltip: 'اتصال هاتفي',
+                                    onPressed: () => launchCallDirect(pitchPhone),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF25D366),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    icon: const Icon(Icons.chat_bubble_rounded, size: 15),
+                                    label: const Text('واتساب', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    onPressed: () => launchWhatsAppDirect(pitchPhone),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     );
@@ -382,6 +469,7 @@ class PitchScheduleViewScreen extends StatefulWidget {
   final double hourlyRate;
   final int durationMinutes;
   final String playerPhone;
+  final String pitchPhone;
   final double? latitude;
   final double? longitude;
 
@@ -391,6 +479,7 @@ class PitchScheduleViewScreen extends StatefulWidget {
     required this.hourlyRate,
     required this.durationMinutes,
     required this.playerPhone,
+    required this.pitchPhone,
     this.latitude,
     this.longitude,
   });
@@ -401,6 +490,7 @@ class PitchScheduleViewScreen extends StatefulWidget {
 
 class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
   DateTime _selectedDate = DateTime.now();
+  final currencyFormatter = NumberFormat('#,###');
 
   @override
   Widget build(BuildContext context) {
@@ -409,13 +499,27 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
     final slots = buildPitchSlots(widget.durationMinutes);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
-        title: Text('جدول ${widget.pitchName}', style: const TextStyle(color: Colors.white)),
+        elevation: 0,
+        title: Text('جدول ${widget.pitchName}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
         actions: [
+          if (widget.pitchPhone.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.phone_rounded, color: Colors.white),
+              tooltip: 'اتصال بصاحب الملعب',
+              onPressed: () => launchCallDirect(widget.pitchPhone),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF25D366)),
+              tooltip: 'محادثة واتساب',
+              onPressed: () => launchWhatsAppDirect(widget.pitchPhone),
+            ),
+          ],
           if (widget.latitude != null && widget.longitude != null)
             IconButton(
-              icon: const Icon(Icons.navigation, color: Colors.white),
+              icon: const Icon(Icons.navigation_rounded, color: Colors.white),
               tooltip: 'طريق الملعب (Waze / Maps)',
               onPressed: () => showMapChooserSheet(context, widget.latitude!, widget.longitude!, widget.pitchName),
             ),
@@ -424,17 +528,21 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
       body: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Colors.white,
             child: Row(
               children: [
-                const Icon(Icons.calendar_month, color: Color(0xFF1B5E20)),
+                const Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)),
                 const SizedBox(width: 8),
-                Text('اليوم: $currentDayArabic ($dateStr)', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('$currentDayArabic ($dateStr)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const Spacer(),
-                TextButton.icon(
-                  icon: const Icon(Icons.edit_calendar),
-                  label: const Text('تغيير التاريخ'),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    foregroundColor: const Color(0xFF1B5E20),
+                  ),
+                  icon: const Icon(Icons.edit_calendar_rounded, size: 16),
+                  label: const Text('تغيير اليوم', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () async {
                     final picked = await showDatePicker(
                       context: context,
@@ -487,28 +595,35 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
                         if (recurringTeam != null) {
                           return Card(
                             color: Colors.purple.shade50,
-                            margin: const EdgeInsets.only(bottom: 12),
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Colors.purple.shade200)),
+                            margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
-                              leading: const Icon(Icons.lock_clock, color: Colors.purple),
+                              leading: const Icon(Icons.lock_clock_rounded, color: Colors.purple),
                               title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Text('حجز أسبوعي ثابت لفريق: $recurringTeam'),
-                              trailing: const Chip(label: Text('حجز دائم', style: TextStyle(color: Colors.purple, fontSize: 11))),
+                              trailing: const Chip(label: Text('حجز دائم', style: TextStyle(color: Colors.purple, fontSize: 11, fontWeight: FontWeight.bold))),
                             ),
                           );
                         }
 
                         if (bookingDoc == null) {
                           return Card(
-                            color: Colors.green.shade50,
-                            margin: const EdgeInsets.only(bottom: 12),
+                            color: Colors.white,
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Colors.green.shade200)),
+                            margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
-                              leading: Icon(Icons.check_circle, color: Colors.green.shade700),
+                              leading: Icon(Icons.check_circle_rounded, color: Colors.green.shade600, size: 28),
                               title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('متاح للحجز الكامل (${widget.hourlyRate.toInt()} د.ع) أو طلب تحدي'),
+                              subtitle: Text('متاح للحجز الكامل (${currencyFormatter.format(widget.hourlyRate)} د.ع) أو طلب تحدي'),
                               trailing: ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1B5E20),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
                                 onPressed: () => _openBookingDialog(context, slot, dateStr),
-                                child: const Text('حجز', style: TextStyle(color: Colors.white)),
+                                child: const Text('حجز الآن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               ),
                             ),
                           );
@@ -524,14 +639,17 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
 
                           return Card(
                             color: Colors.orange.shade50,
-                            margin: const EdgeInsets.only(bottom: 12),
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Colors.orange.shade300)),
+                            margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
-                              leading: const Icon(Icons.flash_on, color: Colors.deepOrange),
-                              title: Text('$slot (تحدي مفتوح!)', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                              leading: const Icon(Icons.bolt_rounded, color: Colors.deepOrange, size: 30),
+                              title: Text('$slot (مباراة تحدي مفتوحة!)', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                               subtitle: Text(
                                 isMyOwnBooking
-                                    ? 'هذا طلب فريقك (${bData['teamOne']})\nبانتظار انضمام فريق منافس'
-                                    : 'فريق (${bData['teamOne']}) يبحث عن خصم!\nتكلفة فريقك: ${halfPrice.toInt()} د.ع (النصف فقط)',
+                                    ? 'هذا طلب فريقك (${bData['teamOne']})\nبانتظار قبول فريق منافس'
+                                    : 'فريق (${bData['teamOne']}) بانتظار خصم!\nحصتكم: ${currencyFormatter.format(halfPrice)} د.ع (نصف الإيجار)',
+                                style: const TextStyle(fontSize: 12),
                               ),
                               trailing: isMyOwnBooking
                                   ? OutlinedButton(
@@ -540,21 +658,23 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
                                       child: const Text('إلغاء طلبي'),
                                     )
                                   : ElevatedButton(
-                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                                       onPressed: () => _acceptChallengeDialog(context, bookingDoc, bData),
-                                      child: const Text('قبول التحدي', style: TextStyle(color: Colors.white)),
+                                      child: const Text('قبول التحدي', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                     ),
                             ),
                           );
                         } else {
                           return Card(
-                            color: Colors.red.shade50,
-                            margin: const EdgeInsets.only(bottom: 12),
+                            color: Colors.grey.shade100,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
-                              leading: const Icon(Icons.cancel, color: Colors.red),
-                              title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              leading: const Icon(Icons.block_rounded, color: Colors.redAccent),
+                              title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
                               subtitle: Text('محجوز: ${bData['teamOne']} ⚔️ ${bData['teamTwo']}'),
-                              trailing: const Chip(label: Text('محجوز', style: TextStyle(color: Colors.red))),
+                              trailing: const Chip(label: Text('محجوز', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11))),
                             ),
                           );
                         }
@@ -576,6 +696,7 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('إلغاء طلب التحدي'),
           content: const Text('هل تريد سحب طلبك وإلغاء هذا الحجز؟'),
           actions: [
@@ -611,7 +732,8 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
           return Directionality(
             textDirection: ui.TextDirection.rtl,
             child: AlertDialog(
-              title: Text('طلب حجز ($slot)'),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text('طلب حجز ($slot)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -620,7 +742,7 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
                     const SizedBox(height: 10),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('عندي فريق خصم جاهز؟', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      title: const Text('عندي فريق خصم جاهز؟', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       value: hasOpponent,
                       onChanged: (val) => setDlgState(() => hasOpponent = val),
                     ),
@@ -632,14 +754,14 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
                     TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم هاتفك للتأكيد', border: OutlineInputBorder())),
                     const SizedBox(height: 14),
                     Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.shade200)),
                       child: Text(
                         hasOpponent
-                            ? 'المبلغ الإجمالي للحجز: ${fullPrice.toInt()} د.ع'
-                            : 'أنت تدفع النصف فقط: ${payablePrice.toInt()} د.ع\n(النصف الثاني يدفعه الخصم عند انضمامه)',
+                            ? 'المبلغ الإجمالي للمباراة: ${currencyFormatter.format(fullPrice)} د.ع'
+                            : 'أنت تدفع النصف فقط: ${currencyFormatter.format(payablePrice)} د.ع\n(النصف الثاني يدفعه الخصم عند انضمامه)',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20), fontSize: 12, height: 1.4),
                       ),
                     ),
                   ],
@@ -668,11 +790,11 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
 
                       if (context.mounted) {
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال طلبك بنجاح!'), backgroundColor: Colors.green));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال طلب الحجز بنجاح وبانتظار موافقة الملعب'), backgroundColor: Colors.green));
                       }
                     }
                   },
-                  child: const Text('إرسال الطلب', style: TextStyle(color: Colors.white)),
+                  child: const Text('إرسال الطلب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -692,7 +814,8 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
-          title: Text('قبول تحدي فريق (${bData['teamOne']})'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('قبول تحدي فريق (${bData['teamOne']})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -700,7 +823,7 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
               const SizedBox(height: 10),
               TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم هاتفك للتأكيد', border: OutlineInputBorder())),
               const SizedBox(height: 12),
-              Text('المبلغ المطلوب من فريقك: ${halfPrice.toInt()} د.ع فقط (نصف الحجز)', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+              Text('المبلغ المطلوب من فريقكم: ${currencyFormatter.format(halfPrice)} د.ع فقط', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
             ],
           ),
           actions: [
@@ -717,11 +840,11 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
 
                   if (context.mounted) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الانضمام وإكمال المباراة بنجاح!'), backgroundColor: Colors.green));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تأكيد انضمامك للتحدي بنجاح!'), backgroundColor: Colors.green));
                   }
                 }
               },
-              child: const Text('تأكيد وقبول التحدي', style: TextStyle(color: Colors.white)),
+              child: const Text('تأكيد وقبول التحدي', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -740,12 +863,24 @@ class PlayerFavoritesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
-        title: const Text('ملاعبي المفضلة', style: TextStyle(color: Colors.white)),
+        title: const Text('ملاعبي المفضلة', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
       ),
       body: favPitches.isEmpty
-          ? const Center(child: Text('لم تضف أي ملعب للمفضلة بعد\nاضغط على رمز القلب عند أي ملعب لحفظه هنا', textAlign: TextAlign.center))
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.favorite_border_rounded, size: 70, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  const Text('قائمتك المفضلة فارغة', style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  const Text('اضغط على رمز القلب عند أي ملعب لحفظه هنا', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ),
+            )
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('pitches').snapshots(),
               builder: (context, snapshot) {
@@ -763,17 +898,20 @@ class PlayerFavoritesTab extends StatelessWidget {
                     final pitchType = data['pitchType'] ?? 'ملعب سباعي';
                     final rate = (data['hourlyRate'] as num?)?.toDouble() ?? 15000.0;
                     final duration = data['matchDurationMinutes'] ?? 60;
+                    final pitchPhone = data['phone'] ?? '';
                     final lat = (data['latitude'] as num?)?.toDouble();
                     final lng = (data['longitude'] as num?)?.toDouble();
 
                     return Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 2,
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
-                        leading: const Icon(Icons.stadium, color: Color(0xFF1B5E20), size: 36),
+                        leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.stadium, color: Color(0xFF1B5E20))),
                         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        subtitle: Text('$gov - $area | $pitchType | $rate د.ع'),
+                        subtitle: Text('$gov - $area | $pitchType | ${rate.toInt()} د.ع'),
                         trailing: IconButton(
-                          icon: const Icon(Icons.favorite, color: Colors.red),
+                          icon: const Icon(Icons.favorite_rounded, color: Colors.red),
                           onPressed: () => onToggleFav(name),
                         ),
                         onTap: () {
@@ -787,6 +925,7 @@ class PlayerFavoritesTab extends StatelessWidget {
                                   hourlyRate: rate,
                                   durationMinutes: duration,
                                   playerPhone: playerPhone,
+                                  pitchPhone: pitchPhone,
                                   latitude: lat,
                                   longitude: lng,
                                 ),
@@ -818,11 +957,12 @@ class PlayerMyBookingsTab extends StatelessWidget {
         builder: (context, setRateState) => Directionality(
           textDirection: ui.TextDirection.rtl,
           child: AlertDialog(
-            title: Text('تقييم $pitchName'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('تقييم $pitchName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('كيف كانت تجربتك وجودة الملعب (الثيل، الإضاءة، المرافق)؟'),
+                const Text('كيف كانت جودة الملعب وتجربة اللعب فيه؟'),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -830,9 +970,9 @@ class PlayerMyBookingsTab extends StatelessWidget {
                     final starVal = index + 1.0;
                     return IconButton(
                       icon: Icon(
-                        selectedStars >= starVal ? Icons.star : Icons.star_border,
+                        selectedStars >= starVal ? Icons.star_rounded : Icons.star_outline_rounded,
                         color: Colors.amber,
-                        size: 32,
+                        size: 34,
                       ),
                       onPressed: () => setRateState(() => selectedStars = starVal),
                     );
@@ -841,7 +981,7 @@ class PlayerMyBookingsTab extends StatelessWidget {
                 const SizedBox(height: 8),
                 TextField(
                   controller: commentCtrl,
-                  decoration: const InputDecoration(labelText: 'ملاحظة أو تعليق مختصر (اختياري)', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'ملاحظة مختصرة للملعب (اختياري)', border: OutlineInputBorder()),
                 ),
               ],
             ),
@@ -879,7 +1019,7 @@ class PlayerMyBookingsTab extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شكراً لتقييمك للملعب!'), backgroundColor: Colors.green));
                   }
                 },
-                child: const Text('إرسال التقييم', style: TextStyle(color: Colors.white)),
+                child: const Text('إرسال التقييم', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -891,9 +1031,10 @@ class PlayerMyBookingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
-        title: const Text('طلباتي ومبارياتي', style: TextStyle(color: Colors.white)),
+        title: const Text('طلباتي ومبارياتي', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('bookings').where('phone', isEqualTo: playerPhone).snapshots(),
@@ -902,7 +1043,18 @@ class PlayerMyBookingsTab extends StatelessWidget {
           final docs = snapshot.data?.docs ?? [];
 
           if (docs.isEmpty) {
-            return const Center(child: Text('لم تقم بإرسال أي طلبات حجز بعد'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history_toggle_off_rounded, size: 70, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  const Text('لم تسجل أي حجوزات بعد', style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  const Text('تصفح الملاعب واحجز موعد مباراتك القادمة', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ),
+            );
           }
 
           return ListView.builder(
@@ -917,19 +1069,21 @@ class PlayerMyBookingsTab extends StatelessWidget {
               final isRated = data['isRated'] == true;
 
               Color color = Colors.orange;
-              String statusTxt = 'قيد المراجعة والانتظار';
+              String statusTxt = 'قيد المراجعة والانتظار ⏳';
               if (st == 'upcoming') {
                 color = Colors.green;
-                statusTxt = 'تم التأكيد والموافقة!';
+                statusTxt = 'تم التأكيد والموافقة! ✔️';
               } else if (st == 'completed') {
                 color = Colors.blueGrey;
-                statusTxt = 'مباراة منتهية ومكتملة';
+                statusTxt = 'مباراة منتهية ومكتملة ⚽';
               } else if (st == 'rejected') {
                 color = Colors.red;
-                statusTxt = 'تم الاعتذار / الرفض';
+                statusTxt = 'تم الاعتذار / الرفض ❌';
               }
 
               return Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 margin: const EdgeInsets.only(bottom: 12),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -940,19 +1094,24 @@ class PlayerMyBookingsTab extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Chip(label: Text(statusTxt, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)), backgroundColor: color.withOpacity(0.1)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                            child: Text(statusTxt, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Text('التاريخ: ${data['date']}  |  الوقت: ${data['startTime']} - ${data['endTime']}'),
-                      Text('المباراة: ${data['teamOne']} ⚔️ ${data['teamTwo']}'),
-                      Text('المبلغ: ${data['price']} د.ع'),
+                      const SizedBox(height: 8),
+                      Text('التاريخ: ${data['date']}  |  الوقت: ${data['startTime']} - ${data['endTime']}', style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                      const SizedBox(height: 4),
+                      Text('المباراة: ${data['teamOne']} ⚔️ ${data['teamTwo']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                      Text('المبلغ: ${data['price']} د.ع', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
                       if (st == 'rejected' && reason.toString().isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                          child: Text('سبب الرفض: $reason', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                          child: Text('سبب الاعتذار: $reason', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                         ),
                       ],
                       if (st == 'completed') ...[
@@ -962,17 +1121,17 @@ class PlayerMyBookingsTab extends StatelessWidget {
                           children: [
                             if (!isRated)
                               ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, foregroundColor: Colors.white),
-                                icon: const Icon(Icons.star, size: 16),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                icon: const Icon(Icons.star_rounded, size: 16),
                                 label: const Text('تقييم جودة الملعب'),
                                 onPressed: () => _openRatePitchDialog(context, doc, pitchName),
                               )
                             else
                               const Row(
                                 children: [
-                                  Icon(Icons.check, color: Colors.green, size: 16),
+                                  Icon(Icons.verified_rounded, color: Colors.green, size: 16),
                                   SizedBox(width: 4),
-                                  Text('تم تقييم هذا الملعب', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  Text('تم تقييم هذا الملعب بنجاح', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                           ],
@@ -1004,7 +1163,8 @@ class PlayerProfileTab extends StatelessWidget {
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
-          title: const Text('تعديل بيانات الملف الشخصي'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('تعديل الملف الشخصي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1016,7 +1176,7 @@ class PlayerProfileTab extends StatelessWidget {
                 const SizedBox(height: 12),
                 TextField(
                   controller: teamCtrl,
-                  decoration: const InputDecoration(labelText: 'اسم الفريق الدائم', border: OutlineInputBorder(), prefixIcon: Icon(Icons.shield)),
+                  decoration: const InputDecoration(labelText: 'اسم الفريق المعتمد', border: OutlineInputBorder(), prefixIcon: Icon(Icons.shield)),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -1050,7 +1210,7 @@ class PlayerProfileTab extends StatelessWidget {
                   }
                 }
               },
-              child: const Text('حفظ التعديل', style: TextStyle(color: Colors.white)),
+              child: const Text('حفظ التعديل', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1063,12 +1223,13 @@ class PlayerProfileTab extends StatelessWidget {
     final currencyFormatter = NumberFormat('#,###');
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
-        title: const Text('ملفي الشخصي (كابتن)', style: TextStyle(color: Colors.white)),
+        title: const Text('الملف الشخصي للكابتن', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
+            icon: const Icon(Icons.logout_rounded, color: Colors.white),
             tooltip: 'تسجيل خروج',
             onPressed: () async {
               final prefs = await SharedPreferences.getInstance();
@@ -1111,16 +1272,16 @@ class PlayerProfileTab extends StatelessWidget {
                     Stack(
                       alignment: Alignment.bottomRight,
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 45,
-                          backgroundColor: Color(0xFF1B5E20),
-                          child: Icon(Icons.person, size: 55, color: Colors.white),
+                          backgroundColor: const Color(0xFF1B5E20),
+                          child: const Icon(Icons.sports_soccer_rounded, size: 50, color: Colors.white),
                         ),
                         if (isTrusted)
                           const CircleAvatar(
                             radius: 14,
                             backgroundColor: Colors.amber,
-                            child: Icon(Icons.verified, size: 18, color: Colors.white),
+                            child: Icon(Icons.verified_rounded, size: 18, color: Colors.white),
                           ),
                       ],
                     ),
@@ -1128,7 +1289,7 @@ class PlayerProfileTab extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                        Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                         if (isTrusted) ...[
                           const SizedBox(width: 6),
                           Container(
@@ -1139,17 +1300,18 @@ class PlayerProfileTab extends StatelessWidget {
                         ],
                       ],
                     ),
-                    Text(team, style: const TextStyle(color: Colors.grey, fontSize: 16)),
-                    const SizedBox(height: 6),
-                    Text('رقم الهاتف: $playerPhone', style: const TextStyle(color: Colors.blueGrey)),
+                    Text(team, style: const TextStyle(color: Colors.grey, fontSize: 15)),
+                    const SizedBox(height: 4),
+                    Text('رقم الهاتف: $playerPhone', style: const TextStyle(color: Colors.blueGrey, fontSize: 13)),
                     const SizedBox(height: 14),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF1B5E20),
                         side: const BorderSide(color: Color(0xFF1B5E20)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.edit, size: 18),
-                      label: const Text('تعديل بيانات الملف الشخصي'),
+                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      label: const Text('تعديل الملف الشخصي', style: TextStyle(fontWeight: FontWeight.bold)),
                       onPressed: () => _openEditProfileDialog(context, name, team, pin),
                     ),
                     const SizedBox(height: 20),
@@ -1158,10 +1320,10 @@ class PlayerProfileTab extends StatelessWidget {
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.green.shade200)),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
                             child: Column(
                               children: [
-                                const Text('إجمالي المباريات', style: TextStyle(color: Colors.grey)),
+                                const Text('إجمالي المباريات', style: TextStyle(color: Colors.grey, fontSize: 12)),
                                 const SizedBox(height: 6),
                                 Text('$totalMatches', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
                               ],
@@ -1172,35 +1334,45 @@ class PlayerProfileTab extends StatelessWidget {
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.teal.shade200)),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
                             child: Column(
                               children: [
-                                const Text('مجموع المبالغ', style: TextStyle(color: Colors.grey)),
+                                const Text('مجموع المبالغ', style: TextStyle(color: Colors.grey, fontSize: 12)),
                                 const SizedBox(height: 6),
-                                Text('${currencyFormatter.format(totalSpent)} د.ع', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
+                                Text('${currencyFormatter.format(totalSpent)} د.ع', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal)),
                               ],
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    ListTile(
-                      leading: const Icon(Icons.shield_outlined, color: Color(0xFF1B5E20)),
-                      title: const Text('اسم الفريق المعتمد'),
-                      subtitle: Text(team),
+                    const SizedBox(height: 20),
+                    Container(
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.shield_outlined, color: Color(0xFF1B5E20)),
+                            title: const Text('اسم الفريق المعتمد'),
+                            subtitle: Text(team),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.phone_android_rounded, color: Color(0xFF1B5E20)),
+                            title: const Text('رقم الهاتف للتواصل الميداني'),
+                            subtitle: Text(playerPhone),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Divider(),
-                    ListTile(
-                      leading: const Icon(Icons.phone_android, color: Color(0xFF1B5E20)),
-                      title: const Text('رقم الهاتف للتواصل الميداني'),
-                      subtitle: Text(playerPhone),
-                    ),
-                    const Divider(),
                     const SizedBox(height: 20),
                     ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, minimumSize: const Size.fromHeight(48)),
-                      icon: const Icon(Icons.logout, color: Colors.white),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.logout_rounded, color: Colors.white),
                       label: const Text('تسجيل خروج من الحساب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       onPressed: () async {
                         final prefs = await SharedPreferences.getInstance();
