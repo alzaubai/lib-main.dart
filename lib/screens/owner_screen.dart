@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
 
@@ -161,6 +162,10 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       currentType = 'سباعي (7 ضد 7)';
     }
 
+    double? currentLat = (data['latitude'] as num?)?.toDouble();
+    double? currentLng = (data['longitude'] as num?)?.toDouble();
+    bool isLocating = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -210,6 +215,60 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     maxLength: 4,
                     decoration: const InputDecoration(labelText: 'رمز PIN للدخول (4 أرقام)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
                   ),
+                  const SizedBox(height: 12),
+                  // قسم تحديد موقع الملعب بالـ GPS
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.shade200)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on, color: Colors.blue),
+                            const SizedBox(width: 6),
+                            Text(
+                              currentLat != null ? 'الموقع محدد ومثبت على الخريطة' : 'لم يتم تحديد موقع الملعب بعد',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: currentLat != null ? Colors.green.shade800 : Colors.brown),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text('اضغط الزر بالأسفل وأنت داخل الملعب ليتم سحب إحداثيات الـ GPS فورياً وتثبيتها للاعبين:', style: TextStyle(fontSize: 12, color: Colors.black87)),
+                        const SizedBox(height: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white),
+                          icon: isLocating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.my_location),
+                          label: Text(isLocating ? 'جاري قراءة القمر الصناعي...' : (currentLat != null ? 'تحديث موقع الملعب الحالي' : 'تحديد موقع الملعب الحالي عبر GPS')),
+                          onPressed: isLocating
+                              ? null
+                              : () async {
+                                  setModalState(() => isLocating = true);
+                                  try {
+                                    LocationPermission perm = await Geolocator.checkPermission();
+                                    if (perm == LocationPermission.denied) {
+                                      perm = await Geolocator.requestPermission();
+                                    }
+                                    if (perm == LocationPermission.deniedForever || perm == LocationPermission.denied) {
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يجب إعطاء إذن الموقع لتحديد مكان الملعب')));
+                                      setModalState(() => isLocating = false);
+                                      return;
+                                    }
+                                    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                                    setModalState(() {
+                                      currentLat = pos.latitude;
+                                      currentLng = pos.longitude;
+                                      isLocating = false;
+                                    });
+                                  } catch (e) {
+                                    setModalState(() => isLocating = false);
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ بجلب الموقع: $e')));
+                                  }
+                                },
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(vertical: 14)),
@@ -224,11 +283,15 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                           'hourlyRate': rate,
                           'pitchType': currentType,
                           'pin': pin,
+                          if (currentLat != null && currentLng != null) ...{
+                            'latitude': currentLat,
+                            'longitude': currentLng,
+                          }
                         });
 
                         if (mounted) {
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث بيانات الملعب بنجاح'), backgroundColor: Colors.green));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث بيانات وموقع الملعب بنجاح'), backgroundColor: Colors.green));
                         }
                       }
                     },
