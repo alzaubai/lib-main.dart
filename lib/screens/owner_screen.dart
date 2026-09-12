@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
+import 'tournaments/tournament_screen.dart';
 
 class OwnerDashboardScreen extends StatefulWidget {
   final String pitchName;
@@ -73,10 +74,26 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(widget.pitchName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const Text('إدارة الحجوزات والاشتراكات والتقييمات', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                const Text('إدارة الحجوزات والاشتراكات والبطولات', style: TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.emoji_events, color: Colors.amberAccent),
+                tooltip: 'تنظيم البطولات والدوريات',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TournamentScreen(
+                        userPhone: 'owner',
+                        isOwner: true,
+                        pitchName: widget.pitchName,
+                      ),
+                    ),
+                  );
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.settings, color: Colors.white),
                 tooltip: 'إعدادات وبيانات الملعب',
