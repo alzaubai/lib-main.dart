@@ -77,6 +77,11 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
             ),
             actions: [
               IconButton(
+                icon: const Icon(Icons.settings, color: Colors.white),
+                tooltip: 'إعدادات وبيانات الملعب',
+                onPressed: () => _openPitchSettingsModal(context),
+              ),
+              IconButton(
                 icon: const Icon(Icons.account_balance_wallet, color: Colors.amberAccent),
                 tooltip: 'كشف الحساب المالي',
                 onPressed: () => _openFinancialReportModal(context),
@@ -140,6 +145,101 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   : null),
         );
       },
+    );
+  }
+
+  void _openPitchSettingsModal(BuildContext context) async {
+    final doc = await _firestore.collection('pitches').doc(widget.pitchName).get();
+    if (!doc.exists || !mounted) return;
+
+    final data = doc.data() as Map<String, dynamic>;
+    final phoneCtrl = TextEditingController(text: data['phone'] ?? '');
+    final rateCtrl = TextEditingController(text: '${data['hourlyRate']?.toInt() ?? 15000}');
+    final pinCtrl = TextEditingController(text: data['pin'] ?? '');
+    String currentType = data['pitchType'] ?? 'سباعي (7 ضد 7)';
+    if (!pitchTypesList.contains(currentType) || currentType == 'الكل') {
+      currentType = 'سباعي (7 ضد 7)';
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: Padding(
+            padding: EdgeInsets.only(top: 20, left: 20, right: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.settings, color: Color(0xFF1B5E20)),
+                      const SizedBox(width: 8),
+                      Text('إعدادات ملعب (${widget.pitchName})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'رقم هاتف التواصل والحجز', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: rateCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'سعر الحجز للمباراة (د.ع)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.attach_money)),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: currentType,
+                    decoration: const InputDecoration(labelText: 'نوع وحجم الملعب', border: OutlineInputBorder()),
+                    items: pitchTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => currentType = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: pinCtrl,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(labelText: 'رمز PIN للدخول (4 أرقام)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(vertical: 14)),
+                    onPressed: () async {
+                      final phone = phoneCtrl.text.trim();
+                      final rate = double.tryParse(rateCtrl.text.trim()) ?? 15000.0;
+                      final pin = pinCtrl.text.trim();
+
+                      if (phone.isNotEmpty && pin.length == 4) {
+                        await _firestore.collection('pitches').doc(widget.pitchName).update({
+                          'phone': phone,
+                          'hourlyRate': rate,
+                          'pitchType': currentType,
+                          'pin': pin,
+                        });
+
+                        if (mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث بيانات الملعب بنجاح'), backgroundColor: Colors.green));
+                        }
+                      }
+                    },
+                    child: const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
