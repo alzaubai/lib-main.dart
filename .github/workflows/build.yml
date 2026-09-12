@@ -50,6 +50,31 @@ jobs:
             convert ball.png -resize 192x192 "$dir/ic_launcher.png"
           done
 
+      - name: Generate Deterministic Keystore For Updates
+        run: |
+          keytool -genkey -v \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "malabi_secure_2026" \
+            -alias "malabi_key" \
+            -keypass "malabi_secure_2026" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Malabi, OU=App, O=Malabi, L=Baghdad, ST=Baghdad, C=IQ"
+
+      - name: Configure Gradle Signing
+        run: |
+          sed -i '/buildTypes {/i \
+              signingConfigs {\
+                  release {\
+                      storeFile file("upload-keystore.jks")\
+                      storePassword "malabi_secure_2026"\
+                      keyAlias "malabi_key"\
+                      keyPassword "malabi_secure_2026"\
+                  }\
+              }' android/app/build.gradle
+          sed -i 's/signingConfig = signingConfigs.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
+
       - name: Inject Firebase Gradle Config
         run: |
           sed -i '/id "org.jetbrains.kotlin.android"/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
@@ -59,7 +84,7 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Build APK
+      - name: Build Signed APK
         run: flutter build apk --release
 
       - name: Upload APK
