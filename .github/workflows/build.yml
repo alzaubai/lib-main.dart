@@ -29,7 +29,7 @@ jobs:
       - name: Create Clean Android Platform
         run: |
           rm -rf android
-          flutter create . --project-name football --platforms=android --org iq.malabi
+          flutter create . --project-name football --platforms=android --org com.example
           mkdir -p android/app
           cp google-services.json android/app/
 
