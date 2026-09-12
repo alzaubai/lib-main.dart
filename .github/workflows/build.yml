@@ -33,6 +33,19 @@ jobs:
           mkdir -p android/app
           cp google-services.json android/app/
 
+      - name: Set App Name To ملعبي
+        run: |
+          sed -i 's/android:label="football"/android:label="ملعبي"/g' android/app/src/main/AndroidManifest.xml
+
+      - name: Generate Football Icon
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          # تحميل صورة كرة قدم عالية الدقة وتحويلها لأيقونة التطبيق الرسمية
+          curl -s -L -o ball.png "https://cdn-icons-png.flaticon.com/512/861/861512.png"
+          for dir in android/app/src/main/res/mipmap-*; do
+            convert ball.png -resize 192x192 "$dir/ic_launcher.png"
+          done
+
       - name: Inject Firebase Gradle Config
         run: |
           sed -i '/id "org.jetbrains.kotlin.android"/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
