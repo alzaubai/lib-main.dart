@@ -70,7 +70,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 1.4,
+                      childAspectRatio: 1.25,
                     ),
                     itemCount: docs.length,
                     itemBuilder: (context, index) => _buildTournamentCard(docs[index]),
@@ -89,8 +89,8 @@ class _TournamentScreenState extends State<TournamentScreen> {
         floatingActionButton: widget.isOwner
             ? FloatingActionButton.extended(
                 backgroundColor: const Color(0xFF1B5E20),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('إطلاق بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.add_rounded, color: Colors.white),
+                label: const Text('إطلاق بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                 onPressed: () => _openCreateTournamentDialog(context),
               )
             : null,
@@ -132,7 +132,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
             const SizedBox(height: 6),
             Text('الملعب المنظم: $pitch', style: const TextStyle(color: Colors.grey, fontSize: 13)),
             const SizedBox(height: 4),
-            Text('الجوائز الكبرى: $prize', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 13)),
+            Text('الجوائز: $prize', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 13)),
             Text('اشتراك الفريق: ${currencyFormatter.format(fee)} د.ع', style: const TextStyle(fontSize: 12)),
             const SizedBox(height: 8),
             Row(
@@ -157,14 +157,16 @@ class _TournamentScreenState extends State<TournamentScreen> {
               ),
             ],
             const Divider(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                if (!isStarted && teams.length < maxTeams && !widget.isOwner)
+                if (!isStarted && teams.length < maxTeams)
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                    icon: const Icon(Icons.person_add, size: 16),
-                    label: const Text('تسجيل فريقي'),
+                    icon: const Icon(Icons.person_add, size: 16, color: Colors.white),
+                    label: Text(widget.isOwner ? 'إضافة فريق يدوياً' : 'تسجيل فريقي', style: const TextStyle(color: Colors.white)),
                     onPressed: () => _showRegisterTeamDialog(context, doc.reference, teams, maxTeams),
                   ),
                 if (widget.isOwner && !isStarted) ...[
@@ -173,18 +175,16 @@ class _TournamentScreenState extends State<TournamentScreen> {
                     onPressed: () => doc.reference.delete(),
                     child: const Text('حذف'),
                   ),
-                  const SizedBox(width: 8),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800),
                     onPressed: () => _startTournament(doc.reference, teams),
-                    child: const Text('بدء القرعة والجداول'),
+                    child: const Text('إطلاق القرعة', style: TextStyle(color: Colors.white)),
                   ),
                 ],
-                const Spacer(),
                 TextButton.icon(
                   style: TextButton.styleFrom(foregroundColor: const Color(0xFF1B5E20)),
                   icon: const Icon(Icons.account_tree_rounded),
-                  label: Text(isStarted ? 'عرض الجدول ومباريات الشجرة' : 'تفاصيل البطولة'),
+                  label: Text(isStarted ? 'عرض الشجرة' : 'التفاصيل والفرق'),
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -220,7 +220,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم البطولة (مثال: كأس رمضان)')),
+                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم البطولة (مثال: كأس الصيف)')),
                   const SizedBox(height: 10),
                   TextField(controller: prizeCtrl, decoration: const InputDecoration(labelText: 'الجوائز (مثال: 500 ألف + كأس)')),
                   const SizedBox(height: 10),
@@ -250,7 +250,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
                       'prize': prizeCtrl.text.trim().isEmpty ? 'كأس البطولة' : prizeCtrl.text.trim(),
                       'fee': double.tryParse(feeCtrl.text.trim()) ?? 25000.0,
                       'maxTeams': maxTeams,
-                      'pitchName': widget.pitchName ?? 'ملعب عام',
+                      'pitchName': widget.pitchName ?? 'ملعب رياضي',
                       'teams': [],
                       'isStarted': false,
                       'champion': '',
@@ -277,10 +277,10 @@ class _TournamentScreenState extends State<TournamentScreen> {
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('تسجيل فريق في البطولة'),
+          title: Text(widget.isOwner ? 'إضافة اسم الفريق المشارك' : 'تسجيل فريق في البطولة'),
           content: TextField(
             controller: teamCtrl,
-            decoration: const InputDecoration(labelText: 'اسم فريقك الرياضي', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'اسم الفريق', border: OutlineInputBorder()),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
@@ -293,11 +293,11 @@ class _TournamentScreenState extends State<TournamentScreen> {
                   await docRef.update({'teams': teams});
                   if (mounted) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تسجيل فريقك بنجاح!'), backgroundColor: Colors.green));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تسجيل الفريق بنجاح!'), backgroundColor: Colors.green));
                   }
                 }
               },
-              child: const Text('تأكيد التسجيل', style: TextStyle(color: Colors.white)),
+              child: const Text('تأكيد الإضافة', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -363,6 +363,7 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
 
             final matches = List<Map<String, dynamic>>.from(data['matches'] ?? []);
             final champion = data['champion'] ?? '';
+            final teams = List<String>.from(data['teams'] ?? []);
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -383,61 +384,87 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                   ),
                   const SizedBox(height: 20),
                 ],
-                const Text('مباريات الشجرة والمواجهات:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                const SizedBox(height: 10),
-                matches.isEmpty
-                    ? const Center(child: Text('لم يتم بدء القرعة بعد'))
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: matches.length,
-                        itemBuilder: (context, index) {
-                          final m = matches[index];
-                          final t1 = m['team1'] ?? 'فريق 1';
-                          final t2 = m['team2'] ?? 'فريق 2';
-                          final s1 = m['score1'];
-                          final s2 = m['score2'];
-                          final winner = m['winner'] ?? '';
+                if (matches.isEmpty) ...[
+                  const Text('الفرق المسجلة حتى الآن:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                  const SizedBox(height: 10),
+                  ...teams.map((t) => Card(child: ListTile(leading: const Icon(Icons.sports_soccer), title: Text(t, style: const TextStyle(fontWeight: FontWeight.bold))))),
+                ] else ...[
+                  const Text('مباريات الشجرة والمواجهات:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                  const SizedBox(height: 10),
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: matches.length,
+                    itemBuilder: (context, index) {
+                      final m = matches[index];
+                      final t1 = m['team1'] ?? 'فريق 1';
+                      final t2 = m['team2'] ?? 'فريق 2';
+                      final s1 = m['score1'];
+                      final s2 = m['score2'];
+                      final winner = m['winner'] ?? '';
 
-                          return Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14.0),
-                              child: Column(
+                      return Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14.0),
+                          child: Column(
+                            children: [
+                              Text(m['round'] ?? 'مباراة', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const SizedBox(height: 8),
+                              Row(
                                 children: [
-                                  Text(m['round'] ?? 'مباراة', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(child: Text(t1, textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: winner == t1 ? Colors.green.shade800 : Colors.black87))),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
-                                        child: Text(s1 != null && s2 != null ? '$s1 - $s2' : 'VS', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  Expanded(
+                                    child: Text(
+                                      t1,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: winner == t1 ? Colors.green.shade800 : Colors.black87,
                                       ),
-                                      Expanded(child: Text(t2, textAlign: TextAlign.left, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: winner == t2 ? Colors.green.shade800 : Colors.black87))),
-                                    ],
-                                  ),
-                                  if (widget.isOwner && winner.isEmpty) ...[
-                                    const Divider(height: 20),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                                      onPressed: () => _showEnterScoreDialog(context, index, matches),
-                                      child: const Text('إدخال النتيجة وتحديد الفائز'),
                                     ),
-                                  ] else if (winner.isNotEmpty) ...[
-                                    const SizedBox(height: 6),
-                                    Text('الفائز المتأهل: $winner ✔️', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-                                  ]
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+                                    child: Text(
+                                      s1 != null && s2 != null ? '$s1 - $s2' : 'ضد',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1B5E20)),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      t2,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: winner == t2 ? Colors.green.shade800 : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                              if (widget.isOwner && winner.isEmpty) ...[
+                                const Divider(height: 20),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                                  onPressed: () => _showEnterScoreDialog(context, index, matches),
+                                  child: const Text('إدخال النتيجة وتحديد الفائز', style: TextStyle(color: Colors.white)),
+                                ),
+                              ] else if (winner.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text('الفائز المتأهل: $winner ✔️', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                              ]
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ],
             );
           },
@@ -457,7 +484,7 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('نتيجة مباراة (${m['team1']} ضد ${m['team2']})'),
+          title: Text('نتيجة (${m['team1']} ضد ${m['team2']})'),
           content: Row(
             children: [
               Expanded(child: TextField(controller: s1Ctrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: m['team1']))),
@@ -474,7 +501,7 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                 int score2 = int.tryParse(s2Ctrl.text.trim()) ?? 0;
 
                 if (score1 == score2) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يمكن أن تنتهي المباراة بالتعادل في نظام الإقصاء')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يمكن التعادل في مباريات الإقصاء')));
                   return;
                 }
 
