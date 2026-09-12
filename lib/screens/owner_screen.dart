@@ -119,7 +119,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.remove('current_pitch_name');
                   if (mounted) {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RoleSelectionScreen()));
+                   Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
                   }
                 },
               ),
