@@ -2,7 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const Map<String, List<String>> iraqLocations = {
-  'بغداد': ['الكل', 'الكرخ الأولى', 'الكرخ الثانية', 'الكرخ الثالثة', 'الرصافة الأولى', 'الرصافة الثانية', 'الرصافة الثالثة', 'أبو غريب', 'المحمودية', 'الطارمية', 'التاجي', 'المدائن'],
+  'بغداد': [
+    'الكل',
+    'الكرخ الأولى',
+    'الكرخ الثانية',
+    'الكرخ الثالثة',
+    'الرصافة الأولى',
+    'الرصافة الثانية',
+    'الرصافة الثالثة',
+    'أبو غريب',
+    'المحمودية',
+    'الطارمية',
+    'التاجي',
+    'المدائن',
+  ],
   'البصرة': ['الكل', 'العشار', 'الجبيلة', 'المعقل', 'القرنة', 'الزبير', 'شط العرب'],
   'أربيل': ['الكل', 'عنكاوا', 'الروستايا', 'بيتي', 'السركال', 'قلعة أربيل'],
   'النجف': ['الكل', 'المدينة القديمة', 'الحنانة', 'الوفاء', 'الكوفة'],
@@ -14,40 +27,49 @@ const Map<String, List<String>> iraqLocations = {
 
 const Map<String, List<String>> subLocationsMap = {
   'الكرخ الأولى': ['المنصور', 'اليرموك', 'العلاوي', 'الدورة', 'البياع', 'الكاظمية'],
-  'الكرخ الثانية': ['العامرية', 'الحارثية', 'الداوودي', 'الغزالة', 'العريج'],
-  'الكرخ الثالثة': ['الشعلة', 'الحرية', 'الإسكان', 'الكاظمية المقدسة', 'الطارمية (اطراف)'],
+  'الكرخ الثانية': ['العامرية', 'الحارثية', 'الداوودي', 'الغزالية', 'العريج'],
+  'الكرخ الثالثة': ['الشعلة', 'الحرية', 'الإعلام', 'الكاظمية المقدسة', 'الطارمية (أطراف)'],
   'الرصافة الأولى': ['الكرادة', 'الشارع الرئيسي', 'أبو نؤاس', 'العرصات', 'المسبح'],
   'الرصافة الثانية': ['زيونة', 'الغدير', 'البلديات', 'المصارف', 'الأمين'],
-  'الرصافة الثالثة': ['الاعظمية', 'الكسرة', 'الميدان', 'باب المعظم', 'الوزيرية', 'الشروق'],
-  'أبو غريب': ['مركز القضاء', 'الرشاد', 'الزيتون', 'الشحيمية', 'النصر والسلام'],
+  'الرصافة الثالثة': ['الأعظمية', 'الكسرة', 'الميدان', 'باب المعظم', 'الوزيرية', 'الشعب'],
+  'أبو غريب': ['مركز القضاء', 'الرسالة', 'الرشاد', 'الزيتون', 'الشحيمية', 'النصر والسلام'],
   'المحمودية': ['مركز المحمودية', 'اللطيفية', 'اليوسفية'],
   'الطارمية': ['مركز الطارمية', 'العبايجي'],
   'التاجي': ['مركز التاجي', 'المشاهدة', 'البوعيفان'],
   'المدائن': ['مركز المدائن', 'النهروان', 'الجسر'],
 };
 
-const List<String> pitchTypesList = ['الكل', 'خماسي (5 ضد 5)', 'سداسي (6 ضد 6)', 'سباعي (7 ضد 7)', 'تساعي (9 ضد 9)'];
-const List<String> pitchSurfaceTypesList = ['الكل', 'ثيل 🌿', 'تارتان 🏟️', 'ترابي 🏜️'];
-const List<String> weekDaysList = ['الجمعة', 'السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+const List<String> pitchTypesList = [
+  'الكل',
+  'خماسي (5 ضد 5)',
+  'سداسي (6 ضد 6)',
+  'سباعي (7 ضد 7)',
+  'تساعي (9 ضد 9)',
+  'ملعب قانوني (11 ضد 11)',
+];
 
-String getArabicDayName(DateTime date) {
-  switch (date.weekday) {
-    case DateTime.friday: return 'الجمعة';
-    case DateTime.saturday: return 'السبت';
-    case DateTime.sunday: return 'الأحد';
-    case DateTime.monday: return 'الإثنين';
-    case DateTime.tuesday: return 'الثلاثاء';
-    case DateTime.wednesday: return 'الأربعاء';
-    case DateTime.thursday: return 'الخميس';
-    default: return 'الجمعة';
-  }
-}
+const List<String> pitchSurfaceTypesList = [
+  'الكل',
+  'ثيل 🌿',
+  'تارتان 🏟️',
+  'ترابي 🏜️',
+];
+
+const List<String> weekDaysList = [
+  'الجمعة',
+  'السبت',
+  'الأحد',
+  'الإثنين',
+  'الثلاثاء',
+  'الأربعاء',
+  'الخميس',
+];
 
 List<String> buildPitchSlots(int durationMinutes) {
   List<String> slots = [];
-  int startHour = 16; // 4 عصراً
+  int startHour = 16;
   int startMin = 0;
-  int endHour = 2; // 2 ليلاً
+  int endHour = 2;
   int endMin = 0;
 
   TimeOfDay current = TimeOfDay(hour: startHour, minute: startMin);
@@ -55,15 +77,10 @@ List<String> buildPitchSlots(int durationMinutes) {
 
   while (true) {
     TimeOfDay next = addMinutes(current, durationMinutes);
-    // تم إصلاح منطق التحقق من الأوقات
-    if (isAfterOrEqual(next, closing) && current.hour >= 16) {
-      break;
-    }
+    if (isAfterOrEqual(next, closing) && current.hour >= 16) break;
     slots.add('${formatTimeAmPm(current)} - ${formatTimeAmPm(next)}');
     current = next;
-    if (current.hour == closing.hour && current.minute == closing.minute) {
-      break;
-    }
+    if (current.hour == closing.hour && current.minute == closing.minute) break;
   }
   return slots;
 }
@@ -75,16 +92,11 @@ TimeOfDay addMinutes(TimeOfDay time, int minutes) {
   return TimeOfDay(hour: newHour, minute: newMin);
 }
 
-// تم إصلاح الدالة لتجنب تضارب التوقيت بعد منتصف الليل
 bool isAfterOrEqual(TimeOfDay t1, TimeOfDay t2) {
   int m1 = t1.hour * 60 + t1.minute;
   int m2 = t2.hour * 60 + t2.minute;
-  
-  // نعتبر أن اليوم يبدأ فعلياً الساعة 6 صباحاً لتنظيم الحجوزات الليلية
-  int shiftedM1 = m1 < 360 ? m1 + 24 * 60 : m1;
-  int shiftedM2 = m2 < 360 ? m2 + 24 * 60 : m2;
-  
-  return shiftedM1 >= shiftedM2;
+  if (t1.hour < 6 && t2.hour >= 16) m1 += 24 * 60;
+  return m1 >= m2 + (t2.hour < 6 ? 24 * 60 : 0);
 }
 
 String formatTimeAmPm(TimeOfDay time) {
@@ -97,9 +109,10 @@ String formatTimeAmPm(TimeOfDay time) {
 }
 
 Future<void> launchCallDirect(String phone) async {
-  final Uri launchUri = Uri(scheme: 'tel', path: phone);
+  String cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+  final Uri launchUri = Uri(scheme: 'tel', path: cleanPhone);
   if (await canLaunchUrl(launchUri)) {
-    await launchUrl(launchUri);
+    await launchUrl(launchUri, mode: LaunchMode.platformDefault);
   }
 }
 
@@ -130,7 +143,7 @@ void showMapChooserSheet(BuildContext context, double lat, double lng, String pi
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('اختر تطبيق الخرائط للتوجه إلى الملعب', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+            Text('التوجه إلى: $pitchName', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF33CCFF), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 12)),
@@ -138,9 +151,7 @@ void showMapChooserSheet(BuildContext context, double lat, double lng, String pi
               label: const Text('فتح عبر Waze', style: TextStyle(fontWeight: FontWeight.bold)),
               onPressed: () async {
                 final url = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
-                if (await canLaunchUrl(url)) {
-                  await launchUrl(url, mode: LaunchMode.externalApplication);
-                }
+                if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
                 if (ctx.mounted) Navigator.pop(ctx);
               },
             ),
@@ -151,9 +162,7 @@ void showMapChooserSheet(BuildContext context, double lat, double lng, String pi
               label: const Text('فتح عبر Google Maps', style: TextStyle(fontWeight: FontWeight.bold)),
               onPressed: () async {
                 final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-                if (await canLaunchUrl(url)) {
-                  await launchUrl(url, mode: LaunchMode.externalApplication);
-                }
+                if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
                 if (ctx.mounted) Navigator.pop(ctx);
               },
             ),
