@@ -7,7 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
 import 'tournaments/tournament_screen.dart';
-import 'owner/owner_analytics_screen.dart';
+import 'owner_analytics_screen.dart';
 
 class OwnerDashboardScreen extends StatefulWidget {
   final String pitchName;
@@ -25,7 +25,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadPendingSeenCache();
     _tabController.addListener(() {
       setState(() {});
@@ -68,20 +68,31 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         final hasUnreadPending = pendingCount > _lastSeenPendingCount;
 
         return Scaffold(
+          backgroundColor: const Color(0xFFF4F6F8),
           appBar: AppBar(
-            backgroundColor: const Color(0xFF1B5E20),
             elevation: 0,
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            backgroundColor: const Color(0xFF1B5E20),
+            title: Row(
               children: [
-                Text(widget.pitchName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const Text('إدارة الحجوزات والاشتراكات والتحليلات', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.stadium, color: Colors.amberAccent, size: 22),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.pitchName, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                    const Text('لوحة تحكّم الملعب', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  ],
+                ),
               ],
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.insights, color: Colors.lightGreenAccent),
-                tooltip: 'تحليلات وإحصاءات الأداء',
+                icon: const Icon(Icons.insights_rounded, color: Colors.lightGreenAccent),
+                tooltip: 'التحليلات المالية والذروة',
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -92,33 +103,17 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.emoji_events, color: Colors.amberAccent),
-                tooltip: 'تنظيم البطولات والدوريات',
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TournamentScreen(
-                        userPhone: 'owner',
-                        isOwner: true,
-                        pitchName: widget.pitchName,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings, color: Colors.white),
-                tooltip: 'إعدادات وبيانات الملعب',
+                icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                tooltip: 'إعدادات الملعب والـ GPS',
                 onPressed: () => _openPitchSettingsModal(context),
               ),
               IconButton(
-                icon: const Icon(Icons.account_balance_wallet, color: Colors.amberAccent),
+                icon: const Icon(Icons.account_balance_wallet_rounded, color: Colors.amberAccent),
                 tooltip: 'كشف الحساب المالي',
                 onPressed: () => _openFinancialReportModal(context),
               ),
               IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
+                icon: const Icon(Icons.logout_rounded, color: Colors.white70),
                 tooltip: 'تسجيل خروج',
                 onPressed: () async {
                   final prefs = await SharedPreferences.getInstance();
@@ -129,24 +124,35 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                 },
               ),
             ],
-            bottom: TabBar(
-              controller: _tabController,
-              indicatorColor: Colors.amberAccent,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              tabs: [
-                const Tab(icon: Icon(Icons.event_available), text: 'المباريات والجدول'),
-                Tab(
-                  icon: Badge(
-                    isLabelVisible: hasUnreadPending,
-                    label: Text('${pendingCount - _lastSeenPendingCount}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    backgroundColor: Colors.red,
-                    child: const Icon(Icons.notifications_active),
-                  ),
-                  text: 'الطلبات المعلقة',
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(48),
+              child: Container(
+                color: const Color(0xFF1B5E20),
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  indicatorColor: Colors.amberAccent,
+                  indicatorWeight: 3,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white60,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  tabs: [
+                    const Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'المباريات والجدول'),
+                    Tab(
+                      icon: Badge(
+                        isLabelVisible: hasUnreadPending,
+                        label: Text('${pendingCount - _lastSeenPendingCount}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        backgroundColor: Colors.redAccent,
+                        child: const Icon(Icons.notifications_active_rounded, size: 20),
+                      ),
+                      text: 'الطلبات المعلقة',
+                    ),
+                    const Tab(icon: Icon(Icons.repeat_rounded, size: 20), text: 'الحجوزات الدائمة'),
+                    const Tab(icon: Icon(Icons.emoji_events_rounded, size: 20), text: 'البطولات والدوريات 🏆'),
+                  ],
                 ),
-                const Tab(icon: Icon(Icons.repeat), text: 'الحجوزات الدائمة'),
-              ],
+              ),
             ),
           ),
           body: TabBarView(
@@ -155,28 +161,40 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
               _buildConfirmedTab(currencyFormatter),
               _buildPendingTab(pendingSnapshot),
               _buildRecurringBookingsTab(),
+              TournamentScreen(
+                userPhone: 'owner',
+                isOwner: true,
+                pitchName: widget.pitchName,
+              ),
             ],
           ),
-          floatingActionButton: _tabController.index == 0
-              ? FloatingActionButton.extended(
-                  backgroundColor: const Color(0xFF1B5E20),
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.add),
-                  label: const Text('حجز موعد يدوي', style: TextStyle(fontWeight: FontWeight.bold)),
-                  onPressed: () => _openAddManualSheet(context),
-                )
-              : (_tabController.index == 2
-                  ? FloatingActionButton.extended(
-                      backgroundColor: Colors.purple.shade800,
-                      foregroundColor: Colors.white,
-                      icon: const Icon(Icons.add_task),
-                      label: const Text('إضافة حجز أسبوعي ثابت', style: TextStyle(fontWeight: FontWeight.bold)),
-                      onPressed: () => _openAddRecurringDialog(context),
-                    )
-                  : null),
+          floatingActionButton: _buildFloatingAction(),
         );
       },
     );
+  }
+
+  Widget? _buildFloatingAction() {
+    if (_tabController.index == 0) {
+      return FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF1B5E20),
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('حجز موعد يدوي', style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => _openAddManualSheet(context),
+      );
+    } else if (_tabController.index == 2) {
+      return FloatingActionButton.extended(
+        backgroundColor: Colors.purple.shade800,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.add_task_rounded),
+        label: const Text('إضافة حجز أسبوعي دائم', style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => _openAddRecurringDialog(context),
+      );
+    }
+    return null;
   }
 
   void _openPitchSettingsModal(BuildContext context) async {
@@ -199,40 +217,58 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Directionality(
           textDirection: ui.TextDirection.rtl,
-          child: Padding(
-            padding: EdgeInsets.only(top: 20, left: 20, right: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(top: 16, left: 20, right: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Icon(Icons.settings, color: Color(0xFF1B5E20)),
-                      const SizedBox(width: 8),
-                      Text('إعدادات ملعب (${widget.pitchName})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                      const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.settings_suggest, color: Color(0xFF1B5E20))),
+                      const SizedBox(width: 10),
+                      Text('إعدادات وبيانات الملعب', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
                     ],
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'رقم هاتف التواصل والحجز', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone)),
+                    decoration: InputDecoration(
+                      labelText: 'رقم هاتف التواصل والحجز',
+                      prefixIcon: const Icon(Icons.phone_rounded, color: Color(0xFF1B5E20)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: rateCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'سعر الحجز للمباراة (د.ع)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.attach_money)),
+                    decoration: InputDecoration(
+                      labelText: 'سعر الحجز للمباراة (د.ع)',
+                      prefixIcon: const Icon(Icons.payments_rounded, color: Colors.teal),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: currentType,
-                    decoration: const InputDecoration(labelText: 'نوع وحجم الملعب', border: OutlineInputBorder()),
+                    decoration: InputDecoration(
+                      labelText: 'نوع وحجم الملعب',
+                      prefixIcon: const Icon(Icons.aspect_ratio_rounded, color: Color(0xFF1B5E20)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                     items: pitchTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
                     onChanged: (val) {
                       if (val != null) setModalState(() => currentType = val);
@@ -243,32 +279,48 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     controller: pinCtrl,
                     keyboardType: TextInputType.number,
                     maxLength: 4,
-                    decoration: const InputDecoration(labelText: 'رمز PIN للدخول (4 أرقام)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
+                    decoration: InputDecoration(
+                      labelText: 'رمز PIN للدخول السريع (4 أرقام)',
+                      prefixIcon: const Icon(Icons.lock_rounded, color: Colors.amber),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.shade200)),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.location_on, color: Colors.blue),
-                            const SizedBox(width: 6),
-                            Text(
-                              currentLat != null ? 'الموقع محدد ومثبت على الخريطة' : 'لم يتم تحديد موقع الملعب بعد',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: currentLat != null ? Colors.green.shade800 : Colors.brown),
+                            Icon(Icons.location_pin, color: currentLat != null ? Colors.green.shade700 : Colors.blue.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                currentLat != null ? 'موقع الملعب مثبت بدقة على الأقمار الصناعية' : 'لم يتم ربط موقع الـ GPS بعد',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: currentLat != null ? Colors.green.shade900 : Colors.blue.shade900),
+                              ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        const Text('اضغط الزر بالأسفل وأنت داخل الملعب ليتم سحب إحداثيات الـ GPS فورياً وتثبيتها للاعبين:', style: TextStyle(fontSize: 12, color: Colors.black87)),
+                        const SizedBox(height: 8),
+                        const Text('اضغط الزر أدناه وأنت متواجد بالملعب لحفظ الإحداثيات لتوجيه اللاعبين عبر Waze و Google Maps:', style: TextStyle(fontSize: 11, color: Colors.black87, height: 1.4)),
                         const SizedBox(height: 10),
                         ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white),
-                          icon: isLocating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.my_location),
-                          label: Text(isLocating ? 'جاري قراءة القمر الصناعي...' : (currentLat != null ? 'تحديث موقع الملعب الحالي' : 'تحديد موقع الملعب الحالي عبر GPS')),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: isLocating
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.my_location_rounded, size: 18),
+                          label: Text(isLocating ? 'جاري الاتصال بالأقمار الصناعية...' : (currentLat != null ? 'تحديث إحداثيات موقع الملعب' : 'تحديد وحفظ موقع الملعب عبر GPS')),
                           onPressed: isLocating
                               ? null
                               : () async {
@@ -300,7 +352,11 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(vertical: 14)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B5E20),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                     onPressed: () async {
                       final phone = phoneCtrl.text.trim();
                       final rate = double.tryParse(rateCtrl.text.trim()) ?? 15000.0;
@@ -320,7 +376,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 
                         if (mounted) {
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث بيانات وموقع الملعب بنجاح'), backgroundColor: Colors.green));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ بيانات الملعب بنجاح'), backgroundColor: Colors.green));
                         }
                       }
                     },
@@ -360,7 +416,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         return Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: const BoxDecoration(
                 color: Color(0xFF1B5E20),
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
@@ -370,12 +426,18 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(14)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('الوارد الفعلي المقبوض', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                          const SizedBox(height: 4),
+                          const Row(
+                            children: [
+                              Icon(Icons.check_circle_outline, color: Colors.amberAccent, size: 16),
+                              SizedBox(width: 4),
+                              Text('الوارد الفعلي المقبوض', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
                           Text('${currencyFormatter.format(actualRevenueReceived)} د.ع', style: const TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -385,12 +447,18 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(14)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('المبلغ المتوقع (مؤكد)', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                          const SizedBox(height: 4),
+                          const Row(
+                            children: [
+                              Icon(Icons.hourglass_top_rounded, color: Colors.lightGreenAccent, size: 16),
+                              SizedBox(width: 4),
+                              Text('المبلغ المؤكد القادم', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
                           Text('${currencyFormatter.format(expectedRevenueUpcoming)} د.ع', style: const TextStyle(color: Colors.lightGreenAccent, fontSize: 16, fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -401,7 +469,18 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
             ),
             Expanded(
               child: docs.isEmpty
-                  ? const Center(child: Text('لا توجد مباريات مؤكدة'))
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.event_busy_rounded, size: 70, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          const Text('لا توجد مباريات مسجلة حالياً', style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          const Text('اضغط "حجز موعد يدوي" لتسجيل مباراة جديدة', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        ],
+                      ),
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.all(14),
                       itemCount: docs.length,
@@ -413,6 +492,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                         final phone = data['phone'] ?? '';
 
                         return Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           margin: const EdgeInsets.only(bottom: 12),
                           child: Padding(
                             padding: const EdgeInsets.all(14.0),
@@ -422,21 +503,30 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('التاريخ: ${data['date']}', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.calendar_today_rounded, size: 15, color: Colors.grey),
+                                        const SizedBox(width: 4),
+                                        Text('${data['date']}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ],
+                                    ),
                                     Row(
                                       children: [
                                         if (isRecurring)
                                           Container(
                                             margin: const EdgeInsets.only(left: 6),
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                             decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(6)),
                                             child: const Text('دائم / أسبوعي', style: TextStyle(fontSize: 10, color: Colors.purple, fontWeight: FontWeight.bold)),
                                           ),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(color: isDone ? Colors.green.shade100 : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: isDone ? Colors.green.shade100 : Colors.orange.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
                                           child: Text(
-                                            isDone ? 'مكتملة ومقبوضة' : 'مؤكدة (بانتظار اللعب)',
+                                            isDone ? 'مكتملة ومقبوضة ✔️' : 'مؤكدة (بانتظار اللعب)',
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDone ? Colors.green.shade900 : Colors.orange.shade900),
                                           ),
                                         ),
@@ -444,36 +534,63 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 10),
                                 Text('${data['teamOne']} ⚔️ ${data['teamTwo']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                                const SizedBox(height: 4),
-                                Text('الوقت: ${data['startTime']} إلى ${data['endTime']}  |  المبلغ: ${currencyFormatter.format(data['price'] ?? 0)} د.ع', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                const Divider(height: 16),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(Icons.access_time_rounded, size: 16, color: Colors.grey.shade600),
+                                    const SizedBox(width: 4),
+                                    Text('${data['startTime']} إلى ${data['endTime']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                    const Spacer(),
+                                    Text('${currencyFormatter.format(data['price'] ?? 0)} د.ع', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal, fontSize: 14)),
+                                  ],
+                                ),
+                                const Divider(height: 20),
                                 Row(
                                   children: [
                                     if (phone.toString().isNotEmpty) ...[
-                                      IconButton(icon: const Icon(Icons.phone, color: Colors.green), tooltip: 'اتصال', onPressed: () => launchCallDirect(phone)),
-                                      IconButton(icon: const Icon(Icons.message, color: Colors.teal), tooltip: 'واتساب', onPressed: () => launchWhatsAppDirect(phone)),
+                                      InkWell(
+                                        onTap: () => launchCallDirect(phone),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+                                          child: const Icon(Icons.phone_rounded, color: Colors.green, size: 18),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      InkWell(
+                                        onTap: () => launchWhatsAppDirect(phone),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(8)),
+                                          child: const Icon(Icons.chat_bubble_rounded, color: Colors.teal, size: 18),
+                                        ),
+                                      ),
                                     ],
                                     const Spacer(),
                                     if (!isDone)
                                       ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1B5E20),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
                                         onPressed: () => _confirmMatchCompletion(context, doc.reference, data),
-                                        icon: const Icon(Icons.check_circle, size: 16),
+                                        icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
                                         label: const Text('إنهاء وتقييم الفريق'),
                                       )
                                     else
                                       const Row(
                                         children: [
-                                          Icon(Icons.verified, color: Colors.green, size: 18),
+                                          Icon(Icons.verified_rounded, color: Colors.green, size: 18),
                                           SizedBox(width: 4),
-                                          Text('مقبوضة ومكتملة', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          Text('تم استلام الوارد', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
                                         ],
                                       ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                                       onPressed: () => doc.reference.delete(),
                                     ),
                                   ],
@@ -501,19 +618,20 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         builder: (context, setDlgState) => Directionality(
           textDirection: ui.TextDirection.rtl,
           child: AlertDialog(
-            title: const Text('تأكيد انتهاء المباراة واستلام الوارد'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('تأكيد انتهاء المباراة واستلام الوارد', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('هل انتهت المباراة وتم استلام المبلغ بالكامل؟', style: TextStyle(height: 1.5)),
-                const SizedBox(height: 14),
+                const Text('هل انتهت المباراة وتم استلام المبلغ بالكامل؟', style: TextStyle(height: 1.4)),
+                const SizedBox(height: 12),
                 const Divider(),
                 const Text('تقييم انضباط الفريق والروح الرياضية:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   value: markTrusted,
-                  title: Text('فريق ملتزم بالحضور والمواعيد والأخلاق (${bData['teamOne']})'),
+                  title: Text('فريق ملتزم بالحضور والمواعيد والأخلاق (${bData['teamOne']})', style: const TextStyle(fontSize: 13)),
                   subtitle: const Text('يمنح الفريق شارة "فريق موثوق 🏅" بتطبيقه', style: TextStyle(fontSize: 11, color: Colors.grey)),
                   activeColor: const Color(0xFF1B5E20),
                   onChanged: (val) => setDlgState(() => markTrusted = val ?? true),
@@ -550,7 +668,20 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
   Widget _buildPendingTab(AsyncSnapshot<QuerySnapshot> snapshot) {
     if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
     final docs = snapshot.data?.docs ?? [];
-    if (docs.isEmpty) return const Center(child: Text('لا توجد أي طلبات حجز معلقة'));
+    if (docs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.mark_email_read_rounded, size: 70, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            const Text('صندوق الطلبات فارغ', style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('أي طلب حجز جديد من اللاعبين سيظهر هنا فوراً', style: TextStyle(color: Colors.grey, fontSize: 12)),
+          ],
+        ),
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.all(14),
@@ -563,6 +694,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 
         return Card(
           color: Colors.amber.shade50,
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.amber.shade300)),
           margin: const EdgeInsets.only(bottom: 12),
           child: Padding(
             padding: const EdgeInsets.all(14.0),
@@ -574,17 +707,17 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   children: [
                     Text('طلب لموعد: ${data['date']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.brown)),
                     Chip(
-                      label: Text(isLookingForOpponent ? 'طلب (يبحث عن خصم)' : 'حجز فريقين', style: const TextStyle(fontSize: 11, color: Colors.white)),
+                      label: Text(isLookingForOpponent ? 'تحدي (يبحث عن خصم)' : 'حجز جاهز لفريقين', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
                       backgroundColor: isLookingForOpponent ? Colors.deepOrange : Colors.green.shade700,
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text('الفريق الطالب: ${data['teamOne']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                if (!isLookingForOpponent) Text('الخصم: ${data['teamTwo']}'),
-                Text('الوقت: ${data['startTime']} - ${data['endTime']}'),
-                Text('المبلغ المتوقع: ${data['price']} د.ع'),
-                const Divider(height: 16),
+                if (!isLookingForOpponent) Text('الفريق المنافس: ${data['teamTwo']}'),
+                Text('الوقت المطلوب: ${data['startTime']} - ${data['endTime']}'),
+                Text('المبلغ المتوقع: ${data['price']} د.ع', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
+                const Divider(height: 18),
                 Row(
                   children: [
                     if (phone.toString().isNotEmpty) ...[
@@ -595,14 +728,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
                       icon: const Icon(Icons.close, size: 16),
-                      label: const Text('رفض'),
+                      label: const Text('اعتذار / رفض'),
                       onPressed: () => _showRejectDialog(context, doc.reference),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
                       icon: const Icon(Icons.check, size: 16, color: Colors.white),
-                      label: const Text('تثبيت وقبول', style: TextStyle(color: Colors.white)),
+                      label: const Text('قبول وتثبيت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       onPressed: () => doc.reference.update({'status': 'upcoming'}),
                     ),
                   ],
@@ -623,7 +756,18 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         final docs = snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
-          return const Center(child: Text('لا توجد حجوزات أسبوعية ثابتة مضافة حتى الآن'));
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.repeat_on_rounded, size: 70, color: Colors.grey.shade400),
+                const SizedBox(height: 12),
+                const Text('لا توجد حجوزات أسبوعية ثابتة', style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('اضغط "إضافة حجز أسبوعي دائم" لتثبيت موعد لفريق', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            ),
+          );
         }
 
         return ListView.builder(
@@ -635,13 +779,15 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 
             return Card(
               color: Colors.purple.shade50,
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.purple.shade200)),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                leading: const CircleAvatar(backgroundColor: Colors.purple, child: Icon(Icons.repeat, color: Colors.white)),
-                title: Text('كل يوم ${data['dayOfWeek']} (${data['timeSlot']})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                leading: const CircleAvatar(backgroundColor: Colors.purple, child: Icon(Icons.repeat_rounded, color: Colors.white)),
+                title: Text('كل يوم ${data['dayOfWeek']} (${data['timeSlot']})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 subtitle: Text('محجوز دائماً لـ: ${data['teamName']}  |  هاتف: ${data['phone']}'),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
                   onPressed: () => doc.reference.delete(),
                 ),
               ),
@@ -671,7 +817,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         builder: (context, setDlgState) => Directionality(
           textDirection: ui.TextDirection.rtl,
           child: AlertDialog(
-            title: const Text('تسجيل حجز ثابت أسبوعياً'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('تسجيل حجز ثابت أسبوعياً', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -756,7 +903,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StreamBuilder<QuerySnapshot>(
         stream: _firestore.collection('bookings').where('pitchName', isEqualTo: widget.pitchName).snapshots(),
         builder: (context, snapshot) {
@@ -777,46 +924,49 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 
           return Directionality(
             textDirection: ui.TextDirection.rtl,
-            child: Padding(
+            child: Container(
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+                  const SizedBox(height: 16),
                   const Text('كشف الحساب المالي الشامل للملعب', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
                   const SizedBox(height: 16),
                   ListTile(
                     tileColor: Colors.green.shade50,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     title: const Text('الوارد الفعلي المقبوض (مكتمل)'),
                     trailing: Text('${currencyFormatter.format(completedTotal)} د.ع', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
                   ),
                   const SizedBox(height: 10),
                   ListTile(
                     tileColor: Colors.blue.shade50,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     title: const Text('المبلغ المتوقع (حجوزات مؤكدة قادمة)'),
                     trailing: Text('${currencyFormatter.format(upcomingTotal)} د.ع', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 16)),
                   ),
                   const SizedBox(height: 10),
                   ListTile(
                     tileColor: Colors.amber.shade50,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     title: const Text('مبالغ قيد الانتظار (طلبات معلقة)'),
                     trailing: Text('${currencyFormatter.format(pendingTotal)} د.ع', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 16)),
                   ),
                   const Divider(height: 24),
                   ListTile(
                     tileColor: Colors.grey.shade100,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     title: const Text('إجمالي الدخل المتوقع الكلي', style: TextStyle(fontWeight: FontWeight.bold)),
                     trailing: Text('${currencyFormatter.format(completedTotal + upcomingTotal)} د.ع', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('إغلاق الكشف', style: TextStyle(color: Colors.white)),
+                    child: const Text('إغلاق الكشف', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -834,6 +984,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('سبب الرفض والاعتذار'),
           content: TextField(
             controller: reasonCtrl,
@@ -928,7 +1079,7 @@ class _FullAddBookingSheetState extends State<FullAddBookingSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+              Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
               const SizedBox(height: 14),
               const Text('حجز موعد مباراة يدوي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
               const SizedBox(height: 14),
@@ -985,7 +1136,7 @@ class _FullAddBookingSheetState extends State<FullAddBookingSheet> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: () async {
                     if (_formKey.currentState!.validate()) {
                       final times = _selectedSlot.split(' - ');
