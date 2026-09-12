@@ -37,10 +37,12 @@ jobs:
         run: |
           sed -i 's/android:label="football"/android:label="ملعبي"/g' android/app/src/main/AndroidManifest.xml
 
-      - name: Inject Android Queries For Phone and WhatsApp
+      - name: Inject Android Queries And Permissions
         run: |
-          # إضافة تصاريح فحص تطبيقات الاتصال والواتساب لنظام أندرويد 11 فما فوق
-          sed -i '/<\/manifest>/i \    <queries>\n        <intent>\n            <action android:name="android.intent.action.DIAL" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n    </queries>' android/app/src/main/AndroidManifest.xml
+          # إضافة تصاريح فحص التطبيقات (الاتصال والويب وويز)
+          sed -i '/<\/manifest>/i \    <queries>\n        <intent>\n            <action android:name="android.intent.action.DIAL" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n        <package android:name="com.waze" />\n    </queries>' android/app/src/main/AndroidManifest.xml
+          # إضافة أذونات الـ GPS
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
       - name: Generate Football Icon
         run: |
@@ -56,7 +58,9 @@ jobs:
           sed -i '/id "dev.flutter.flutter-gradle-plugin"/a \    id "com.google.gms.google-services"' android/app/build.gradle
 
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub add geolocator
+          flutter pub get
 
       - name: Build APK
         run: flutter build apk --release
