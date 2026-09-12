@@ -17,9 +17,10 @@ class _AuthScreenState extends State<AuthScreen> {
   final _phoneController = TextEditingController();
   final _pinController = TextEditingController();
   
-  // حقول خاصة بصاحب الملعب عند التسجيل
   final _pitchNameController = TextEditingController();
   final _hourlyRateController = TextEditingController(text: '25000');
+  final _descriptionController = TextEditingController();
+
   String _selectedGov = 'بغداد';
   String _selectedArea = 'الكرخ الأولى';
   String _selectedSubArea = 'المنصور';
@@ -46,22 +47,12 @@ class _AuthScreenState extends State<AuthScreen> {
       if (savedRole == 'player') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => Directionality(
-              textDirection: ui.TextDirection.rtl,
-              child: PlayerMainScreen(userPhone: savedPhone),
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => PlayerMainScreen(userPhone: savedPhone)),
         );
       } else if (savedRole == 'owner') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => Directionality(
-              textDirection: ui.TextDirection.rtl,
-              child: OwnerDashboardScreen(pitchName: savedPitchName ?? savedPhone),
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => OwnerDashboardScreen(pitchName: savedPitchName ?? savedPhone)),
         );
       }
     }
@@ -72,16 +63,12 @@ class _AuthScreenState extends State<AuthScreen> {
     final pin = _pinController.text.trim();
 
     if (phone.isEmpty || pin.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى إدخال رقم الهاتف ورمز المرور')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى إدخال رقم الهاتف والرمز (PIN)')));
       return;
     }
 
     if (!_isLoginMode && _userRole == 'owner' && _pitchNameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى إدخال اسم الملعب')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى إدخال اسم الملعب')));
       return;
     }
 
@@ -95,66 +82,35 @@ class _AuthScreenState extends State<AuthScreen> {
 
       if (_isLoginMode) {
         if (!docSnap.exists) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('رقم الهاتف غير مسجل، يرجى إنشاء حساب جديد')),
-            );
-          }
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الحساب غير موجود، يرجى إنشاء حساب جديد')));
           setState(() => _isLoading = false);
           return;
         }
 
         final data = docSnap.data() as Map<String, dynamic>;
-        final savedPin = data['pin'] ?? '';
-        final role = data['role'] ?? 'player';
-        final associatedPitch = data['pitchName'] ?? phone;
-
-        if (savedPin != pin) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('رمز المرور غير صحيح')),
-            );
-          }
+        if (data['pin'] != pin) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رمز المرور غير صحيح')));
           setState(() => _isLoading = false);
           return;
         }
 
+        final role = data['role'] ?? 'player';
+        final associatedPitch = data['pitchName'] ?? phone;
+
         await prefs.setString('saved_phone', phone);
         await prefs.setString('saved_role', role);
-        if (role == 'owner') {
-          await prefs.setString('current_pitch_name', associatedPitch);
-        }
+        if (role == 'owner') await prefs.setString('current_pitch_name', associatedPitch);
 
         if (mounted) {
           if (role == 'owner') {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => Directionality(
-                  textDirection: ui.TextDirection.rtl,
-                  child: OwnerDashboardScreen(pitchName: associatedPitch),
-                ),
-              ),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OwnerDashboardScreen(pitchName: associatedPitch)));
           } else {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => Directionality(
-                  textDirection: ui.TextDirection.rtl,
-                  child: PlayerMainScreen(userPhone: phone),
-                ),
-              ),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerMainScreen(userPhone: phone)));
           }
         }
       } else {
         if (docSnap.exists) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('رقم الهاتف مسجل مسبقاً، قم بتسجيل الدخول')),
-            );
-          }
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رقم الهاتف مسجل بالفعل')));
           setState(() => _isLoading = false);
           return;
         }
@@ -181,9 +137,11 @@ class _AuthScreenState extends State<AuthScreen> {
             'governorate': _selectedGov,
             'area': _selectedArea,
             'subArea': _selectedSubArea,
+            'description': _descriptionController.text.trim(),
             'pin': pin,
             'rating': 5.0,
             'ratingCount': 1,
+            'matchDurationMinutes': 60,
             'createdAt': FieldValue.serverTimestamp(),
           });
           await prefs.setString('current_pitch_name', pitchName);
@@ -194,32 +152,14 @@ class _AuthScreenState extends State<AuthScreen> {
 
         if (mounted) {
           if (_userRole == 'owner') {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => Directionality(
-                  textDirection: ui.TextDirection.rtl,
-                  child: OwnerDashboardScreen(pitchName: pitchName),
-                ),
-              ),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OwnerDashboardScreen(pitchName: pitchName)));
           } else {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => Directionality(
-                  textDirection: ui.TextDirection.rtl,
-                  child: PlayerMainScreen(userPhone: phone),
-                ),
-              ),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerMainScreen(userPhone: phone)));
           }
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -258,7 +198,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       decoration: InputDecoration(
-                        labelText: 'رقم الهاتف',
+                        labelText: 'رقم الهاتف (مثال: 07801234567)',
                         prefixIcon: const Icon(Icons.phone),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -274,107 +214,107 @@ class _AuthScreenState extends State<AuthScreen> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
-                    if (!_isLoginMode) ...[
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      value: _userRole,
+                      decoration: InputDecoration(
+                        labelText: 'الدخول كـ',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'player', child: Text('كابتن فريق / لاعب')),
+                        DropdownMenuItem(value: 'owner', child: Text('صاحب ملعب رياضي')),
+                      ],
+                      onChanged: (val) => setState(() => _userRole = val ?? 'player'),
+                    ),
+                    if (!_isLoginMode && _userRole == 'owner') ...[
                       const SizedBox(height: 14),
+                      const Divider(),
+                      const Text('بيانات الملعب:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _pitchNameController,
+                        decoration: InputDecoration(labelText: 'اسم الملعب', prefixIcon: const Icon(Icons.stadium), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _hourlyRateController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(labelText: 'سعر الحجز (د.ع)', prefixIcon: const Icon(Icons.payments), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedPitchType,
+                              decoration: InputDecoration(labelText: 'الحجم', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                              items: pitchTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 11)))).toList(),
+                              onChanged: (val) => setState(() => _selectedPitchType = val!),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedSurfaceType,
+                              decoration: InputDecoration(labelText: 'الأرضية', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                              items: pitchSurfaceTypesList.where((s) => s != 'الكل').map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 11)))).toList(),
+                              onChanged: (val) => setState(() => _selectedSurfaceType = val!),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: _userRole,
+                        value: _selectedGov,
+                        decoration: InputDecoration(labelText: 'المحافظة', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                        items: iraqLocations.keys.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _selectedGov = val;
+                              final aList = iraqLocations[val]?.where((a) => a != 'الكل').toList() ?? [];
+                              _selectedArea = aList.isNotEmpty ? aList.first : '';
+                              final sList = subLocationsMap[_selectedArea] ?? [];
+                              _selectedSubArea = sList.isNotEmpty ? sList.first : '';
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: areas.contains(_selectedArea) ? _selectedArea : (areas.isNotEmpty ? areas.first : null),
+                        decoration: InputDecoration(labelText: 'المنطقة / القضاء', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                        items: areas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _selectedArea = val;
+                              final sList = subLocationsMap[_selectedArea] ?? [];
+                              _selectedSubArea = sList.isNotEmpty ? sList.first : '';
+                            });
+                          }
+                        },
+                      ),
+                      if (subAreas.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          value: subAreas.contains(_selectedSubArea) ? _selectedSubArea : (subAreas.isNotEmpty ? subAreas.first : null),
+                          decoration: InputDecoration(labelText: 'الحي الفرعي', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                          items: subAreas.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                          onChanged: (val) => setState(() => _selectedSubArea = val ?? ''),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _descriptionController,
+                        maxLines: 2,
                         decoration: InputDecoration(
-                          labelText: 'نوع الحساب',
+                          labelText: 'العنوان التفصيلي / نقطة دالة (مثال: حي الرسالة، قرب الجامع الكبير)',
+                          prefixIcon: const Icon(Icons.description),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 'player', child: Text('كابتن فريق / لاعب')),
-                          DropdownMenuItem(value: 'owner', child: Text('صاحب ملعب رياضي')),
-                        ],
-                        onChanged: (val) => setState(() => _userRole = val ?? 'player'),
                       ),
-                      if (_userRole == 'owner') ...[
-                        const SizedBox(height: 14),
-                        const Divider(),
-                        const Text('معلومات الملعب الأساسية', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _pitchNameController,
-                          decoration: InputDecoration(
-                            labelText: 'اسم الملعب',
-                            prefixIcon: const Icon(Icons.stadium),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _hourlyRateController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'سعر الحجز للمباراة (د.ع)',
-                            prefixIcon: const Icon(Icons.payments),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedPitchType,
-                                decoration: InputDecoration(labelText: 'الحجم', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                                items: pitchTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 11)))).toList(),
-                                onChanged: (val) => setState(() => _selectedPitchType = val!),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedSurfaceType,
-                                decoration: InputDecoration(labelText: 'الأرضية', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                                items: pitchSurfaceTypesList.where((s) => s != 'الكل').map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 11)))).toList(),
-                                onChanged: (val) => setState(() => _selectedSurfaceType = val!),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          value: _selectedGov,
-                          decoration: InputDecoration(labelText: 'المحافظة', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                          items: iraqLocations.keys.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() {
-                                _selectedGov = val;
-                                final aList = iraqLocations[val]?.where((a) => a != 'الكل').toList() ?? [];
-                                _selectedArea = aList.isNotEmpty ? aList.first : '';
-                                final sList = subLocationsMap[_selectedArea] ?? [];
-                                _selectedSubArea = sList.isNotEmpty ? sList.first : '';
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          value: areas.contains(_selectedArea) ? _selectedArea : (areas.isNotEmpty ? areas.first : null),
-                          decoration: InputDecoration(labelText: 'المنطقة / القضاء', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                          items: areas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() {
-                                _selectedArea = val;
-                                final sList = subLocationsMap[_selectedArea] ?? [];
-                                _selectedSubArea = sList.isNotEmpty ? sList.first : '';
-                              });
-                            }
-                          },
-                        ),
-                        if (subAreas.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          DropdownButtonFormField<String>(
-                            value: subAreas.contains(_selectedSubArea) ? _selectedSubArea : (subAreas.isNotEmpty ? subAreas.first : null),
-                            decoration: InputDecoration(labelText: 'الحي الدقيق', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                            items: subAreas.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                            onChanged: (val) => setState(() => _selectedSubArea = val ?? ''),
-                          ),
-                        ],
-                      ],
                     ],
                     const SizedBox(height: 20),
                     _isLoading
@@ -395,7 +335,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     TextButton(
                       onPressed: () => setState(() => _isLoginMode = !_isLoginMode),
                       child: Text(
-                        _isLoginMode ? 'ليس لديك حساب؟ انشئ حساباً جديداً' : 'لديك حساب بالفعل؟ سجل دخولك',
+                        _isLoginMode ? 'ليس لديك حساب؟ إنشاء حساب جديد' : 'لديك حساب بالفعل؟ تسجيل الدخول',
                         style: const TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold),
                       ),
                     ),
