@@ -19,10 +19,9 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
   late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  String selectedGov = 'بغداد';
+  String selectedGov = 'الكل';
   String selectedArea = 'الكل';
   String selectedType = 'الكل';
-  String selectedSurface = 'الكل';
   String searchQuery = '';
 
   @override
@@ -105,7 +104,6 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
   Widget _buildExploreTab() {
     return Column(
       children: [
-        // شريط الفلاتر والبحث
         Container(
           padding: const EdgeInsets.all(12),
           color: Colors.white,
@@ -130,7 +128,7 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
                     DropdownButton<String>(
                       value: selectedGov,
                       underline: const SizedBox(),
-                      items: iraqGovernorates.map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))).toList(),
+                      items: iraqGovernoratesList.map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))).toList(),
                       onChanged: (v) => setState(() {
                         selectedGov = v!;
                         selectedArea = 'الكل';
@@ -140,7 +138,7 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
                     DropdownButton<String>(
                       value: selectedArea,
                       underline: const SizedBox(),
-                      items: getAreasForGovernorate(selectedGov).map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 12)))).toList(),
+                      items: getAreasListForGov(selectedGov).map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 12)))).toList(),
                       onChanged: (v) => setState(() => selectedArea = v!),
                     ),
                     const SizedBox(width: 8),
@@ -156,8 +154,6 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
             ],
           ),
         ),
-
-        // قائمة الملاعب
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: _firestore.collection('pitches').snapshots(),
@@ -168,7 +164,6 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
 
               var docs = snapshot.data?.docs ?? [];
 
-              // تطبيق الفلاتر
               docs = docs.where((doc) {
                 final d = doc.data() as Map<String, dynamic>;
                 final name = (d['name'] ?? doc.id).toString();
@@ -258,7 +253,7 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
                                   style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                                   icon: const Icon(Icons.location_on, size: 16, color: Colors.blue),
                                   label: const Text('الموقع', style: TextStyle(fontSize: 12)),
-                                  onPressed: () => launchMapsDirect(lat, lng),
+                                  onPressed: () => launchMapDirect(lat, lng),
                                 ),
                               ],
                               const Spacer(),
@@ -283,7 +278,6 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
     );
   }
 
-  // نافذة فحص المواعيد (أخضر وأحمر) للكابتن
   void _openBookingScheduleModal(BuildContext context, String pitchName, double hourlyRate) {
     DateTime selectedDate = DateTime.now();
     final availableSlots = buildPitchSlots(60);
@@ -337,15 +331,12 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
                     ],
                   ),
                   const Divider(height: 20),
-
-                  // قراءة الحجوزات ومباريات البطولة معاً
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
                       stream: _firestore
                           .collection('bookings')
                           .where('pitchName', isEqualTo: pitchName)
                           .where('date', isEqualTo: dateStr)
-                          // شمول مباريات البطولة tournament_match رسمياً
                           .where('status', whereIn: ['pending', 'upcoming', 'tournament_match', 'completed'])
                           .snapshots(),
                       builder: (context, snapshot) {
@@ -362,7 +353,6 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
                             final parts = slot.split(' - ');
                             final sTime = parts[0].trim();
 
-                            // فحص هل الموعد محجوز في السيرفر
                             final matchingBooking = bookings.cast<DocumentSnapshot?>().firstWhere(
                               (b) {
                                 final d = b!.data() as Map<String, dynamic>;
