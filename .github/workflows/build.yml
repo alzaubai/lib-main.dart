@@ -37,10 +37,14 @@ jobs:
         run: |
           sed -i 's/android:label="football"/android:label="ملعبي"/g' android/app/src/main/AndroidManifest.xml
 
+      - name: Inject Android Queries For Phone and WhatsApp
+        run: |
+          # إضافة تصاريح فحص تطبيقات الاتصال والواتساب لنظام أندرويد 11 فما فوق
+          sed -i '/<\/manifest>/i \    <queries>\n        <intent>\n            <action android:name="android.intent.action.DIAL" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n    </queries>' android/app/src/main/AndroidManifest.xml
+
       - name: Generate Football Icon
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
-          # تحميل صورة كرة قدم عالية الدقة وتحويلها لأيقونة التطبيق الرسمية
           curl -s -L -o ball.png "https://cdn-icons-png.flaticon.com/512/861/861512.png"
           for dir in android/app/src/main/res/mipmap-*; do
             convert ball.png -resize 192x192 "$dir/ic_launcher.png"
