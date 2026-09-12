@@ -1,200 +1,576 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
+import '../constants.dart';
+import 'auth_screen.dart';
+import 'tournaments/tournament_screen.dart';
+import 'owner/owner_analytics_screen.dart';
 
-class TournamentScreen extends StatefulWidget {
-  final String userPhone;
-  final bool isOwner;
-  final String? pitchName;
-
-  const TournamentScreen({
-    super.key,
-    required this.userPhone,
-    required this.isOwner,
-    this.pitchName,
-  });
+class OwnerDashboardScreen extends StatefulWidget {
+  final String pitchName;
+  const OwnerDashboardScreen({super.key, required this.pitchName});
 
   @override
-  State<TournamentScreen> createState() => _TournamentScreenState();
+  State<OwnerDashboardScreen> createState() => _OwnerDashboardScreenState();
 }
 
-class _TournamentScreenState extends State<TournamentScreen> {
+class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final currencyFormatter = NumberFormat('#,###');
+  int _lastSeenPendingCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _loadPendingSeenCache();
+    _tabController.addListener(() {
+      setState(() {});
+      if (_tabController.index == 1) _markPendingAsSeen();
+    });
+  }
+
+  Future<void> _loadPendingSeenCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _lastSeenPendingCount = prefs.getInt('owner_pending_seen_${widget.pitchName}') ?? 0;
+    });
+  }
+
+  Future<void> _markPendingAsSeen() async {
+    final query = await _firestore
+        .collection('bookings')
+        .where('pitchName', isEqualTo: widget.pitchName)
+        .where('status', isEqualTo: 'pending')
+        .get();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('owner_pending_seen_${widget.pitchName}', query.docs.length);
+    setState(() => _lastSeenPendingCount = query.docs.length);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: ui.TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF4F6F8),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF1B5E20),
-          title: const Text('بطولات ودوريات الملاعب 🏆', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        ),
-        body: StreamBuilder<QuerySnapshot>(
-          stream: _firestore.collection('tournaments').snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+    final currencyFormatter = NumberFormat('#,###');
 
-            final docs = snapshot.data?.docs ?? [];
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('bookings')
+          .where('pitchName', isEqualTo: widget.pitchName)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, pendingSnapshot) {
+        final pendingCount = pendingSnapshot.data?.docs.length ?? 0;
+        final hasUnreadPending = pendingCount > _lastSeenPendingCount;
 
-            if (docs.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.emoji_events_outlined, size: 70, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    const Text('لا توجد بطولات نشطة حالياً', style: TextStyle(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
-                    if (widget.isOwner) ...[
-                      const SizedBox(height: 8),
-                      const Text('اضغط الزر أدناه لإطلاق بطولة جديدة لملعبك', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                    ]
-                  ],
-                ),
-              );
-            }
-
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                bool isWideScreen = constraints.maxWidth > 600;
-
-                if (isWideScreen) {
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 1.25,
+        return Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF4F6F8),
+            appBar: AppBar(
+              elevation: 0,
+              backgroundColor: const Color(0xFF1B5E20),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.stadium, color: Colors.amberAccent, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.pitchName,
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Text('لوحة تحكّم الملعب', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                      ],
                     ),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) => _buildTournamentCard(docs[index]),
-                  );
-                }
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.insights_rounded, color: Colors.lightGreenAccent),
+                  tooltip: 'التحليلات المالية والذروة',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => OwnerAnalyticsScreen(pitchName: widget.pitchName)),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.tune_rounded, color: Colors.white),
+                  tooltip: 'إعدادات الملعب والـ GPS',
+                  onPressed: () => _openPitchSettingsModal(context),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.account_balance_wallet_rounded, color: Colors.amberAccent),
+                  tooltip: 'كشف الحساب المالي',
+                  onPressed: () => _openFinancialReportModal(context),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white70),
+                  tooltip: 'تسجيل خروج',
+                  onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.clear();
+                    if (mounted) {
+                      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const AuthScreen()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                ),
+              ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(52),
+                child: Container(
+                  color: const Color(0xFF1B5E20),
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: false,
+                    indicatorColor: Colors.amberAccent,
+                    indicatorWeight: 4,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white60,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    tabs: [
+                      const Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'الجدول'),
+                      Tab(
+                        icon: Badge(
+                          isLabelVisible: hasUnreadPending,
+                          label: Text('${pendingCount - _lastSeenPendingCount}',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          backgroundColor: Colors.redAccent,
+                          child: const Icon(Icons.notifications_active_rounded, size: 20),
+                        ),
+                        text: 'الطلبات',
+                      ),
+                      const Tab(icon: Icon(Icons.repeat_rounded, size: 20), text: 'الدائمة'),
+                      const Tab(icon: Icon(Icons.emoji_events_rounded, size: 20), text: 'البطولات 🏆'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            body: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildConfirmedTab(currencyFormatter),
+                _buildPendingTab(pendingSnapshot),
+                _buildRecurringBookingsTab(),
+                TournamentScreen(userPhone: 'owner', isOwner: true, pitchName: widget.pitchName),
+              ],
+            ),
+            floatingActionButton: _buildFloatingAction(),
+          ),
+        );
+      },
+    );
+  }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(14),
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) => _buildTournamentCard(docs[index]),
-                );
-              },
-            );
-          },
+  Widget? _buildFloatingAction() {
+    if (_tabController.index == 0) {
+      return FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF1B5E20),
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('حجز موعد يدوي', style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => _openAddManualSheet(context),
+      );
+    } else if (_tabController.index == 2) {
+      return FloatingActionButton.extended(
+        backgroundColor: Colors.purple.shade800,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.add_task_rounded),
+        label: const Text('إضافة حجز أسبوعي دائم', style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => _openAddRecurringDialog(context),
+      );
+    }
+    return null;
+  }
+
+  Widget _buildConfirmedTab(NumberFormat currencyFormatter) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('bookings')
+          .where('pitchName', isEqualTo: widget.pitchName)
+          .where('status', whereIn: ['upcoming', 'completed'])
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        double actualRevenueReceived = 0.0;
+        double expectedRevenueUpcoming = 0.0;
+
+        for (var doc in docs) {
+          final d = doc.data() as Map<String, dynamic>;
+          final price = (d['price'] as num?)?.toDouble() ?? 0.0;
+          final status = d['status'];
+
+          if (status == 'completed') {
+            actualRevenueReceived += price;
+          } else if (status == 'upcoming') {
+            expectedRevenueUpcoming += price;
+          }
+        }
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1B5E20),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.check_circle_outline, color: Colors.amberAccent, size: 16),
+                              SizedBox(width: 4),
+                              Text('الوارد الفعلي المقبوض', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text('${currencyFormatter.format(actualRevenueReceived)} د.ع',
+                              style: const TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.hourglass_top_rounded, color: Colors.lightGreenAccent, size: 16),
+                              SizedBox(width: 4),
+                              Text('المبلغ المؤكد القادم', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text('${currencyFormatter.format(expectedRevenueUpcoming)} د.ع',
+                              style: const TextStyle(color: Colors.lightGreenAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: docs.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.event_busy_rounded, size: 70, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          const Text('لا توجد مباريات مسجلة حالياً',
+                              style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(14),
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
+                        final data = doc.data() as Map<String, dynamic>;
+                        final isDone = data['status'] == 'completed';
+                        final phone = data['phone'] ?? '';
+
+                        return Card(
+                          elevation: 3,
+                          shadowColor: Colors.black12,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: BorderSide(
+                              color: isDone ? Colors.green.shade300 : Colors.grey.shade300,
+                              width: 1.2,
+                            ),
+                          ),
+                          margin: const EdgeInsets.only(bottom: 14),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(Icons.calendar_today_rounded, size: 16, color: Colors.grey.shade700),
+                                        const SizedBox(width: 6),
+                                        Text('${data['date']}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                                      ],
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: isDone ? Colors.green.shade50 : Colors.amber.shade50,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: isDone ? Colors.green : Colors.amber.shade700),
+                                      ),
+                                      child: Text(
+                                        isDone ? 'مكتملة ومقبوضة ✔️' : 'مؤكدة (بانتظار اللعب) ⏳',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDone ? Colors.green.shade900 : Colors.brown.shade800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF4F7F4),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          '${data['teamOne']}',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                                        ),
+                                      ),
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                                        child: Text('⚔️', style: TextStyle(fontSize: 18)),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          '${data['teamTwo']}',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.grey.shade600),
+                                    const SizedBox(width: 6),
+                                    Text('${data['startTime']} إلى ${data['endTime']}',
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                    const Spacer(),
+                                    Text(
+                                      '${currencyFormatter.format(data['price'] ?? 0)} د.ع',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal, fontSize: 15),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(height: 24),
+                                Row(
+                                  children: [
+                                    if (phone.toString().isNotEmpty) ...[
+                                      IconButton(
+                                        icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.green),
+                                        tooltip: 'اتصال',
+                                        onPressed: () => launchCallDirect(phone),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
+                                        tooltip: 'واتساب',
+                                        onPressed: () => launchWhatsAppDirect(phone),
+                                      ),
+                                    ],
+                                    const Spacer(),
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.red.shade700,
+                                        side: BorderSide(color: Colors.red.shade300),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      ),
+                                      icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                                      label: const Text('حذف', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      onPressed: () => _confirmDeleteMatch(context, doc.reference),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    if (!isDone)
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1B5E20),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        ),
+                                        icon: const Icon(Icons.check_circle_rounded, size: 18),
+                                        label: const Text('إنهاء وتثبيت', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        onPressed: () => _confirmMatchCompletion(context, doc.reference, data),
+                                      )
+                                    else
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.verified_rounded, color: Colors.green, size: 18),
+                                          SizedBox(width: 4),
+                                          Text('تم القبض', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        ],
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _confirmMatchCompletion(BuildContext context, DocumentReference docRef, Map<String, dynamic> bData) {
+    bool markTrusted = true;
+    final teamPhone = bData['phone'] ?? '';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 28),
+                SizedBox(width: 8),
+                Text('تأكيد إنهاء المباراة', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.red, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'تنبيه: بمجرد التأكيد لن تتمكن من التراجع، وسيتم تسجيل المبلغ نهائياً في الوارد الفعلي.',
+                          style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text('المباراة: ${bData['teamOne']} ⚔️ ${bData['teamTwo']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('المبلغ المقبوض: ${bData['price']} د.ع', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
+                const Divider(height: 20),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: markTrusted,
+                  title: Text('فريق ملتزم بالحضور والمواعيد (${bData['teamOne']})', style: const TextStyle(fontSize: 12)),
+                  subtitle: const Text('يمنح الفريق شارة "فريق موثوق 🏅"', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  activeColor: const Color(0xFF1B5E20),
+                  onChanged: (val) => setDlgState(() => markTrusted = val ?? true),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                onPressed: () async {
+                  await docRef.update({
+                    'status': 'completed',
+                    'teamTrustedRated': markTrusted,
+                  });
+
+                  if (teamPhone.toString().isNotEmpty) {
+                    await _firestore.collection('players').doc(teamPhone).set({
+                      'isTrustedTeam': markTrusted,
+                    }, SetOptions(merge: true));
+                  }
+
+                  if (mounted) Navigator.pop(ctx);
+                },
+                child: const Text('نعم، تأكيد وتثبيت الوارد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
         ),
-        floatingActionButton: widget.isOwner
-            ? FloatingActionButton.extended(
-                backgroundColor: const Color(0xFF1B5E20),
-                icon: const Icon(Icons.add_rounded, color: Colors.white),
-                label: const Text('إطلاق بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                onPressed: () => _openCreateTournamentDialog(context),
-              )
-            : null,
       ),
     );
   }
 
-  Widget _buildTournamentCard(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    final name = data['name'] ?? 'بطولة';
-    final prize = data['prize'] ?? 'كأس وميداليات';
-    final fee = (data['fee'] as num?)?.toDouble() ?? 25000.0;
-    final system = data['tournamentSystem'] ?? 'خروج المغلوب (Knockout)';
-    final pitch = data['pitchName'] ?? '';
-    final teams = List<String>.from(data['teams'] ?? []);
-    final maxTeams = data['maxTeams'] ?? 8;
-    final isStarted = data['isStarted'] == true;
-    final champion = data['champion'] ?? '';
-
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.only(bottom: 14),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)))),
-                Chip(
-                  label: Text(system, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  backgroundColor: Colors.amber.shade100,
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text('الملعب المنظم: $pitch', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-            const SizedBox(height: 4),
-            Text('الجوائز الكبرى: $prize', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 13)),
-            Text('اشتراك الفريق: ${currencyFormatter.format(fee)} د.ع', style: const TextStyle(fontSize: 12)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.group, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text('الفرق المسجلة: ${teams.length} / $maxTeams', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              ],
-            ),
-            if (champion.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber)),
-                child: Row(
-                  children: [
-                    const Icon(Icons.emoji_events, color: Colors.amber, size: 22),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text('بطل البطولة المتوج: $champion 🏆', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900))),
-                  ],
-                ),
-              ),
-            ],
-            const Divider(height: 20),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (!isStarted && teams.length < maxTeams)
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                    icon: const Icon(Icons.person_add, size: 16, color: Colors.white),
-                    label: Text(widget.isOwner ? 'إضافة فريق يدوياً' : 'تسجيل فريقي', style: const TextStyle(color: Colors.white)),
-                    onPressed: () => _showRegisterTeamDialog(context, doc.reference, teams, maxTeams),
-                  ),
-                if (widget.isOwner && !isStarted && teams.length >= 2) ...[
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                    onPressed: () => doc.reference.delete(),
-                    child: const Text('حذف'),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800),
-                    onPressed: () => _startTournament(doc.reference, teams),
-                    child: const Text('إطلاق القرعة', style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-                TextButton.icon(
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF1B5E20)),
-                  icon: const Icon(Icons.account_tree_rounded),
-                  label: Text(isStarted ? 'عرض الشجرة والمباريات' : 'التفاصيل والفرق'),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TournamentDetailsScreen(tournamentId: doc.id, isOwner: widget.isOwner),
-                      ),
-                    );
-                  },
-                ),
-              ],
+  void _confirmDeleteMatch(BuildContext context, DocumentReference docRef) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('حذف هذا الحجز نهائياً؟'),
+          content: const Text('هل أنت متأكد من حذف هذه المباراة من الجدول؟ لن يتم احتسابها في الحسابات.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                await docRef.delete();
+                if (mounted) Navigator.pop(ctx);
+              },
+              child: const Text('نعم، حذف الحجز', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -202,14 +578,172 @@ class _TournamentScreenState extends State<TournamentScreen> {
     );
   }
 
-  void _openCreateTournamentDialog(BuildContext context) {
-    final nameCtrl = TextEditingController();
-    final prizeCtrl = TextEditingController();
-    final feeCtrl = TextEditingController(text: '25000');
-    
-    int maxTeams = 8;
-    String tournamentSystem = 'خروج المغلوب (Knockout)';
-    bool isSubmitting = false;
+  Widget _buildPendingTab(AsyncSnapshot<QuerySnapshot> snapshot) {
+    final docs = snapshot.data?.docs ?? [];
+    if (docs.isEmpty) return const Center(child: Text('لا توجد طلبات معلقة'));
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: docs.length,
+      itemBuilder: (context, index) {
+        final doc = docs[index];
+        final data = doc.data() as Map<String, dynamic>;
+
+        return Card(
+          color: Colors.amber.shade50,
+          child: ListTile(
+            title: Text('طلب من: ${data['teamOne']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('الموعد: ${data['date']} (${data['startTime']} - ${data['endTime']})'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => doc.reference.update({'status': 'rejected'})),
+                IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: () => doc.reference.update({'status': 'upcoming'})),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRecurringBookingsTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection('recurring_rules').where('pitchName', isEqualTo: widget.pitchName).snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) return const Center(child: Text('لا توجد حجوزات أسبوعية ثابتة'));
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(14),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final doc = docs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.repeat, color: Colors.purple),
+                title: Text('كل ${data['dayOfWeek']} (${data['timeSlot']})'),
+                subtitle: Text('محجوز لـ: ${data['teamName']}'),
+                trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => doc.reference.delete()),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openAddRecurringDialog(BuildContext context) async {
+    final availableSlots = buildPitchSlots(60);
+    List<String> selectedDays = ['الجمعة'];
+    String chosenSlot = availableSlots.first;
+    final teamCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final priceCtrl = TextEditingController(text: '25000');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text('إضافة حجز أسبوعي دائم'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: chosenSlot,
+                    decoration: const InputDecoration(labelText: 'الفترة'),
+                    items: availableSlots.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (v) => setDlgState(() => chosenSlot = v!),
+                  ),
+                  TextField(controller: teamCtrl, decoration: const InputDecoration(labelText: 'اسم الفريق')),
+                  TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف')),
+                  TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المبلغ')),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                onPressed: () async {
+                  if (teamCtrl.text.isNotEmpty) {
+                    await _firestore.collection('recurring_rules').add({
+                      'pitchName': widget.pitchName,
+                      'dayOfWeek': selectedDays.first,
+                      'timeSlot': chosenSlot,
+                      'teamName': teamCtrl.text.trim(),
+                      'phone': phoneCtrl.text.trim(),
+                      'price': double.tryParse(priceCtrl.text.trim()) ?? 25000.0,
+                    });
+                    if (mounted) Navigator.pop(ctx);
+                  }
+                },
+                child: const Text('تثبيت'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openFinancialReportModal(BuildContext context) {
+    final currencyFormatter = NumberFormat('#,###');
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => StreamBuilder<QuerySnapshot>(
+        stream: _firestore.collection('bookings').where('pitchName', isEqualTo: widget.pitchName).snapshots(),
+        builder: (context, snapshot) {
+          double completedTotal = 0;
+          if (snapshot.hasData) {
+            for (var d in snapshot.data!.docs) {
+              final data = d.data() as Map<String, dynamic>;
+              if (data['status'] == 'completed') {
+                completedTotal += (data['price'] as num?)?.toDouble() ?? 0.0;
+              }
+            }
+          }
+          return Directionality(
+            textDirection: ui.TextDirection.rtl,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('كشف الحساب المالي الكلي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    tileColor: Colors.green.shade50,
+                    title: const Text('إجمالي الوارد الفعلي المقبوض:'),
+                    trailing: Text('${currencyFormatter.format(completedTotal)} د.ع',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B5E20))),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _openPitchSettingsModal(BuildContext context) async {
+    final doc = await _firestore.collection('pitches').doc(widget.pitchName).get();
+    if (!doc.exists || !mounted) return;
+
+    final data = doc.data() as Map<String, dynamic>;
+    final phoneCtrl = TextEditingController(text: data['phone'] ?? '');
+    final rateCtrl = TextEditingController(text: '${data['hourlyRate']?.toInt() ?? 25000}');
+    final descCtrl = TextEditingController(text: data['description'] ?? '');
+
+    String currentType = data['pitchType'] ?? 'سباعي (7 ضد 7)';
+    String currentSurface = data['surfaceType'] ?? 'ثيل 🌿';
+    double? currentLat = (data['latitude'] as num?)?.toDouble();
+    double? currentLng = (data['longitude'] as num?)?.toDouble();
+    bool isLocating = false;
 
     showModalBottomSheet(
       context: context,
@@ -219,230 +753,117 @@ class _TournamentScreenState extends State<TournamentScreen> {
         builder: (context, setModalState) => Directionality(
           textDirection: ui.TextDirection.rtl,
           child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 20,
-                  offset: Offset(0, -5),
-                )
-              ],
-            ),
-            padding: EdgeInsets.only(
-              top: 16,
-              left: 20,
-              right: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+            padding: EdgeInsets.only(top: 16, left: 20, right: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
-                    child: Container(
-                      width: 48,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
+                  Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
                   const SizedBox(height: 16),
+                  const Text('إعدادات وبيانات الملعب', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'رقم هاتف التواصل', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: rateCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'سعر الحجز (د.ع)', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.amber.shade200),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: currentType,
+                          decoration: const InputDecoration(labelText: 'حجم الملعب', border: OutlineInputBorder()),
+                          items: pitchTypesList
+                              .where((t) => t != 'الكل')
+                              .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 11))))
+                              .toList(),
+                          onChanged: (val) => setModalState(() => currentType = val!),
                         ),
-                        child: const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 28),
                       ),
-                      const SizedBox(width: 12),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('إطلاق بطولة جديدة 🏆', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                          Text('حدد تفاصيل المنافسة والجوائز ونظام اللعب', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                        ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: currentSurface,
+                          decoration: const InputDecoration(labelText: 'نوع الأرضية', border: OutlineInputBorder()),
+                          items: pitchSurfaceTypesList
+                              .where((s) => s != 'الكل')
+                              .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 11))))
+                              .toList(),
+                          onChanged: (val) => setModalState(() => currentSurface = val!),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
                   TextField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'اسم البطولة الرسمية',
-                      hintText: 'مثال: كأس رمضان الليلي / دوري النجوم',
-                      prefixIcon: const Icon(Icons.sports_soccer, color: Color(0xFF1B5E20)),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFF1B5E20), width: 2),
-                      ),
+                    controller: descCtrl,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: 'العنوان التفصيلي / نقطة دالة', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      children: [
+                        Text(
+                          currentLat != null ? 'تم ربط موقع الملعب عبر الـ GPS بنجاح' : 'لم يتم تثبيت الموقع على الخريطة بعد',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: currentLat != null ? Colors.green.shade900 : Colors.blue.shade900),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white),
+                          icon: isLocating
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.my_location),
+                          label: Text(isLocating ? 'جاري التحديد...' : 'تثبيت موقع الملعب الحالي'),
+                          onPressed: isLocating
+                              ? null
+                              : () async {
+                                  setModalState(() => isLocating = true);
+                                  try {
+                                    LocationPermission perm = await Geolocator.requestPermission();
+                                    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                                    setModalState(() {
+                                      currentLat = pos.latitude;
+                                      currentLng = pos.longitude;
+                                      isLocating = false;
+                                    });
+                                  } catch (_) {
+                                    setModalState(() => isLocating = false);
+                                  }
+                                },
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: prizeCtrl,
-                          decoration: InputDecoration(
-                            labelText: 'الجوائز الكبرى',
-                            hintText: 'مثال: كأس + 500 ألف',
-                            prefixIcon: const Icon(Icons.card_giftcard, color: Colors.amber),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: feeCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'اشتراك الفريق (د.ع)',
-                            prefixIcon: const Icon(Icons.payments, color: Colors.teal),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  const Text('عدد الفرق المشاركة بالبطولة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [4, 8, 12, 16].map((count) {
-                      final isSelected = maxTeams == count;
-                      return ChoiceChip(
-                        label: Text('$count فرق', style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black87)),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFF1B5E20),
-                        backgroundColor: Colors.grey.shade100,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        onSelected: (selected) {
-                          if (selected) setModalState(() => maxTeams = count);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text('نظام وقوانين المنافسة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setModalState(() => tournamentSystem = 'خروج المغلوب (Knockout)'),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: tournamentSystem.contains('Knockout') ? Colors.green.shade50 : Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: tournamentSystem.contains('Knockout') ? const Color(0xFF1B5E20) : Colors.grey.shade300,
-                                width: tournamentSystem.contains('Knockout') ? 2 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(Icons.flash_on_rounded, color: tournamentSystem.contains('Knockout') ? const Color(0xFF1B5E20) : Colors.grey, size: 22),
-                                const SizedBox(height: 4),
-                                Text('خروج المغلوب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: tournamentSystem.contains('Knockout') ? const Color(0xFF1B5E20) : Colors.black54)),
-                                const Text('إقصاء مباشر وشجرة', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setModalState(() => tournamentSystem = 'دوري مجموعات (نقاط)'),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: tournamentSystem.contains('نقاط') ? Colors.green.shade50 : Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: tournamentSystem.contains('نقاط') ? const Color(0xFF1B5E20) : Colors.grey.shade300,
-                                width: tournamentSystem.contains('نقاط') ? 2 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(Icons.format_list_numbered_rounded, color: tournamentSystem.contains('نقاط') ? const Color(0xFF1B5E20) : Colors.grey, size: 22),
-                                const SizedBox(height: 4),
-                                Text('دوري ونقاط', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: tournamentSystem.contains('نقاط') ? const Color(0xFF1B5E20) : Colors.black54)),
-                                const Text('جدول ترتيب ومجموعات', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1B5E20),
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              final name = nameCtrl.text.trim();
-                              if (name.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى كتابة اسم البطولة')));
-                                return;
-                              }
-
-                              setModalState(() => isSubmitting = true);
-
-                              try {
-                                final pName = widget.pitchName ?? 'ملعب عام';
-                                final fee = double.tryParse(feeCtrl.text.trim()) ?? 25000.0;
-                                final prize = prizeCtrl.text.trim().isEmpty ? 'كأس وميداليات' : prizeCtrl.text.trim();
-
-                                await _firestore.collection('tournaments').add({
-                                  'name': name,
-                                  'prize': prize,
-                                  'fee': fee,
-                                  'maxTeams': maxTeams,
-                                  'tournamentSystem': tournamentSystem,
-                                  'pitchName': pName,
-                                  'teams': [],
-                                  'isStarted': false,
-                                  'champion': '',
-                                  'createdAt': FieldValue.serverTimestamp(),
-                                });
-
-                                if (mounted) {
-                                  Navigator.pop(ctx);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('تم نشر البطولة بنجاح 🏆'), backgroundColor: Colors.green),
-                                  );
-                                }
-                              } catch (e) {
-                                setModalState(() => isSubmitting = false);
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ أثناء النشر: $e')));
-                              }
-                            },
-                      child: isSubmitting
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('نشر البطولة وفتح التسجيل للفرق 🚀', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-                    ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(vertical: 12)),
+                    onPressed: () async {
+                      await _firestore.collection('pitches').doc(widget.pitchName).update({
+                        'phone': phoneCtrl.text.trim(),
+                        'hourlyRate': double.tryParse(rateCtrl.text.trim()) ?? 25000.0,
+                        'pitchType': currentType,
+                        'surfaceType': currentSurface,
+                        'description': descCtrl.text.trim(),
+                        if (currentLat != null) 'latitude': currentLat,
+                        if (currentLng != null) 'longitude': currentLng,
+                      });
+                      if (mounted) Navigator.pop(ctx);
+                    },
+                    child: const Text('حفظ الإعدادات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -453,301 +874,309 @@ class _TournamentScreenState extends State<TournamentScreen> {
     );
   }
 
-  void _showRegisterTeamDialog(BuildContext context, DocumentReference docRef, List<String> teams, int maxTeams) {
-    final teamCtrl = TextEditingController();
+  void _openAddManualSheet(BuildContext context) async {
+    final pitchDoc = await _firestore.collection('pitches').doc(widget.pitchName).get();
+    final duration = pitchDoc.data()?['matchDurationMinutes'] ?? 60;
+    final defaultPrice = (pitchDoc.data()?['hourlyRate'] as num?)?.toDouble() ?? 25000.0;
 
-    showDialog(
+    if (!mounted) return;
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => Directionality(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Directionality(
         textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(widget.isOwner ? 'إضافة اسم الفريق المشارك' : 'تسجيل فريق في البطولة'),
-          content: TextField(
-            controller: teamCtrl,
-            decoration: const InputDecoration(labelText: 'اسم الفريق', border: OutlineInputBorder()),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-              onPressed: () async {
-                final tName = teamCtrl.text.trim();
-                if (tName.isNotEmpty && teams.length < maxTeams) {
-                  teams.add(tName);
-                  await docRef.update({'teams': teams});
-                  if (mounted) {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تسجيل الفريق بنجاح!'), backgroundColor: Colors.green));
-                  }
-                }
-              },
-              child: const Text('تأكيد الإضافة', style: TextStyle(color: Colors.white)),
-            ),
-          ],
+        child: ModernAddBookingSheet(
+          pitchName: widget.pitchName,
+          durationMinutes: duration,
+          defaultRate: defaultPrice,
         ),
       ),
     );
   }
-
-  Future<void> _startTournament(DocumentReference docRef, List<String> teams) async {
-    if (teams.length < 2) return;
-    
-    teams.shuffle();
-
-    String initialRound = 'الدور الأول';
-    if (teams.length == 16) initialRound = 'ثمن النهائي (دور الـ 16)';
-    if (teams.length == 8) initialRound = 'ربع النهائي';
-    if (teams.length == 4) initialRound = 'نصف النهائي';
-    if (teams.length == 2) initialRound = 'المباراة النهائية 🏆';
-
-    List<Map<String, dynamic>> matches = [];
-    for (int i = 0; i < teams.length; i += 2) {
-      if (i + 1 < teams.length) {
-        matches.add({
-          'team1': teams[i],
-          'team2': teams[i + 1],
-          'score1': null,
-          'score2': null,
-          'winner': '',
-          'round': initialRound,
-          'matchIndex': matches.length,
-        });
-      }
-    }
-
-    await docRef.update({
-      'isStarted': true,
-      'matches': matches,
-    });
-  }
 }
 
-class TournamentDetailsScreen extends StatefulWidget {
-  final String tournamentId;
-  final bool isOwner;
+class ModernAddBookingSheet extends StatefulWidget {
+  final String pitchName;
+  final int durationMinutes;
+  final double defaultRate;
 
-  const TournamentDetailsScreen({super.key, required this.tournamentId, required this.isOwner});
+  const ModernAddBookingSheet({
+    super.key,
+    required this.pitchName,
+    required this.durationMinutes,
+    required this.defaultRate,
+  });
 
   @override
-  State<TournamentDetailsScreen> createState() => _TournamentDetailsScreenState();
+  State<ModernAddBookingSheet> createState() => _ModernAddBookingSheetState();
 }
 
-class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
+class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _teamOneController = TextEditingController();
+  final _teamTwoController = TextEditingController();
+  final _phoneController = TextEditingController();
+  late final TextEditingController _priceController;
+
+  DateTime _selectedDate = DateTime.now();
+  late String _selectedSlot;
+  late List<String> _slots;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _slots = buildPitchSlots(widget.durationMinutes);
+    _selectedSlot = _slots.isNotEmpty ? _slots.first : '08:00 م - 09:00 م';
+    _priceController = TextEditingController(text: '${widget.defaultRate.toInt()}');
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: ui.TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF4F6F8),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF1B5E20),
-          title: const Text('شجرة مواجهات البطولة 🌳', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        ),
-        body: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId).snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-            final data = snapshot.data!.data() as Map<String, dynamic>?;
-            if (data == null) return const Center(child: Text('البطولة غير موجودة'));
-
-            final matches = List<Map<String, dynamic>>.from(data['matches'] ?? []);
-            final champion = data['champion'] ?? '';
-            final teams = List<String>.from(data['teams'] ?? []);
-
-            return ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (champion.isNotEmpty) ...[
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 25,
+            offset: Offset(0, -5),
+          )
+        ],
+      ),
+      padding: EdgeInsets.only(
+        top: 14,
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 46,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
                   Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.amber.shade700, width: 2)),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.emoji_events, color: Colors.amber, size: 50),
-                        const SizedBox(height: 8),
-                        const Text('مبارك التتويج بالبطولة الكبرى!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text('الفريق البطل: $champion 🏆', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
-                      ],
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.add_task_rounded, color: Color(0xFF1B5E20), size: 26),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'تسجيل مباراة وحجز مباشر ⚽',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                      ),
+                      Text(
+                        'الملعب: ${widget.pitchName}',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7FAF7),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.green.shade100),
+                ),
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _teamOneController,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        hintText: 'اسم الفريق الأول',
+                        filled: true,
+                        fillColor: Colors.white,
+                        prefixIcon: const Icon(Icons.shield_outlined, color: Color(0xFF1B5E20)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      ),
+                      validator: (v) => v!.trim().isEmpty ? 'يرجى كتابة اسم الفريق' : null,
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('⚔️ VS ⚔️', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    ),
+                    TextFormField(
+                      controller: _teamTwoController,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        hintText: 'اسم الفريق الثاني (أو اكتب: تحدي)',
+                        filled: true,
+                        fillColor: Colors.white,
+                        prefixIcon: const Icon(Icons.sports_soccer, color: Colors.teal),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      ),
+                      validator: (v) => v!.trim().isEmpty ? 'يرجى كتابة اسم الفريق' : null,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 15)),
+                    lastDate: DateTime.now().add(const Duration(days: 60)),
+                  );
+                  if (picked != null) setState(() => _selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today_rounded, color: Color(0xFF1B5E20), size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        'موعد المباراة: ${DateFormat('yyyy/MM/dd').format(_selectedDate)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const Spacer(),
+                      const Text('تغيير 📅', style: TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('اختر فترة وتوقيت المباراة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 42,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _slots.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final slot = _slots[index];
+                    final isSelected = _selectedSlot == slot;
+                    return ChoiceChip(
+                      label: Text(slot, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black87)),
+                      selected: isSelected,
+                      selectedColor: const Color(0xFF1B5E20),
+                      backgroundColor: Colors.grey.shade100,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      onSelected: (val) {
+                        if (val) setState(() => _selectedSlot = slot);
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'رقم هاتف الكابتن',
+                        prefixIcon: const Icon(Icons.phone_rounded, color: Colors.green, size: 20),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                ],
-                if (matches.isEmpty) ...[
-                  const Text('الفرق المسجلة حتى الآن:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                  const SizedBox(height: 10),
-                  ...teams.map((t) => Card(child: ListTile(leading: const Icon(Icons.sports_soccer), title: Text(t, style: const TextStyle(fontWeight: FontWeight.bold))))),
-                ] else ...[
-                  const Text('مباريات الشجرة والمواجهات:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                  const SizedBox(height: 10),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: matches.length,
-                    itemBuilder: (context, index) {
-                      final m = matches[index];
-                      final t1 = m['team1'] ?? 'فريق 1';
-                      final t2 = m['team2'] ?? 'فريق 2';
-                      final s1 = m['score1'];
-                      final s2 = m['score2'];
-                      final winner = m['winner'] ?? '';
-
-                      return Card(
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14.0),
-                          child: Column(
-                            children: [
-                              Text(m['round'] ?? 'مباراة', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      t1,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        color: winner == t1 ? Colors.green.shade800 : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
-                                    child: Text(
-                                      s1 != null && s2 != null ? '$s1 - $s2' : 'ضد',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1B5E20)),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      t2,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        color: winner == t2 ? Colors.green.shade800 : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (widget.isOwner && winner.isEmpty) ...[
-                                const Divider(height: 20),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                                  onPressed: () => _showEnterScoreDialog(context, index, matches),
-                                  child: const Text('إدخال النتيجة وتحديد الفائز', style: TextStyle(color: Colors.white)),
-                                ),
-                              ] else if (winner.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Text('الفائز المتأهل: $winner ✔️', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-                              ]
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _priceController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'المبلغ (د.ع)',
+                        prefixIcon: const Icon(Icons.payments_rounded, color: Colors.teal, size: 20),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
                   ),
                 ],
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B5E20),
+                    foregroundColor: Colors.white,
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: _isSaving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_circle_rounded),
+                  label: const Text('تثبيت المباراة في الجدول ⚽', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  onPressed: _isSaving
+                      ? null
+                      : () async {
+                          if (_formKey.currentState!.validate()) {
+                            setState(() => _isSaving = true);
+                            final times = _selectedSlot.split(' - ');
+                            final sTime = times[0];
+                            final eTime = times.length > 1 ? times[1] : '';
 
-  void _showEnterScoreDialog(BuildContext context, int matchIndex, List<Map<String, dynamic>> matches) {
-    final s1Ctrl = TextEditingController();
-    final s2Ctrl = TextEditingController();
-    final m = matches[matchIndex];
+                            await FirebaseFirestore.instance.collection('bookings').add({
+                              'pitchName': widget.pitchName,
+                              'teamOne': _teamOneController.text.trim(),
+                              'teamTwo': _teamTwoController.text.trim(),
+                              'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+                              'startTime': sTime,
+                              'endTime': eTime,
+                              'phone': _phoneController.text.trim(),
+                              'price': double.tryParse(_priceController.text.trim()) ?? widget.defaultRate,
+                              'status': 'upcoming',
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
 
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('نتيجة (${m['team1']} ضد ${m['team2']})'),
-          content: Row(
-            children: [
-              Expanded(child: TextField(controller: s1Ctrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: m['team1']))),
-              const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('-')),
-              Expanded(child: TextField(controller: s2Ctrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: m['team2']))),
+                            if (mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('تم تثبيت المباراة في الجدول بنجاح'), backgroundColor: Colors.green),
+                              );
+                            }
+                          }
+                        },
+                ),
+              ),
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-              onPressed: () async {
-                int score1 = int.tryParse(s1Ctrl.text.trim()) ?? 0;
-                int score2 = int.tryParse(s2Ctrl.text.trim()) ?? 0;
-
-                if (score1 == score2) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا يمكن التعادل في مباريات الإقصاء')));
-                  return;
-                }
-
-                String matchWinner = score1 > score2 ? m['team1'] : m['team2'];
-
-                matches[matchIndex]['score1'] = score1;
-                matches[matchIndex]['score2'] = score2;
-                matches[matchIndex]['winner'] = matchWinner;
-
-                final currentRound = m['round'];
-                final currentRoundMatches = matches.where((match) => match['round'] == currentRound).toList();
-                final allFinished = currentRoundMatches.every((match) => match['winner'] != '');
-
-                Map<String, dynamic> updateData = {'matches': matches};
-
-                if (allFinished) {
-                  final winners = currentRoundMatches.map((match) => match['winner'].toString()).toList();
-                  
-                  if (winners.length == 8) {
-                    for (int i = 0; i < winners.length; i += 2) {
-                      matches.add({
-                        'team1': winners[i],
-                        'team2': winners[i + 1],
-                        'score1': null,
-                        'score2': null,
-                        'winner': '',
-                        'round': 'ربع النهائي',
-                        'matchIndex': matches.length,
-                      });
-                    }
-                  } else if (winners.length == 4) {
-                    matches.add({'team1': winners[0], 'team2': winners[1], 'score1': null, 'score2': null, 'winner': '', 'round': 'نصف النهائي', 'matchIndex': matches.length});
-                    matches.add({'team1': winners[2], 'team2': winners[3], 'score1': null, 'score2': null, 'winner': '', 'round': 'نصف النهائي', 'matchIndex': matches.length});
-                  } else if (winners.length == 2 && !currentRound.toString().contains('النهائية')) {
-                    matches.add({
-                      'team1': winners[0],
-                      'team2': winners[1],
-                      'score1': null,
-                      'score2': null,
-                      'winner': '',
-                      'round': 'المباراة النهائية 🏆',
-                      'matchIndex': matches.length,
-                    });
-                  } else if (winners.length == 1 || currentRound.toString().contains('النهائية')) {
-                    updateData['champion'] = matches.last['winner'];
-                  }
-                  updateData['matches'] = matches;
-                }
-
-                await FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId).update(updateData);
-                if (mounted) Navigator.pop(ctx);
-              },
-              child: const Text('حفظ وإعلان الفائز', style: TextStyle(color: Colors.white)),
-            ),
-          ],
         ),
       ),
     );
