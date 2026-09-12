@@ -50,9 +50,11 @@ jobs:
             convert ball.png -resize 192x192 "$dir/ic_launcher.png"
           done
 
-      - name: Generate Deterministic Keystore For Updates
+      - name: Restore or Generate Permanent Keystore
         run: |
-          keytool -genkey -v \
+          mkdir -p android/app
+          # استخدام مفتاح موحد ثابت عبر سريال ثابت وتاريخ ثابت لمنع تغير التوقيع بين مرات البناء
+          keytool -genkeypair -v \
             -keystore android/app/upload-keystore.jks \
             -storepass "malabi_secure_2026" \
             -alias "malabi_key" \
@@ -60,6 +62,7 @@ jobs:
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
+            -startdate "2026/01/01 00:00:00" \
             -dname "CN=Malabi, OU=App, O=Malabi, L=Baghdad, ST=Baghdad, C=IQ"
 
       - name: Configure Gradle Signing
