@@ -27,6 +27,25 @@ const Map<String, List<String>> iraqLocations = {
   'دهوك': ['الكل', 'مركز دهوك', 'زاخو', 'سميل', 'عمادية']
 };
 
+const List<String> pitchTypesList = [
+  'الكل',
+  'خماسي (5 ضد 5)',
+  'سداسي (6 ضد 6)',
+  'سباعي (7 ضد 7)',
+  'ثماني (8 ضد 8)',
+  'قانوني كامل (11 ضد 11)'
+];
+
+const List<String> weekDaysList = [
+  'الجمعة',
+  'السبت',
+  'الأحد',
+  'الإثنين',
+  'الثلاثاء',
+  'الأربعاء',
+  'الخميس'
+];
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -37,7 +56,6 @@ void main() async {
   runApp(const PitchBookingApp());
 }
 
-// دوال الاتصال والواتساب المحدثة
 Future<void> launchCallDirect(String phone) async {
   final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
   final uri = Uri(scheme: 'tel', path: clean);
@@ -95,7 +113,7 @@ class PitchBookingApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// الشاشة الرئيسية لاختيار الحساب والدخول
+// الشاشة الرئيسية لاختيار الحساب
 // -------------------------------------------------------------
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -153,7 +171,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
               const SizedBox(height: 12),
               const Text('تطبيق مَلعَبي', textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
               const SizedBox(height: 6),
-              const Text('حجز وإدارة ملاعب كرة القدم بكل سهولة', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Text('المنصة الرياضية لحجز وتنظيم ملاعب كرة القدم', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey)),
               const SizedBox(height: 36),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
@@ -183,7 +201,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                 child: Row(
                   children: [
                     Expanded(child: Divider()),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('بوابة اللاعبين', style: TextStyle(color: Colors.grey, fontSize: 12))),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('بوابة اللاعبين والفرق', style: TextStyle(color: Colors.grey, fontSize: 12))),
                     Expanded(child: Divider()),
                   ],
                 ),
@@ -196,7 +214,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: const Icon(Icons.login),
-                label: const Text('تسجيل دخول لاعب / كابتن فريق', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                label: const Text('تسجيل دخول كابتن / لاعب', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                 onPressed: () => _openPlayerLoginModal(context),
               ),
               const SizedBox(height: 10),
@@ -208,7 +226,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: const Icon(Icons.person_add),
-                label: const Text('إنشاء حساب لاعب جديد لأول مرة', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                label: const Text('إنشاء حساب كابتن جديد', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                 onPressed: () => _openPlayerRegisterModal(context),
               ),
             ],
@@ -276,7 +294,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
 
     String selectedGov = 'بغداد';
     String selectedDist = 'أبو غريب';
-    int matchDurationMinutes = 60; // 60 دقيقة (ساعة) أو 90 دقيقة (ساعة ونصف)
+    String selectedType = 'سباعي (7 ضد 7)';
+    int matchDurationMinutes = 60;
 
     showModalBottomSheet(
       context: context,
@@ -321,7 +340,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: selectedDist,
-                            decoration: const InputDecoration(labelText: 'المنطقة / القضاء', border: OutlineInputBorder()),
+                            decoration: const InputDecoration(labelText: 'المنطقة', border: OutlineInputBorder()),
                             items: dists.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
                             onChanged: (val) {
                               if (val != null) setModalState(() => selectedDist = val);
@@ -331,12 +350,21 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: selectedType,
+                      decoration: const InputDecoration(labelText: 'نوع وحجم الملعب', border: OutlineInputBorder()),
+                      items: pitchTypesList.where((t) => t != 'الكل').map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selectedType = val);
+                      },
+                    ),
+                    const SizedBox(height: 10),
                     DropdownButtonFormField<int>(
                       value: matchDurationMinutes,
                       decoration: const InputDecoration(labelText: 'مدة الحجز للمباراة الواحدة', border: OutlineInputBorder()),
                       items: const [
-                        DropdownMenuItem(value: 60, child: Text('ساعة واحدة (مثال: 4 إلى 5، 5 إلى 6)')),
-                        DropdownMenuItem(value: 90, child: Text('ساعة ونصف (مثال: 4 إلى 5:30، 5:30 إلى 7)')),
+                        DropdownMenuItem(value: 60, child: Text('ساعة واحدة')),
+                        DropdownMenuItem(value: 90, child: Text('ساعة ونصف')),
                       ],
                       onChanged: (val) {
                         if (val != null) setModalState(() => matchDurationMinutes = val);
@@ -366,6 +394,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                             'name': name,
                             'governorate': selectedGov,
                             'area': selectedDist,
+                            'pitchType': selectedType,
                             'phone': phone,
                             'pin': pin,
                             'matchDurationMinutes': matchDurationMinutes,
@@ -462,15 +491,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('إنشاء حساب لاعب / كابتن جديد', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                const Text('إنشاء حساب كابتن جديد', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                 const SizedBox(height: 14),
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم الكابتن أو اللاعب الكامل', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person))),
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم الكابتن الكامل', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person))),
                 const SizedBox(height: 10),
-                TextField(controller: teamCtrl, decoration: const InputDecoration(labelText: 'اسم فريقك الدائم (مثال: فريق الصقور)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.shield))),
+                TextField(controller: teamCtrl, decoration: const InputDecoration(labelText: 'اسم فريقك (مثال: الصقور)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.shield))),
                 const SizedBox(height: 10),
-                TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف للتواصل وتأكيد الحجز', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone))),
+                TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف للتواصل', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone))),
                 const SizedBox(height: 10),
-                TextField(controller: pinCtrl, keyboardType: TextInputType.number, maxLength: 4, decoration: const InputDecoration(labelText: 'اختر رمز PIN للدخول (4 أرقام)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock))),
+                TextField(controller: pinCtrl, keyboardType: TextInputType.number, maxLength: 4, decoration: const InputDecoration(labelText: 'رمز PIN للدخول (4 أرقام)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock))),
                 const SizedBox(height: 10),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey.shade800, padding: const EdgeInsets.symmetric(vertical: 14)),
@@ -498,7 +527,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       }
                     }
                   },
-                  child: const Text('تسجيل الحساب والبدء', style: TextStyle(color: Colors.white, fontSize: 16)),
+                  child: const Text('تسجيل وبدء الاستخدام', style: TextStyle(color: Colors.white, fontSize: 16)),
                 ),
               ],
             ),
@@ -510,7 +539,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
 }
 
 // -------------------------------------------------------------
-// لوحة تحكم صاحب الملعب (الوارد الفعلي بعد الإكمال + المبلغ المتوقع)
+// لوحة تحكم صاحب الملعب
 // -------------------------------------------------------------
 class OwnerDashboardScreen extends StatefulWidget {
   final String pitchName;
@@ -523,11 +552,17 @@ class OwnerDashboardScreen extends StatefulWidget {
 class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  bool _pendingSeen = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.index == 1 && mounted) {
+        setState(() => _pendingSeen = true);
+      }
+    });
   }
 
   @override
@@ -544,6 +579,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       stream: _firestore.collection('bookings').where('pitchName', isEqualTo: widget.pitchName).where('status', isEqualTo: 'pending').snapshots(),
       builder: (context, pendingSnapshot) {
         final pendingCount = pendingSnapshot.data?.docs.length ?? 0;
+        final showPendingBadge = !_pendingSeen && pendingCount > 0;
 
         return Scaffold(
           appBar: AppBar(
@@ -553,7 +589,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(widget.pitchName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const Text('لوحة إدارة الحجوزات والمالية', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                const Text('إدارة الحجوزات والاشتراكات الدائمة', style: TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
             actions: [
@@ -561,13 +597,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                 icon: const Icon(Icons.account_balance_wallet, color: Colors.amberAccent),
                 tooltip: 'كشف الحساب المالي',
                 onPressed: () => _openFinancialReportModal(context),
-              ),
-              IconButton(
-                icon: const Icon(Icons.remove_red_eye, color: Colors.white),
-                tooltip: 'معاينة كلاعب',
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const Directionality(textDirection: ui.TextDirection.rtl, child: PlayerMainScreen(playerPhone: 'owner_preview'))));
-                },
               ),
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.white),
@@ -590,13 +619,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                 const Tab(icon: Icon(Icons.event_available), text: 'المباريات والجدول'),
                 Tab(
                   icon: Badge(
-                    isLabelVisible: pendingCount > 0,
+                    isLabelVisible: showPendingBadge,
                     label: Text('$pendingCount', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     backgroundColor: Colors.red,
                     child: const Icon(Icons.notifications_active),
                   ),
                   text: 'الطلبات المعلقة',
                 ),
+                const Tab(icon: Icon(Icons.repeat), text: 'الحجوزات الدائمة'),
               ],
             ),
           ),
@@ -605,13 +635,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
             children: [
               _buildConfirmedTab(currencyFormatter),
               _buildPendingTab(pendingSnapshot),
+              _buildRecurringBookingsTab(),
             ],
           ),
           floatingActionButton: FloatingActionButton.extended(
             backgroundColor: const Color(0xFF1B5E20),
             foregroundColor: Colors.white,
             icon: const Icon(Icons.add),
-            label: const Text('حجز موعد يدوي', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: const Text('حجز موعد جديد', style: TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () => _openAddManualSheet(context),
           ),
         );
@@ -626,10 +657,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
         final docs = snapshot.data?.docs ?? [];
-        final now = DateTime.now();
-
-        double actualRevenueReceived = 0.0; // الوارد الفعلي: المحصل فقط بعد إكمال المباراة
-        double expectedRevenueUpcoming = 0.0; // المبلغ المتوقع: الحجوزات المؤكدة التي لم تكتمل بعد
+        double actualRevenueReceived = 0.0;
+        double expectedRevenueUpcoming = 0.0;
 
         for (var doc in docs) {
           final d = doc.data() as Map<String, dynamic>;
@@ -660,7 +689,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('الوارد المقبوض (الفعلي)', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                          const Text('الوارد الفعلي المقبوض', style: TextStyle(color: Colors.white70, fontSize: 11)),
                           const SizedBox(height: 4),
                           Text('${currencyFormatter.format(actualRevenueReceived)} د.ع', style: const TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
                         ],
@@ -687,7 +716,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
             ),
             Expanded(
               child: docs.isEmpty
-                  ? const Center(child: Text('لا توجد حجوزات مؤكدة'))
+                  ? const Center(child: Text('لا توجد مباريات مؤكدة'))
                   : ListView.builder(
                       padding: const EdgeInsets.all(14),
                       itemCount: docs.length,
@@ -695,6 +724,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                         final doc = docs[index];
                         final data = doc.data() as Map<String, dynamic>;
                         final isDone = data['status'] == 'completed';
+                        final isRecurring = data['isRecurring'] == true;
                         final phone = data['phone'] ?? '';
 
                         return Card(
@@ -708,13 +738,24 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text('التاريخ: ${data['date']}', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(color: isDone ? Colors.green.shade100 : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
-                                      child: Text(
-                                        isDone ? 'مكتملة (تم استلام الوارد)' : 'مؤكدة (بانتظار اللعب)',
-                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDone ? Colors.green.shade900 : Colors.orange.shade900),
-                                      ),
+                                    Row(
+                                      children: [
+                                        if (isRecurring)
+                                          Container(
+                                            margin: const EdgeInsets.only(left: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(6)),
+                                            child: const Text('دائم / أسبوعي', style: TextStyle(fontSize: 10, color: Colors.purple, fontWeight: FontWeight.bold)),
+                                          ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(color: isDone ? Colors.green.shade100 : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+                                          child: Text(
+                                            isDone ? 'مكتملة ومقبوضة' : 'مؤكدة (بانتظار اللعب)',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDone ? Colors.green.shade900 : Colors.orange.shade900),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -726,21 +767,26 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                 Row(
                                   children: [
                                     if (phone.toString().isNotEmpty) ...[
-                                      IconButton(icon: const Icon(Icons.phone, color: Colors.green), tooltip: 'اتصال مباشر', onPressed: () => launchCallDirect(phone)),
-                                      IconButton(icon: const Icon(Icons.message, color: Colors.teal), tooltip: 'واتساب مباشر', onPressed: () => launchWhatsAppDirect(phone)),
+                                      IconButton(icon: const Icon(Icons.phone, color: Colors.green), tooltip: 'اتصال', onPressed: () => launchCallDirect(phone)),
+                                      IconButton(icon: const Icon(Icons.message, color: Colors.teal), tooltip: 'واتساب', onPressed: () => launchWhatsAppDirect(phone)),
                                     ],
                                     const Spacer(),
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: isDone ? Colors.grey : const Color(0xFF1B5E20),
-                                        foregroundColor: Colors.white,
+                                    if (!isDone)
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white),
+                                        onPressed: () => _confirmMatchCompletion(context, doc.reference),
+                                        icon: const Icon(Icons.check_circle, size: 16),
+                                        label: const Text('تحديد كمكتملة وتنزيل الوارد'),
+                                      )
+                                    else
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.verified, color: Colors.green, size: 18),
+                                          SizedBox(width: 4),
+                                          Text('تم استلام الوارد نهائياً', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        ],
                                       ),
-                                      onPressed: () {
-                                        doc.reference.update({'status': isDone ? 'upcoming' : 'completed'});
-                                      },
-                                      icon: Icon(isDone ? Icons.undo : Icons.check_circle, size: 16),
-                                      label: Text(isDone ? 'إلغاء الإكمال' : 'تحديد كمكتملة وتنزيل الوارد'),
-                                    ),
+                                    const SizedBox(width: 8),
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                                       onPressed: () => doc.reference.delete(),
@@ -757,6 +803,33 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
           ],
         );
       },
+    );
+  }
+
+  void _confirmMatchCompletion(BuildContext context, DocumentReference docRef) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تأكيد استلام الوارد'),
+          content: const Text(
+            'هل أنت متأكد من انتهاء المباراة واستلام الوارد؟\n\nتنبيه: بعد التأكيد سيتم إدخال المبلغ في الوارد الفعلي بشكل نهائي ولن تتمكن من إلغائها أو التراجع عنها.',
+            style: TextStyle(height: 1.5),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () async {
+                await docRef.update({'status': 'completed'});
+                if (mounted) Navigator.pop(ctx);
+              },
+              child: const Text('نعم، تأكيد واستلام الوارد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -828,6 +901,116 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     );
   }
 
+  Widget _buildRecurringBookingsTab() {
+    return Scaffold(
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firestore.collection('recurring_rules').where('pitchName', isEqualTo: widget.pitchName).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          final docs = snapshot.data?.docs ?? [];
+
+          if (docs.isEmpty) {
+            return const Center(child: Text('لا توجد حجوزات أسبوعية ثابتة مضافة حتى الآن'));
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(14),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data() as Map<String, dynamic>;
+
+              return Card(
+                color: Colors.purple.shade50,
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const CircleAvatar(backgroundColor: Colors.purple, child: Icon(Icons.repeat, color: Colors.white)),
+                  title: Text('كل يوم ${data['dayOfWeek']} (${data['timeSlot']})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('محجوز دائماً لـ: ${data['teamName']}  |  هاتف: ${data['phone']}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => doc.reference.delete(),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.purple.shade800,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_task),
+        label: const Text('إضافة حجز أسبوعي ثابت'),
+        onPressed: () => _openAddRecurringDialog(context),
+      ),
+    );
+  }
+
+  void _openAddRecurringDialog(BuildContext context) {
+    String day = 'الجمعة';
+    final slotCtrl = TextEditingController(text: '08:00 م - 09:30 م');
+    final teamCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final priceCtrl = TextEditingController(text: '15000');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text('تسجيل حجز ثابت أسبوعياً'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: day,
+                    decoration: const InputDecoration(labelText: 'يوم الحجز في كل أسبوع', border: OutlineInputBorder()),
+                    items: weekDaysList.map((d) => DropdownMenuItem(value: d, child: Text('كل يوم $d'))).toList(),
+                    onChanged: (v) {
+                      if (v != null) setDlgState(() => day = v);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(controller: slotCtrl, decoration: const InputDecoration(labelText: 'وقت الحجز (مثال: 08:00 م - 09:30 م)', border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+                  TextField(controller: teamCtrl, decoration: const InputDecoration(labelText: 'اسم الفريق أو الكابتن الدائم', border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+                  TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم هاتف الفريق', border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+                  TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المبلغ لكل مباراة (د.ع)', border: OutlineInputBorder())),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade800),
+                onPressed: () async {
+                  if (teamCtrl.text.isNotEmpty) {
+                    await _firestore.collection('recurring_rules').add({
+                      'pitchName': widget.pitchName,
+                      'dayOfWeek': day,
+                      'timeSlot': slotCtrl.text.trim(),
+                      'teamName': teamCtrl.text.trim(),
+                      'phone': phoneCtrl.text.trim(),
+                      'price': double.tryParse(priceCtrl.text.trim()) ?? 15000.0,
+                      'createdAt': FieldValue.serverTimestamp(),
+                    });
+                    if (mounted) Navigator.pop(ctx);
+                  }
+                },
+                child: const Text('حفظ كحجز ثابت', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openFinancialReportModal(BuildContext context) {
     final currencyFormatter = NumberFormat('#,###');
     showModalBottomSheet(
@@ -865,7 +1048,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   ListTile(
                     tileColor: Colors.green.shade50,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    title: const Text('الوارد الفعلي المستلم (مباريات مكتملة)'),
+                    title: const Text('الوارد الفعلي المقبوض (مكتمل)'),
                     trailing: Text('${currencyFormatter.format(completedTotal)} د.ع', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
                   ),
                   const SizedBox(height: 10),
@@ -886,7 +1069,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   ListTile(
                     tileColor: Colors.grey.shade100,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    title: const Text('إجمالي الدخل الكلي المتوقع للملعب', style: TextStyle(fontWeight: FontWeight.bold)),
+                    title: const Text('إجمالي الدخل المتوقع الكلي', style: TextStyle(fontWeight: FontWeight.bold)),
                     trailing: Text('${currencyFormatter.format(completedTotal + upcomingTotal)} د.ع', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
                   ),
                   const SizedBox(height: 16),
@@ -948,7 +1131,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 }
 
 // -------------------------------------------------------------
-// واجهة اللاعب الرئيسية (4 تبويبات: استكشاف، مفضلة، طلباتي، بروفايل)
+// واجهة اللاعب الرئيسية (مع نظام إخفاء الشارة فور الدخول)
 // -------------------------------------------------------------
 class PlayerMainScreen extends StatefulWidget {
   final String playerPhone;
@@ -961,6 +1144,7 @@ class PlayerMainScreen extends StatefulWidget {
 class _PlayerMainScreenState extends State<PlayerMainScreen> {
   int _currentIndex = 0;
   List<String> _favPitches = [];
+  bool _matchesBadgeSeen = false;
 
   @override
   void initState() {
@@ -1000,6 +1184,9 @@ class _PlayerMainScreenState extends State<PlayerMainScreen> {
           }
         }
 
+        // إخفاء الشارة عند دخول اللاعب لتبويب مبارياتي
+        final showMatchBadge = !_matchesBadgeSeen && updatesCount > 0;
+
         final pages = [
           PlayerExplorePitchesTab(
             favPitches: _favPitches,
@@ -1022,20 +1209,20 @@ class _PlayerMainScreenState extends State<PlayerMainScreen> {
             type: BottomNavigationBarType.fixed,
             selectedItemColor: const Color(0xFF1B5E20),
             unselectedItemColor: Colors.grey,
-            onTap: (idx) => setState(() => _currentIndex = idx),
+            onTap: (idx) {
+              setState(() {
+                _currentIndex = idx;
+                if (idx == 2) {
+                  _matchesBadgeSeen = true; // مسح الإشعار فور الضغط عليه
+                }
+              });
+            },
             items: [
               const BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'استكشاف'),
+              const BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'المفضلة'),
               BottomNavigationBarItem(
                 icon: Badge(
-                  isLabelVisible: _favPitches.isNotEmpty,
-                  label: Text('${_favPitches.length}'),
-                  child: const Icon(Icons.favorite),
-                ),
-                label: 'المفضلة',
-              ),
-              BottomNavigationBarItem(
-                icon: Badge(
-                  isLabelVisible: updatesCount > 0,
+                  isLabelVisible: showMatchBadge,
                   label: Text('$updatesCount', style: const TextStyle(color: Colors.white)),
                   backgroundColor: Colors.red,
                   child: const Icon(Icons.sports_soccer),
@@ -1068,6 +1255,7 @@ class PlayerExplorePitchesTab extends StatefulWidget {
 class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
   String _selectedGov = 'بغداد';
   String _selectedArea = 'الكل';
+  String _selectedPitchType = 'الكل';
   String _search = '';
 
   @override
@@ -1117,16 +1305,35 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'ابحث باسم الملعب...',
-                    prefixIcon: const Icon(Icons.search),
-                    isDense: true,
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  ),
-                  onChanged: (val) => setState(() => _search = val.trim().toLowerCase()),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedPitchType,
+                        decoration: const InputDecoration(labelText: 'نوع الملعب', isDense: true, border: OutlineInputBorder()),
+                        items: pitchTypesList.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedPitchType = val);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 5,
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'اسم الملعب...',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          isDense: true,
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                        onChanged: (val) => setState(() => _search = val.trim().toLowerCase()),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1142,17 +1349,28 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                   final data = doc.data() as Map<String, dynamic>;
                   final gov = data['governorate'] ?? 'بغداد';
                   final area = data['area'] ?? '';
+                  final pitchType = data['pitchType'] ?? 'سباعي (7 ضد 7)';
                   final name = (data['name'] ?? '').toString().toLowerCase();
 
                   final matchesGov = gov == _selectedGov;
                   final matchesArea = _selectedArea == 'الكل' || area == _selectedArea;
+                  final matchesType = _selectedPitchType == 'الكل' || pitchType == _selectedPitchType;
                   final matchesSearch = name.contains(_search);
 
-                  return matchesGov && matchesArea && matchesSearch;
+                  return matchesGov && matchesArea && matchesType && matchesSearch;
                 }).toList();
 
                 if (filtered.isEmpty) {
-                  return Center(child: Text('لا توجد ملاعب في $_selectedGov - $_selectedArea', style: const TextStyle(color: Colors.grey)));
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Text(
+                        'لا توجد ملاعب مطابقة للبحث في\n$_selectedGov - $_selectedArea (${_selectedPitchType == 'الكل' ? 'جميع الأحجام' : _selectedPitchType})',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey, height: 1.5),
+                      ),
+                    ),
+                  );
                 }
 
                 return ListView.builder(
@@ -1163,6 +1381,7 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                     final pitchName = data['name'] ?? 'ملعب';
                     final area = data['area'] ?? '';
                     final gov = data['governorate'] ?? '';
+                    final pitchType = data['pitchType'] ?? 'ملعب سباعي';
                     final rate = (data['hourlyRate'] as num?)?.toDouble() ?? 15000.0;
                     final duration = data['matchDurationMinutes'] ?? 60;
                     final isFav = widget.favPitches.contains(pitchName);
@@ -1175,8 +1394,8 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('$gov - $area  |  مدة المباراة: $duration دقيقة', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                            Text('السعر: ${rate.toInt()} د.ع (فريق واحد: ${(rate / 2).toInt()} د.ع)', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
+                            Text('$gov - $area  |  النوع: $pitchType', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                            Text('مدة المباراة: $duration دقيقة  |  السعر: ${rate.toInt()} د.ع', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
                           ],
                         ),
                         trailing: IconButton(
@@ -1213,7 +1432,7 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
 }
 
 // -------------------------------------------------------------
-// جدول مواعيد الملعب وتوليد الأوقات ديناميكياً (ساعة أو ساعة ونصف)
+// جدول المواعيد (مع منع اللاعب من قبول تحدي فريقه بنفسه)
 // -------------------------------------------------------------
 class PitchScheduleViewScreen extends StatefulWidget {
   final String pitchName;
@@ -1230,11 +1449,10 @@ class PitchScheduleViewScreen extends StatefulWidget {
 class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
   DateTime _selectedDate = DateTime.now();
 
-  // توليد الفترات الزمنية ديناميكياً حسب مدة الحجز (من 4 عصراً حتى 1 فجراً)
   List<String> _generateSlots() {
     final List<String> generated = [];
-    DateTime start = DateTime(2026, 1, 1, 16, 0); // 04:00 PM
-    final DateTime end = DateTime(2026, 1, 2, 1, 0); // 01:00 AM اليوم التالي
+    DateTime start = DateTime(2026, 1, 1, 16, 0);
+    final DateTime end = DateTime(2026, 1, 2, 1, 0);
 
     while (start.isBefore(end)) {
       final DateTime slotEnd = start.add(Duration(minutes: widget.durationMinutes));
@@ -1246,9 +1464,23 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
     return generated;
   }
 
+  String _getArabicDayName(DateTime date) {
+    const days = {
+      DateTime.friday: 'الجمعة',
+      DateTime.saturday: 'السبت',
+      DateTime.sunday: 'الأحد',
+      DateTime.monday: 'الإثنين',
+      DateTime.tuesday: 'الثلاثاء',
+      DateTime.wednesday: 'الأربعاء',
+      DateTime.thursday: 'الخميس',
+    };
+    return days[date.weekday] ?? '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    final currentDayArabic = _getArabicDayName(_selectedDate);
     final slots = _generateSlots();
 
     return Scaffold(
@@ -1265,7 +1497,7 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
               children: [
                 const Icon(Icons.calendar_month, color: Color(0xFF1B5E20)),
                 const SizedBox(width: 8),
-                Text('اليوم: $dateStr', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('اليوم: $currentDayArabic ($dateStr)', style: const TextStyle(fontWeight: FontWeight.bold)),
                 const Spacer(),
                 TextButton.icon(
                   icon: const Icon(Icons.edit_calendar),
@@ -1285,83 +1517,146 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('bookings').where('pitchName', isEqualTo: widget.pitchName).where('date', isEqualTo: dateStr).snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
-                final docs = snapshot.data?.docs ?? [];
-                final Map<String, DocumentSnapshot> bookedMap = {};
-
-                for (var d in docs) {
-                  final data = d.data() as Map<String, dynamic>;
-                  final slotKey = '${data['startTime']} - ${data['endTime']}';
-                  final st = data['status'];
-                  if (st == 'upcoming' || st == 'pending' || st == 'completed') {
-                    bookedMap[slotKey] = d;
-                  }
+              stream: FirebaseFirestore.instance.collection('recurring_rules').where('pitchName', isEqualTo: widget.pitchName).where('dayOfWeek', isEqualTo: currentDayArabic).snapshots(),
+              builder: (context, recurringSnap) {
+                final recurringDocs = recurringSnap.data?.docs ?? [];
+                final Map<String, String> recurringMap = {};
+                for (var r in recurringDocs) {
+                  final rd = r.data() as Map<String, dynamic>;
+                  recurringMap[rd['timeSlot']] = rd['teamName'];
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(14),
-                  itemCount: slots.length,
-                  itemBuilder: (context, index) {
-                    final slot = slots[index];
-                    final bookingDoc = bookedMap[slot];
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('bookings').where('pitchName', isEqualTo: widget.pitchName).where('date', isEqualTo: dateStr).snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
-                    if (bookingDoc == null) {
-                      return Card(
-                        color: Colors.green.shade50,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: Icon(Icons.check_circle, color: Colors.green.shade700),
-                          title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('متاح للحجز الكامل (${widget.hourlyRate.toInt()} د.ع) أو طلب تحدي'),
-                          trailing: ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                            onPressed: () => _openBookingDialog(context, slot, dateStr),
-                            child: const Text('حجز', style: TextStyle(color: Colors.white)),
-                          ),
-                        ),
-                      );
+                    final docs = snapshot.data?.docs ?? [];
+                    final Map<String, DocumentSnapshot> bookedMap = {};
+
+                    for (var d in docs) {
+                      final data = d.data() as Map<String, dynamic>;
+                      final slotKey = '${data['startTime']} - ${data['endTime']}';
+                      final st = data['status'];
+                      if (st == 'upcoming' || st == 'pending' || st == 'completed') {
+                        bookedMap[slotKey] = d;
+                      }
                     }
 
-                    final bData = bookingDoc.data() as Map<String, dynamic>;
-                    final isLookingForOpponent = bData['teamTwo'] == 'بانتظار الخصم';
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(14),
+                      itemCount: slots.length,
+                      itemBuilder: (context, index) {
+                        final slot = slots[index];
+                        final bookingDoc = bookedMap[slot];
+                        final recurringTeam = recurringMap[slot];
 
-                    if (isLookingForOpponent) {
-                      final halfPrice = widget.hourlyRate / 2;
-                      return Card(
-                        color: Colors.orange.shade50,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: const Icon(Icons.flash_on, color: Colors.deepOrange),
-                          title: Text('$slot (تحدي مفتوح!)', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
-                          subtitle: Text('فريق (${bData['teamOne']}) يبحث عن خصم!\nتكلفة فريقك: ${halfPrice.toInt()} د.ع (النصف فقط)'),
-                          trailing: ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
-                            onPressed: () => _acceptChallengeDialog(context, bookingDoc, bData),
-                            child: const Text('قبول التحدي', style: TextStyle(color: Colors.white)),
-                          ),
-                        ),
-                      );
-                    } else {
-                      return Card(
-                        color: Colors.red.shade50,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: const Icon(Icons.cancel, color: Colors.red),
-                          title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('محجوز: ${bData['teamOne']} ⚔️ ${bData['teamTwo']}'),
-                          trailing: const Chip(label: Text('محجوز', style: TextStyle(color: Colors.red))),
-                        ),
-                      );
-                    }
+                        if (recurringTeam != null) {
+                          return Card(
+                            color: Colors.purple.shade50,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: ListTile(
+                              leading: const Icon(Icons.lock_clock, color: Colors.purple),
+                              title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('حجز أسبوعي ثابت لفريق: $recurringTeam'),
+                              trailing: const Chip(label: Text('حجز دائم', style: TextStyle(color: Colors.purple, fontSize: 11))),
+                            ),
+                          );
+                        }
+
+                        if (bookingDoc == null) {
+                          return Card(
+                            color: Colors.green.shade50,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: ListTile(
+                              leading: Icon(Icons.check_circle, color: Colors.green.shade700),
+                              title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('متاح للحجز الكامل (${widget.hourlyRate.toInt()} د.ع) أو طلب تحدي'),
+                              trailing: ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                                onPressed: () => _openBookingDialog(context, slot, dateStr),
+                                child: const Text('حجز', style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                          );
+                        }
+
+                        final bData = bookingDoc.data() as Map<String, dynamic>;
+                        final isLookingForOpponent = bData['teamTwo'] == 'بانتظار الخصم';
+                        final creatorPhone = bData['phone'] ?? '';
+                        final isMyOwnBooking = creatorPhone == widget.playerPhone; // التحقق من هوية صاحب الطلب
+
+                        if (isLookingForOpponent) {
+                          final halfPrice = widget.hourlyRate / 2;
+
+                          return Card(
+                            color: Colors.orange.shade50,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: ListTile(
+                              leading: const Icon(Icons.flash_on, color: Colors.deepOrange),
+                              title: Text('$slot (تحدي مفتوح!)', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                              subtitle: Text(
+                                isMyOwnBooking
+                                    ? 'هذا طلب فريقك (${bData['teamOne']})\nبانتظار انضمام فريق منافس'
+                                    : 'فريق (${bData['teamOne']}) يبحث عن خصم!\nتكلفة فريقك: ${halfPrice.toInt()} د.ع (النصف فقط)',
+                              ),
+                              trailing: isMyOwnBooking
+                                  ? OutlinedButton(
+                                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                                      onPressed: () => _cancelMyChallenge(context, bookingDoc.reference),
+                                      child: const Text('إلغاء طلبي'),
+                                    )
+                                  : ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
+                                      onPressed: () => _acceptChallengeDialog(context, bookingDoc, bData),
+                                      child: const Text('قبول التحدي', style: TextStyle(color: Colors.white)),
+                                    ),
+                            ),
+                          );
+                        } else {
+                          return Card(
+                            color: Colors.red.shade50,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: ListTile(
+                              leading: const Icon(Icons.cancel, color: Colors.red),
+                              title: Text(slot, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('محجوز: ${bData['teamOne']} ⚔️ ${bData['teamTwo']}'),
+                              trailing: const Chip(label: Text('محجوز', style: TextStyle(color: Colors.red))),
+                            ),
+                          );
+                        }
+                      },
+                    );
                   },
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _cancelMyChallenge(BuildContext context, DocumentReference docRef) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('إلغاء طلب التحدي'),
+          content: const Text('هل تريد سحب طلبك وإلغاء هذا الحجز؟'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                await docRef.delete();
+                if (mounted) Navigator.pop(ctx);
+              },
+              child: const Text('نعم، إلغاء الحجز', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1407,7 +1702,9 @@ class _PitchScheduleViewScreenState extends State<PitchScheduleViewScreen> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
                       child: Text(
-                        hasOpponent ? 'المبلغ الإجمالي للحجز: ${fullPrice.toInt()} د.ع' : 'أنت تدفع النصف فقط: ${payablePrice.toInt()} د.ع\n(النصف الثاني يدفعه الخصم عند انضمامه)',
+                        hasOpponent
+                            ? 'المبلغ الإجمالي للحجز: ${fullPrice.toInt()} د.ع'
+                            : 'أنت تدفع النصف فقط: ${payablePrice.toInt()} د.ع\n(النصف الثاني يدفعه الخصم عند انضمامه)',
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
                       ),
@@ -1515,7 +1812,7 @@ class PlayerFavoritesTab extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B5E20),
-        title: const Text('ملاعبي المفضلة (❤️)', style: TextStyle(color: Colors.white)),
+        title: const Text('ملاعبي المفضلة', style: TextStyle(color: Colors.white)),
       ),
       body: favPitches.isEmpty
           ? const Center(child: Text('لم تضف أي ملعب للمفضلة بعد\nاضغط على رمز القلب عند أي ملعب لحفظه هنا', textAlign: TextAlign.center))
@@ -1533,6 +1830,7 @@ class PlayerFavoritesTab extends StatelessWidget {
                     final name = data['name'] ?? 'ملعب';
                     final area = data['area'] ?? '';
                     final gov = data['governorate'] ?? '';
+                    final pitchType = data['pitchType'] ?? 'ملعب سباعي';
                     final rate = (data['hourlyRate'] as num?)?.toDouble() ?? 15000.0;
                     final duration = data['matchDurationMinutes'] ?? 60;
 
@@ -1541,7 +1839,7 @@ class PlayerFavoritesTab extends StatelessWidget {
                       child: ListTile(
                         leading: const Icon(Icons.stadium, color: Color(0xFF1B5E20), size: 36),
                         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        subtitle: Text('$gov - $area | $rate د.ع | $duration دقيقة'),
+                        subtitle: Text('$gov - $area | $pitchType | $rate د.ع'),
                         trailing: IconButton(
                           icon: const Icon(Icons.favorite, color: Colors.red),
                           onPressed: () => onToggleFav(name),
@@ -1573,7 +1871,7 @@ class PlayerFavoritesTab extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// تبويب طلبات اللاعب ومبارياته
+// تبويب طلبات ومباريات اللاعب
 // -------------------------------------------------------------
 class PlayerMyBookingsTab extends StatelessWidget {
   final String playerPhone;
@@ -1656,7 +1954,7 @@ class PlayerMyBookingsTab extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// شاشة بروفايل اللاعب الخاصة
+// شاشة بروفايل اللاعب
 // -------------------------------------------------------------
 class PlayerProfileTab extends StatelessWidget {
   final String playerPhone;
@@ -1788,7 +2086,7 @@ class PlayerProfileTab extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// نموذج الحجز اليدوي المباشر لصاحب الملعب
+// نموذج الحجز اليدوي المباشر
 // -------------------------------------------------------------
 class FullAddBookingSheet extends StatefulWidget {
   final String pitchName;
