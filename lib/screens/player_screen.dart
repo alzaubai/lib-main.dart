@@ -804,6 +804,70 @@ class PlayerProfileTab extends StatelessWidget {
   final String playerPhone;
   const PlayerProfileTab({super.key, required this.playerPhone});
 
+  void _openEditProfileDialog(BuildContext context, String currentName, String currentTeam, String currentPin) {
+    final nameCtrl = TextEditingController(text: currentName);
+    final teamCtrl = TextEditingController(text: currentTeam);
+    final pinCtrl = TextEditingController(text: currentPin);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تعديل بيانات الملف الشخصي'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'اسم الكابتن / اللاعب', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: teamCtrl,
+                  decoration: const InputDecoration(labelText: 'اسم الفريق الدائم', border: OutlineInputBorder(), prefixIcon: Icon(Icons.shield)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: pinCtrl,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: const InputDecoration(labelText: 'رمز PIN للدخول (4 أرقام)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () async {
+                final newName = nameCtrl.text.trim();
+                final newTeam = teamCtrl.text.trim();
+                final newPin = pinCtrl.text.trim();
+
+                if (newName.isNotEmpty && newPin.length == 4) {
+                  await FirebaseFirestore.instance.collection('players').doc(playerPhone).update({
+                    'name': newName,
+                    'teamName': newTeam.isEmpty ? 'فريق $newName' : newTeam,
+                    'pin': newPin,
+                  });
+
+                  if (context.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث البيانات بنجاح'), backgroundColor: Colors.green));
+                  }
+                }
+              },
+              child: const Text('حفظ التعديل', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currencyFormatter = NumberFormat('#,###');
@@ -830,6 +894,7 @@ class PlayerProfileTab extends StatelessWidget {
           final data = snapshot.data?.data() as Map<String, dynamic>?;
           final name = data?['name'] ?? 'كابتن الفريق';
           final team = data?['teamName'] ?? 'فريق غير محدد';
+          final pin = data?['pin'] ?? '';
 
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('bookings').where('phone', isEqualTo: playerPhone).snapshots(),
@@ -862,7 +927,17 @@ class PlayerProfileTab extends StatelessWidget {
                     Text(team, style: const TextStyle(color: Colors.grey, fontSize: 16)),
                     const SizedBox(height: 6),
                     Text('رقم الهاتف: $playerPhone', style: const TextStyle(color: Colors.blueGrey)),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1B5E20),
+                        side: const BorderSide(color: Color(0xFF1B5E20)),
+                      ),
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('تعديل بيانات الملف الشخصي'),
+                      onPressed: () => _openEditProfileDialog(context, name, team, pin),
+                    ),
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         Expanded(
