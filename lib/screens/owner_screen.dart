@@ -73,7 +73,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(widget.pitchName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const Text('إدارة الحجوزات والاشتراكات الدائمة', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                const Text('إدارة الحجوزات والاشتراكات والتقييمات', style: TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
             actions: [
@@ -216,7 +216,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     decoration: const InputDecoration(labelText: 'رمز PIN للدخول (4 أرقام)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
                   ),
                   const SizedBox(height: 12),
-                  // قسم تحديد موقع الملعب بالـ GPS
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.shade200)),
@@ -430,16 +429,16 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                     if (!isDone)
                                       ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white),
-                                        onPressed: () => _confirmMatchCompletion(context, doc.reference),
+                                        onPressed: () => _confirmMatchCompletion(context, doc.reference, data),
                                         icon: const Icon(Icons.check_circle, size: 16),
-                                        label: const Text('تحديد كمكتملة وتنزيل الوارد'),
+                                        label: const Text('إنهاء وتقييم الفريق'),
                                       )
                                     else
                                       const Row(
                                         children: [
                                           Icon(Icons.verified, color: Colors.green, size: 18),
                                           SizedBox(width: 4),
-                                          Text('تم استلام الوارد نهائياً', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          Text('مقبوضة ومكتملة', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
                                         ],
                                       ),
                                     const SizedBox(width: 8),
@@ -462,28 +461,57 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     );
   }
 
-  void _confirmMatchCompletion(BuildContext context, DocumentReference docRef) {
+  void _confirmMatchCompletion(BuildContext context, DocumentReference docRef, Map<String, dynamic> bData) {
+    bool markTrusted = true;
+    final teamPhone = bData['phone'] ?? '';
+
     showDialog(
       context: context,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('تأكيد استلام الوارد'),
-          content: const Text(
-            'هل أنت متأكد من انتهاء المباراة واستلام الوارد؟\n\nتنبيه: بعد التأكيد سيتم إدخال المبلغ في الوارد الفعلي بشكل نهائي ولن تتمكن من إلغائها أو التراجع عنها.',
-            style: TextStyle(height: 1.5),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-              onPressed: () async {
-                await docRef.update({'status': 'completed'});
-                if (mounted) Navigator.pop(ctx);
-              },
-              child: const Text('نعم، تأكيد واستلام الوارد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text('تأكيد انتهاء المباراة واستلام الوارد'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('هل انتهت المباراة وتم استلام المبلغ بالكامل؟', style: TextStyle(height: 1.5)),
+                const SizedBox(height: 14),
+                const Divider(),
+                const Text('تقييم انضباط الفريق والروح الرياضية:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: markTrusted,
+                  title: Text('فريق ملتزم بالحضور والمواعيد والأخلاق (${bData['teamOne']})'),
+                  subtitle: const Text('يمنح الفريق شارة "فريق موثوق 🏅" بتطبيقه', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  activeColor: const Color(0xFF1B5E20),
+                  onChanged: (val) => setDlgState(() => markTrusted = val ?? true),
+                ),
+              ],
             ),
-          ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                onPressed: () async {
+                  await docRef.update({
+                    'status': 'completed',
+                    'teamTrustedRated': markTrusted,
+                  });
+
+                  if (teamPhone.toString().isNotEmpty) {
+                    await _firestore.collection('players').doc(teamPhone).set({
+                      'isTrustedTeam': markTrusted,
+                    }, SetOptions(merge: true));
+                  }
+
+                  if (mounted) Navigator.pop(ctx);
+                },
+                child: const Text('نعم، تأكيد وتثبيت الوارد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
         ),
       ),
     );
