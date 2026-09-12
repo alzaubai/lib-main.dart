@@ -1,44 +1,78 @@
-import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const Map<String, List<String>> iraqLocations = {
+// قائمة المحافظات العراقية
+const List<String> iraqGovernoratesList = [
+  'الكل',
+  'بغداد',
+  'البصرة',
+  'أربيل',
+  'النجف',
+  'كربلاء',
+  'نينوى',
+  'كركوك',
+  'السليمانية',
+  'دهوك',
+  'الأنبار',
+  'بابل',
+  'ديالى',
+  'واسط',
+  'ميسان',
+  'ذي قار',
+  'المثنى',
+  'القادسية',
+  'صلاح الدين',
+];
+
+// اسم مرادف للتوافق القديم
+const List<String> iraqGovernorates = iraqGovernoratesList;
+
+// مناطق ومحلات كل محافظة
+final Map<String, List<String>> iraqAreasData = {
   'بغداد': [
     'الكل',
-    'الكرخ الأولى',
-    'الكرخ الثانية',
-    'الكرخ الثالثة',
-    'الرصافة الأولى',
-    'الرصافة الثانية',
-    'الرصافة الثالثة',
+    'الكرخ',
+    'الرصافة',
     'أبو غريب',
+    'المنصور',
+    'اليرموك',
+    'الدورة',
+    'السيدية',
+    'العامرية',
+    'الغزالية',
+    'الشعلة',
+    'الكاظمية',
+    'الحرية',
+    'الكرادة',
+    'الجادرية',
+    'زيونة',
+    'شارع فلسطين',
+    'مدينة الصدر',
+    'الأعظمية',
+    'الشعب',
+    'البنوك',
+    'القاهرة',
+    'الزعفرانية',
     'المحمودية',
-    'الطارمية',
     'التاجي',
-    'المدائن',
   ],
-  'البصرة': ['الكل', 'العشار', 'الجبيلة', 'المعقل', 'القرنة', 'الزبير', 'شط العرب'],
-  'أربيل': ['الكل', 'عنكاوا', 'الروستايا', 'بيتي', 'السركال', 'قلعة أربيل'],
-  'النجف': ['الكل', 'المدينة القديمة', 'الحنانة', 'الوفاء', 'الكوفة'],
-  'كربلاء': ['الكل', 'مركز المدينة', 'الحر', 'العباسية', 'المحافظة'],
-  'بابل': ['الكل', 'الحلة', 'المحاويل', 'الإسكندرية', 'المدحتية', 'القاسم'],
-  'السليمانية': ['الكل', 'بختياري', 'الكورنيش', 'سرجنار'],
-  'نينوى': ['الكل', 'الموصل الحدباء', 'الزهور', 'العلا', 'التحرير'],
+  'البصرة': ['الكل', 'العشار', 'الجبيلة', 'القرنة', 'الزبير', 'شط العرب', 'أبو الخصيب', 'المعقل', 'الطويسة'],
+  'أربيل': ['الكل', 'عينكاوة', 'الشارع الستيني', 'الشارع المئة', 'بختياري', 'طيراوة', 'شورش'],
+  'النجف': ['الكل', 'الكوفة', 'المشخاب', 'الحنانة', 'حي الأمير', 'حي الغدير', 'حي السعد'],
+  'كربلاء': ['الكل', 'مركز المدينة', 'الهندية', 'عين التمر', 'حي الحسين', 'حي المعلمين', 'حي العباس'],
+  'الأنبار': ['الكل', 'الرمادي', 'الفلوجة', 'هيت', 'القائم', 'حديثة', 'الخالدية'],
+  'بابل': ['الكل', 'الحلة', 'المحاويل', 'المسيب', 'القاسم', 'الهاشمية'],
+  'ديالى': ['الكل', 'بعقوبة', 'المقدادية', 'الخالص', 'خانقين', 'بلدروز'],
 };
 
-const Map<String, List<String>> subLocationsMap = {
-  'الكرخ الأولى': ['المنصور', 'اليرموك', 'العلاوي', 'الدورة', 'البياع', 'الكاظمية'],
-  'الكرخ الثانية': ['العامرية', 'الحارثية', 'الداوودي', 'الغزالية', 'العريج'],
-  'الكرخ الثالثة': ['الشعلة', 'الحرية', 'الإعلام', 'الكاظمية المقدسة', 'الطارمية (أطراف)'],
-  'الرصافة الأولى': ['الكرادة', 'الشارع الرئيسي', 'أبو نؤاس', 'العرصات', 'المسبح'],
-  'الرصافة الثانية': ['زيونة', 'الغدير', 'البلديات', 'المصارف', 'الأمين'],
-  'الرصافة الثالثة': ['الأعظمية', 'الكسرة', 'الميدان', 'باب المعظم', 'الوزيرية', 'الشعب'],
-  'أبو غريب': ['مركز القضاء', 'الرسالة', 'الرشاد', 'الزيتون', 'الشحيمية', 'النصر والسلام'],
-  'المحمودية': ['مركز المحمودية', 'اللطيفية', 'اليوسفية'],
-  'الطارمية': ['مركز الطارمية', 'العبايجي'],
-  'التاجي': ['مركز التاجي', 'المشاهدة', 'البوعيفان'],
-  'المدائن': ['مركز المدائن', 'النهروان', 'الجسر'],
-};
+// دالة إرجاع المناطق حسب المحافظة
+List<String> getAreasListForGov(String gov) {
+  return iraqAreasData[gov] ?? ['الكل', 'المركز', 'شمال المحافظة', 'جنوب المحافظة'];
+}
 
+// اسم مرادف للتوافق
+List<String> getAreasForGovernorate(String gov) => getAreasListForGov(gov);
+
+// أنواع وأحجام الملاعب
 const List<String> pitchTypesList = [
   'الكل',
   'خماسي (5 ضد 5)',
@@ -48,127 +82,58 @@ const List<String> pitchTypesList = [
   'ملعب قانوني (11 ضد 11)',
 ];
 
+// أنواع الأرضيات
 const List<String> pitchSurfaceTypesList = [
   'الكل',
   'ثيل 🌿',
-  'تارتان 🏟️',
-  'ترابي 🏜️',
+  'ثيل تركي ممتاز 🇹🇷',
+  'تارتان صلب 🔴',
+  'رمل شاطئي 🏖️',
 ];
 
-const List<String> weekDaysList = [
-  'الجمعة',
-  'السبت',
-  'الأحد',
-  'الإثنين',
-  'الثلاثاء',
-  'الأربعاء',
-  'الخميس',
-];
-
+// توليد فترات وساعات اللعب من العصر حتى الفجر
 List<String> buildPitchSlots(int durationMinutes) {
-  List<String> slots = [];
-  int startHour = 16;
-  int startMin = 0;
-  int endHour = 2;
-  int endMin = 0;
-
-  TimeOfDay current = TimeOfDay(hour: startHour, minute: startMin);
-  TimeOfDay closing = TimeOfDay(hour: endHour, minute: endMin);
-
-  while (true) {
-    TimeOfDay next = addMinutes(current, durationMinutes);
-    if (isAfterOrEqual(next, closing) && current.hour >= 16) break;
-    slots.add('${formatTimeAmPm(current)} - ${formatTimeAmPm(next)}');
-    current = next;
-    if (current.hour == closing.hour && current.minute == closing.minute) break;
-  }
-  return slots;
+  return [
+    '04:00 م - 05:00 م',
+    '05:00 م - 06:00 م',
+    '06:00 م - 07:00 م',
+    '07:00 م - 08:00 م',
+    '08:00 م - 09:00 م',
+    '09:00 م - 10:00 م',
+    '10:00 م - 11:00 م',
+    '11:00 م - 12:00 ص',
+    '12:00 ص - 01:00 ص',
+    '01:00 ص - 02:00 ص',
+    '02:00 ص - 03:00 ص',
+  ];
 }
 
-TimeOfDay addMinutes(TimeOfDay time, int minutes) {
-  int totalMins = time.hour * 60 + time.minute + minutes;
-  int newHour = (totalMins ~/ 60) % 24;
-  int newMin = totalMins % 60;
-  return TimeOfDay(hour: newHour, minute: newMin);
-}
-
-bool isAfterOrEqual(TimeOfDay t1, TimeOfDay t2) {
-  int m1 = t1.hour * 60 + t1.minute;
-  int m2 = t2.hour * 60 + t2.minute;
-  if (t1.hour < 6 && t2.hour >= 16) m1 += 24 * 60;
-  return m1 >= m2 + (t2.hour < 6 ? 24 * 60 : 0);
-}
-
-String formatTimeAmPm(TimeOfDay time) {
-  int h = time.hour;
-  String period = h >= 12 ? 'م' : 'ص';
-  int hour12 = h % 12;
-  if (hour12 == 0) hour12 = 12;
-  String minStr = time.minute.toString().padLeft(2, '0');
-  return '$hour12:$minStr $period';
-}
-
+// دوال فتح الاتصال والخرائط والواتساب
 Future<void> launchCallDirect(String phone) async {
-  String cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-  final Uri launchUri = Uri(scheme: 'tel', path: cleanPhone);
-  if (await canLaunchUrl(launchUri)) {
-    await launchUrl(launchUri, mode: LaunchMode.platformDefault);
+  final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
+  final uri = Uri.parse('tel:$cleanPhone');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
   }
 }
 
 Future<void> launchWhatsAppDirect(String phone) async {
-  String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-  if (cleanPhone.startsWith('0')) {
+  var cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
+  if (cleanPhone.startsWith('07')) {
     cleanPhone = '964${cleanPhone.substring(1)}';
   }
-  final url = Uri.parse('https://wa.me/$cleanPhone?text=${Uri.encodeComponent("مرحباً كابتن، استفسر بخصوص حجز ملعب في تطبيق ملعبي")}');
-  if (await canLaunchUrl(url)) {
-    await launchUrl(url, mode: LaunchMode.externalApplication);
+  final uri = Uri.parse('https://wa.me/$cleanPhone');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 
-void showMapChooserSheet(BuildContext context, double lat, double lng, String pitchName) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('التوجه إلى: $pitchName', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF33CCFF), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 12)),
-              icon: const Icon(Icons.navigation),
-              label: const Text('فتح عبر Waze', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () async {
-                final url = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
-                if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
-              icon: const Icon(Icons.map),
-              label: const Text('فتح عبر Google Maps', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () async {
-                final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-                if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+Future<void> launchMapDirect(double lat, double lng) async {
+  final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 }
+
+// مرادف بنفس الاسم القديم
+Future<void> launchMapsDirect(double lat, double lng) => launchMapDirect(lat, lng);
