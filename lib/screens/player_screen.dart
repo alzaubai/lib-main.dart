@@ -273,13 +273,33 @@ class _PlayerExplorePitchesTabState extends State<PlayerExplorePitchesTab> {
                     final lat = (data['latitude'] as num?)?.toDouble();
                     final lng = (data['longitude'] as num?)?.toDouble();
 
+                    final rating = (data['rating'] as num?)?.toDouble() ?? 5.0;
+                    final ratingCount = data['ratingCount'] ?? 0;
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: Column(
                         children: [
                           ListTile(
                             leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.sports_soccer, color: Color(0xFF1B5E20))),
-                            title: Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            title: Row(
+                              children: [
+                                Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.amber.shade300)),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.star, size: 14, color: Colors.amber),
+                                      const SizedBox(width: 2),
+                                      Text(ratingCount > 0 ? rating.toStringAsFixed(1) : 'جديد', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -770,6 +790,86 @@ class PlayerMyBookingsTab extends StatelessWidget {
   final String playerPhone;
   const PlayerMyBookingsTab({super.key, required this.playerPhone});
 
+  void _openRatePitchDialog(BuildContext context, DocumentSnapshot doc, String pitchName) {
+    double selectedStars = 5.0;
+    final commentCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setRateState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            title: Text('تقييم $pitchName'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('كيف كانت تجربتك وجودة الملعب (الثيل، الإضاءة، المرافق)؟'),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final starVal = index + 1.0;
+                    return IconButton(
+                      icon: Icon(
+                        selectedStars >= starVal ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 32,
+                      ),
+                      onPressed: () => setRateState(() => selectedStars = starVal),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: commentCtrl,
+                  decoration: const InputDecoration(labelText: 'ملاحظة أو تعليق مختصر (اختياري)', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+                onPressed: () async {
+                  await doc.reference.update({
+                    'isRated': true,
+                    'ratingScore': selectedStars,
+                    'ratingComment': commentCtrl.text.trim(),
+                  });
+
+                  final pitchRef = FirebaseFirestore.instance.collection('pitches').doc(pitchName);
+                  await FirebaseFirestore.instance.runTransaction((transaction) async {
+                    final pSnapshot = await transaction.get(pitchRef);
+                    if (pSnapshot.exists) {
+                      final pData = pSnapshot.data() as Map<String, dynamic>;
+                      final currentRating = (pData['rating'] as num?)?.toDouble() ?? 5.0;
+                      final count = (pData['ratingCount'] as num?)?.toInt() ?? 0;
+
+                      final newCount = count + 1;
+                      final newAverage = ((currentRating * count) + selectedStars) / newCount;
+
+                      transaction.update(pitchRef, {
+                        'rating': double.parse(newAverage.toStringAsFixed(1)),
+                        'ratingCount': newCount,
+                      });
+                    }
+                  });
+
+                  if (context.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شكراً لتقييمك للملعب!'), backgroundColor: Colors.green));
+                  }
+                },
+                child: const Text('إرسال التقييم', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -791,9 +891,12 @@ class PlayerMyBookingsTab extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             itemCount: docs.length,
             itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
+              final doc = docs[index];
+              final data = doc.data() as Map<String, dynamic>;
               final st = data['status'] ?? 'pending';
               final reason = data['rejectReason'] ?? '';
+              final pitchName = data['pitchName'] ?? 'الملعب';
+              final isRated = data['isRated'] == true;
 
               Color color = Colors.orange;
               String statusTxt = 'قيد المراجعة والانتظار';
@@ -818,7 +921,7 @@ class PlayerMyBookingsTab extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(data['pitchName'] ?? 'الملعب', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           Chip(label: Text(statusTxt, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)), backgroundColor: color.withOpacity(0.1)),
                         ],
                       ),
@@ -832,6 +935,29 @@ class PlayerMyBookingsTab extends StatelessWidget {
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
                           child: Text('سبب الرفض: $reason', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                      if (st == 'completed') ...[
+                        const Divider(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (!isRated)
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, foregroundColor: Colors.white),
+                                icon: const Icon(Icons.star, size: 16),
+                                label: const Text('تقييم جودة الملعب'),
+                                onPressed: () => _openRatePitchDialog(context, doc, pitchName),
+                              )
+                            else
+                              const Row(
+                                children: [
+                                  Icon(Icons.check, color: Colors.green, size: 16),
+                                  SizedBox(width: 4),
+                                  Text('تم تقييم هذا الملعب', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                          ],
                         ),
                       ],
                     ],
@@ -941,6 +1067,7 @@ class PlayerProfileTab extends StatelessWidget {
           final name = data?['name'] ?? 'كابتن الفريق';
           final team = data?['teamName'] ?? 'فريق غير محدد';
           final pin = data?['pin'] ?? '';
+          final isTrusted = data?['isTrustedTeam'] == true;
 
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('bookings').where('phone', isEqualTo: playerPhone).snapshots(),
@@ -963,13 +1090,37 @@ class PlayerProfileTab extends StatelessWidget {
                 child: Column(
                   children: [
                     const SizedBox(height: 10),
-                    const CircleAvatar(
-                      radius: 45,
-                      backgroundColor: Color(0xFF1B5E20),
-                      child: Icon(Icons.person, size: 55, color: Colors.white),
+                    Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        const CircleAvatar(
+                          radius: 45,
+                          backgroundColor: Color(0xFF1B5E20),
+                          child: Icon(Icons.person, size: 55, color: Colors.white),
+                        ),
+                        if (isTrusted)
+                          const CircleAvatar(
+                            radius: 14,
+                            backgroundColor: Colors.amber,
+                            child: Icon(Icons.verified, size: 18, color: Colors.white),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 12),
-                    Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                        if (isTrusted) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(10)),
+                            child: const Text('فريق موثوق 🏅', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.brown)),
+                          ),
+                        ],
+                      ],
+                    ),
                     Text(team, style: const TextStyle(color: Colors.grey, fontSize: 16)),
                     const SizedBox(height: 6),
                     Text('رقم الهاتف: $playerPhone', style: const TextStyle(color: Colors.blueGrey)),
