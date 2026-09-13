@@ -28,7 +28,7 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
     _tabController.addListener(() => setState(() {}));
     _loadUserData();
 
-    // تشغيل الاستماع اللحظي لإشعارات قبول أو رفض الحجز
+    // تشغيل الاستماع اللحظي لإشعارات قبول أو رفض الحجز بعد اكتمال بناء الواجهة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       PlayerNotificationService.listenToBookingUpdates(context, widget.userPhone);
     });
@@ -47,6 +47,7 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    PlayerNotificationService.stopListening();
     _tabController.dispose();
     super.dispose();
   }
@@ -94,6 +95,7 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
               icon: const Icon(Icons.logout_rounded, color: Colors.white70),
               tooltip: 'تسجيل خروج',
               onPressed: () async {
+                PlayerNotificationService.stopListening();
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.clear();
                 if (mounted) {
