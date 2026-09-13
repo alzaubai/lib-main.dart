@@ -248,8 +248,17 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     final rateCtrl = TextEditingController(text: '${data['hourlyRate']?.toInt() ?? 25000}');
     final descCtrl = TextEditingController(text: data['description'] ?? '');
 
-    String currentType = data['pitchType'] ?? 'سباعي (7 ضد 7)';
-    String currentSurface = data['surfaceType'] ?? 'ثيل 🌿';
+    // معالجة وحماية أنواع الأرضيات من القيم القديمة
+    String rawType = data['pitchType'] ?? 'سباعي (7 ضد 7)';
+    String currentType = pitchTypesList.contains(rawType) && rawType != 'الكل'
+        ? rawType
+        : 'سباعي (7 ضد 7)';
+
+    String rawSurface = data['surfaceType'] ?? 'ثيل 🌿';
+    String currentSurface = pitchSurfaceTypesList.contains(rawSurface) && rawSurface != 'الكل'
+        ? rawSurface
+        : 'ثيل 🌿';
+
     double? currentLat = (data['latitude'] as num?)?.toDouble();
     double? currentLng = (data['longitude'] as num?)?.toDouble();
     bool isLocating = false;
