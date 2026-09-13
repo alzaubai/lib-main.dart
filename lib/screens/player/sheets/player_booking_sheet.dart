@@ -25,9 +25,31 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
   DateTime _selectedDate = DateTime.now();
   final List<String> _availableSlots = buildPitchSlots(60);
 
+  String _getArabicDayName(DateTime date) {
+    switch (date.weekday) {
+      case DateTime.friday:
+        return 'الجمعة';
+      case DateTime.thursday:
+        return 'الخميس';
+      case DateTime.saturday:
+        return 'السبت';
+      case DateTime.sunday:
+        return 'الأحد';
+      case DateTime.monday:
+        return 'الإثنين';
+      case DateTime.tuesday:
+        return 'الثلاثاء';
+      case DateTime.wednesday:
+        return 'الأربعاء';
+      default:
+        return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    final dayNameArabic = _getArabicDayName(_selectedDate);
 
     return Directionality(
       textDirection: ui.TextDirection.rtl,
@@ -45,10 +67,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               child: Container(
                 width: 44,
                 height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
               ),
             ),
             const SizedBox(height: 12),
@@ -60,29 +79,18 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                   children: [
                     Text(
                       'جدول مواعيد: ${widget.pitchName}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Color(0xFF1B5E20),
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B5E20)),
                     ),
-                    const Text(
-                      'الأخضر متاح للحجز / الأحمر محجوز أو بطولة',
-                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    Text(
+                      'يوم $dayNameArabic ($dateStr)',
+                      style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade100,
-                    foregroundColor: Colors.black87,
-                    elevation: 0,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade100, foregroundColor: Colors.black87, elevation: 0),
                   icon: const Icon(Icons.calendar_today, size: 16),
-                  label: Text(
-                    dateStr,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
+                  label: const Text('تغيير اليوم', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () async {
                     final p = await showDatePicker(
                       context: context,
@@ -96,6 +104,8 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ],
             ),
             const Divider(height: 20),
+
+            // دمج قراءة حجوزات اليوم + قواعد التكرار الأسبوعي لنفس اليوم
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: _firestore
@@ -104,79 +114,109 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                     .where('date', isEqualTo: dateStr)
                     .where('status', whereIn: ['pending', 'upcoming', 'tournament_match', 'completed'])
                     .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                builder: (context, bookingSnapshot) {
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: _firestore
+                        .collection('recurring_rules')
+                        .where('pitchName', isEqualTo: widget.pitchName)
+                        .where('dayOfWeek', isEqualTo: dayNameArabic)
+                        .snapshots(),
+                    builder: (context, recurringSnapshot) {
+                      if (bookingSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                  final bookings = snapshot.data?.docs ?? [];
+                      final bookings = bookingSnapshot.data?.docs ?? [];
+                      final recurringRules = recurringSnapshot.data?.docs ?? [];
 
-                  return ListView.builder(
-                    itemCount: _availableSlots.length,
-                    itemBuilder: (context, idx) {
-                      final slot = _availableSlots[idx];
-                      final parts = slot.split(' - ');
-                      final sTime = parts[0].trim();
+                      return ListView.builder(
+                        itemCount: _availableSlots.length,
+                        itemBuilder: (context, idx) {
+                          final slot = _availableSlots[idx];
+                          final parts = slot.split(' - ');
+                          final sTime = parts[0].trim();
 
-                      final matchingBooking = bookings.cast<DocumentSnapshot?>().firstWhere(
-                        (b) {
-                          final d = b!.data() as Map<String, dynamic>;
-                          final bookStartTime = (d['startTime'] ?? '').toString().trim();
-                          return bookStartTime == sTime;
-                        },
-                        orElse: () => null,
-                      );
+                          // فحص حجز عادي أو بطولة
+                          final matchingBooking = bookings.cast<DocumentSnapshot?>().firstWhere(
+                            (b) {
+                              final d = b!.data() as Map<String, dynamic>;
+                              final bookStartTime = (d['startTime'] ?? '').toString().trim();
+                              return bookStartTime == sTime;
+                            },
+                            orElse: () => null,
+                          );
 
-                      final isBooked = matchingBooking != null;
-                      Map<String, dynamic>? bData = isBooked ? matchingBooking.data() as Map<String, dynamic> : null;
-                      final isTournament = bData?['status'] == 'tournament_match';
+                          // فحص حجز أسبوعي دائم
+                          final matchingRecurring = recurringRules.cast<DocumentSnapshot?>().firstWhere(
+                            (r) {
+                              final d = r!.data() as Map<String, dynamic>;
+                              final rSlot = (d['timeSlot'] ?? '').toString().trim();
+                              final rStart = (d['startTime'] ?? '').toString().trim();
+                              return rSlot == slot || rStart == sTime;
+                            },
+                            orElse: () => null,
+                          );
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: isBooked ? Colors.red.shade50 : Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isBooked ? Colors.red.shade200 : Colors.green.shade300),
-                        ),
-                        child: ListTile(
-                          leading: Icon(
-                            isTournament ? Icons.emoji_events : (isBooked ? Icons.cancel : Icons.check_circle),
-                            color: isBooked ? Colors.red : Colors.green,
-                          ),
-                          title: Text(
-                            slot,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              color: isBooked ? Colors.red.shade900 : Colors.green.shade900,
+                          final isRegularBooked = matchingBooking != null;
+                          final isRecurringBooked = matchingRecurring != null;
+                          final isBooked = isRegularBooked || isRecurringBooked;
+
+                          Map<String, dynamic>? bData = isRegularBooked ? matchingBooking.data() as Map<String, dynamic> : null;
+                          Map<String, dynamic>? rData = isRecurringBooked ? matchingRecurring.data() as Map<String, dynamic> : null;
+
+                          final isTournament = bData?['status'] == 'tournament_match';
+
+                          String subtitleText = 'متاح للحجز المباشر ✔️';
+                          Color textColor = Colors.green.shade900;
+                          IconData leadingIcon = Icons.check_circle;
+                          Color themeColor = Colors.green;
+
+                          if (isTournament) {
+                            subtitleText = '🏆 بطولة رسمية: ${bData?['teamOne']} ⚔️ ${bData?['teamTwo']}';
+                            textColor = Colors.amber.shade900;
+                            leadingIcon = Icons.emoji_events;
+                            themeColor = Colors.amber;
+                          } else if (isRecurringBooked) {
+                            subtitleText = '🔒 حجز أسبوعي دائم: ${rData?['teamName']} ⚔️ ${rData?['teamTwo'] ?? ''}';
+                            textColor = Colors.purple.shade900;
+                            leadingIcon = Icons.repeat_rounded;
+                            themeColor = Colors.purple;
+                          } else if (isRegularBooked) {
+                            subtitleText = 'هذا الموعد محجوز مسبقاً ❌';
+                            textColor = Colors.red.shade900;
+                            leadingIcon = Icons.cancel;
+                            themeColor = Colors.red;
+                          }
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: isBooked ? (isRecurringBooked ? Colors.purple.shade50 : Colors.red.shade50) : Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isBooked ? (isRecurringBooked ? Colors.purple.shade200 : Colors.red.shade200) : Colors.green.shade300,
+                              ),
                             ),
-                          ),
-                          subtitle: isTournament
-                              ? Text(
-                                  '🏆 بطولة رسمية: ${bData?['teamOne']} ⚔️ ${bData?['teamTwo']}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.amber.shade900,
-                                  ),
-                                )
-                              : (isBooked
-                                  ? const Text('هذا الموعد محجوز مسبقاً ❌', style: TextStyle(fontSize: 11, color: Colors.red))
-                                  : const Text('متاح للحجز المباشر ✔️', style: TextStyle(fontSize: 11, color: Colors.green))),
-                          trailing: isBooked
-                              ? const Chip(
-                                  label: Text('محجوز', style: TextStyle(fontSize: 10, color: Colors.white)),
-                                  backgroundColor: Colors.red,
-                                )
-                              : ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1B5E20),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  ),
-                                  onPressed: () => _openRequestDialog(context, dateStr, slot),
-                                  child: const Text('احجز الآن', style: TextStyle(color: Colors.white, fontSize: 12)),
-                                ),
-                        ),
+                            child: ListTile(
+                              leading: Icon(leadingIcon, color: themeColor),
+                              title: Text(slot, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                              subtitle: Text(subtitleText, style: TextStyle(fontSize: 11, fontWeight: isBooked ? FontWeight.bold : FontWeight.normal, color: textColor)),
+                              trailing: isBooked
+                                  ? Chip(
+                                      label: Text(
+                                        isRecurringBooked ? 'دائم' : (isTournament ? 'بطولة' : 'محجوز'),
+                                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                      ),
+                                      backgroundColor: isRecurringBooked ? Colors.purple.shade800 : (isTournament ? Colors.amber.shade800 : Colors.red),
+                                    )
+                                  : ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(horizontal: 12)),
+                                      onPressed: () => _openRequestDialog(context, dateStr, slot),
+                                      child: const Text('احجز الآن', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                    ),
+                            ),
+                          );
+                        },
                       );
                     },
                   );
