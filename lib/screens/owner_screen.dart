@@ -11,6 +11,7 @@ import 'owner/tabs/owner_schedule_tab.dart';
 import 'owner/tabs/owner_requests_tab.dart';
 import 'owner/tabs/owner_recurring_tab.dart';
 import 'owner/sheets/add_manual_booking_sheet.dart';
+import 'owner/sheets/add_recurring_booking_sheet.dart';
 
 class OwnerDashboardScreen extends StatefulWidget {
   final String pitchName;
@@ -196,7 +197,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         elevation: 4,
         icon: const Icon(Icons.add_task_rounded),
         label: const Text('إضافة حجز أسبوعي دائم', style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => _openAddRecurringDialog(context),
+        onPressed: () => _openAddRecurringSheet(context),
       );
     }
     return null;
@@ -221,58 +222,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     );
   }
 
-  void _openAddRecurringDialog(BuildContext context) async {
-    final availableSlots = buildPitchSlots(60);
-    List<String> selectedDays = ['الجمعة'];
-    String chosenSlot = availableSlots.first;
-    final teamCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    final priceCtrl = TextEditingController(text: '25000');
+  void _openAddRecurringSheet(BuildContext context) async {
+    final pitchDoc = await _firestore.collection('pitches').doc(widget.pitchName).get();
+    final defaultPrice = (pitchDoc.data()?['hourlyRate'] as num?)?.toDouble() ?? 25000.0;
 
-    showDialog(
+    if (!mounted) return;
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDlgState) => Directionality(
-          textDirection: ui.TextDirection.rtl,
-          child: AlertDialog(
-            title: const Text('إضافة حجز أسبوعي دائم'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: chosenSlot,
-                    decoration: const InputDecoration(labelText: 'الفترة'),
-                    items: availableSlots.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                    onChanged: (v) => setDlgState(() => chosenSlot = v!),
-                  ),
-                  TextField(controller: teamCtrl, decoration: const InputDecoration(labelText: 'اسم الفريق')),
-                  TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف')),
-                  TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المبلغ')),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-              ElevatedButton(
-                onPressed: () async {
-                  if (teamCtrl.text.isNotEmpty) {
-                    await _firestore.collection('recurring_rules').add({
-                      'pitchName': widget.pitchName,
-                      'dayOfWeek': selectedDays.first,
-                      'timeSlot': chosenSlot,
-                      'teamName': teamCtrl.text.trim(),
-                      'phone': phoneCtrl.text.trim(),
-                      'price': double.tryParse(priceCtrl.text.trim()) ?? 25000.0,
-                    });
-                    if (mounted) Navigator.pop(ctx);
-                  }
-                },
-                child: const Text('تثبيت'),
-              ),
-            ],
-          ),
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddRecurringBookingSheet(
+        pitchName: widget.pitchName,
+        defaultRate: defaultPrice,
       ),
     );
   }
@@ -300,14 +262,28 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         builder: (context, setModalState) => Directionality(
           textDirection: ui.TextDirection.rtl,
           child: Container(
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-            padding: EdgeInsets.only(top: 16, left: 20, right: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              top: 16,
+              left: 20,
+              right: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   const Text('إعدادات وبيانات الملعب', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
                   const SizedBox(height: 14),
@@ -365,8 +341,9 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                         Text(
                           currentLat != null ? 'تم ربط موقع الملعب عبر الـ GPS بنجاح' : 'لم يتم تثبيت الموقع على الخريطة بعد',
                           style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: currentLat != null ? Colors.green.shade900 : Colors.blue.shade900),
+                            fontWeight: FontWeight.bold,
+                            color: currentLat != null ? Colors.green.shade900 : Colors.blue.shade900,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         ElevatedButton.icon(
