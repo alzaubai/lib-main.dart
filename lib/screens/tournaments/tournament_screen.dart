@@ -45,7 +45,6 @@ class TournamentScreen extends StatelessWidget {
                     backgroundColor: Colors.transparent,
                     builder: (_) => CreateTournamentSheet(
                       pitchName: pitchName ?? '',
-                      ownerPhone: userPhone,
                     ),
                   );
                 },
