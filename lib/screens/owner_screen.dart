@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
 import 'tournaments/tournament_screen.dart';
@@ -39,7 +40,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       if (_tabController.index == 1) _markPendingAsSeen();
     });
 
-    // استماع لحظي لإشعارات إلغاء الحجوزات من قبل اللاعبين
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _listenToPlayerCancellations();
     });
@@ -92,10 +92,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'قام الكابتن بإلغاء حجز فريقه رسميًا قبل موعد المباراة بأكثر من 3 ساعات:',
-                style: const TextStyle(fontSize: 13, height: 1.4),
-              ),
+              const Text('قام الكابتن بإلغاء حجز فريقه رسميًا قبل موعد المباراة بأكثر من 3 ساعات:', style: TextStyle(fontSize: 13, height: 1.4)),
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -118,7 +115,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
               onPressed: () async {
-                // تعليم الإشعار كمقروء حتى لا يظهر مجدداً
                 await docRef.update({'cancellationSeenByOwner': true});
                 if (ctx.mounted) Navigator.pop(ctx);
               },
@@ -356,6 +352,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     double? currentLat = (data['latitude'] as num?)?.toDouble();
     double? currentLng = (data['longitude'] as num?)?.toDouble();
     bool isLocating = false;
+    final mapController = MapController();
 
     showModalBottomSheet(
       context: context,
@@ -365,6 +362,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
         builder: (context, setModalState) => Directionality(
           textDirection: ui.TextDirection.rtl,
           child: Container(
+            height: MediaQuery.of(ctx).size.height * 0.88,
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -436,12 +434,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     decoration: const InputDecoration(labelText: 'العنوان التفصيلي / نقطة دالة', border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 14),
+
+                  // قسم الخريطة التفاعلية المصغرة وتثبيت الموقع
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: currentLat != null ? Colors.green.shade50 : Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: currentLat != null ? Colors.green.shade200 : Colors.blue.shade200),
+                      color: currentLat != null ? const Color(0xFFF1F8F1) : Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: currentLat != null ? Colors.green.shade300 : Colors.blue.shade200),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -456,7 +456,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                currentLat != null ? 'تم تثبيت الموقع الجغرافي عبر الـ GPS' : 'لم يتم تثبيت موقع الملعب بعد',
+                                currentLat != null ? 'موقع الملعب مثبت على الخريطة' : 'لم يتم تثبيت موقع الملعب بعد',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
@@ -464,55 +464,69 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                 ),
                               ),
                             ),
+                            if (currentLat != null)
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
+                                tooltip: 'إزالة الإحداثيات',
+                                onPressed: () => setModalState(() {
+                                  currentLat = null;
+                                  currentLng = null;
+                                }),
+                              ),
                           ],
                         ),
+
+                        // الخريطة المصغرة التفاعلية المدمجة
                         if (currentLat != null && currentLng != null) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                            child: Text(
-                              'الإحداثيات: ${currentLat!.toStringAsFixed(5)}, ${currentLng!.toStringAsFixed(5)}',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
-                              textDirection: ui.TextDirection.ltr,
-                              textAlign: TextAlign.center,
+                            height: 200,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.green.shade400, width: 1.5),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.blue.shade800,
-                                    side: BorderSide(color: Colors.blue.shade300),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  icon: const Icon(Icons.map_rounded, size: 16),
-                                  label: const Text('معاينة على الخريطة', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                  onPressed: () async {
-                                    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$currentLat,$currentLng');
-                                    if (await canLaunchUrl(uri)) {
-                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                    }
-                                  },
+                            clipBehavior: Clip.antiAlias,
+                            child: FlutterMap(
+                              mapController: mapController,
+                              options: MapOptions(
+                                initialCenter: LatLng(currentLat!, currentLng!),
+                                initialZoom: 16.5,
+                                interactionOptions: const InteractionOptions(
+                                  flags: InteractiveFlag.all,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                                tooltip: 'إزالة الإحداثيات',
-                                onPressed: () {
-                                  setModalState(() {
-                                    currentLat = null;
-                                    currentLng = null;
-                                  });
-                                },
-                              ),
-                            ],
+                              children: [
+                                TileLayer(
+                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.malabi.app',
+                                ),
+                                MarkerLayer(
+                                  markers: [
+                                    Marker(
+                                      point: LatLng(currentLat!, currentLng!),
+                                      width: 44,
+                                      height: 44,
+                                      child: const Icon(
+                                        Icons.location_pin,
+                                        color: Colors.redAccent,
+                                        size: 42,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Center(
+                            child: Text(
+                              '💡 يمكنك تحريك وتكبير الخريطة لمعاينة النقطة بدقة',
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
                           ),
                         ],
-                        const SizedBox(height: 8),
+
+                        const SizedBox(height: 10),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: currentLat != null ? Colors.teal.shade700 : Colors.blue.shade700,
@@ -557,6 +571,9 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                       currentLng = pos.longitude;
                                       isLocating = false;
                                     });
+
+                                    // تحريك الخريطة للنقطة الجديدة فوراً
+                                    mapController.move(LatLng(pos.latitude, pos.longitude), 16.5);
                                   } catch (e) {
                                     setModalState(() => isLocating = false);
                                     if (context.mounted) {
@@ -570,6 +587,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 16),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
