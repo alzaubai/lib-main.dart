@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -66,6 +67,24 @@ class TournamentCard extends StatelessWidget {
     } catch (_) {}
   }
 
+  void _makeCall(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  void _openWhatsApp(String phone) async {
+    String cleanPhone = phone.replaceAll(RegExp(r'\s+|-'), '');
+    if (cleanPhone.startsWith('07')) {
+      cleanPhone = '964${cleanPhone.substring(1)}';
+    }
+    final uri = Uri.parse('https://wa.me/$cleanPhone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currencyFormatter = NumberFormat('#,###');
@@ -83,6 +102,7 @@ class TournamentCard extends StatelessWidget {
     final startDate = data['startDate'] ?? '';
     final countdown = _calculateCountdown(startDate);
     final champion = data['champion'];
+    final contactPhone = data['phone'] ?? data['ownerPhone'] ?? '';
 
     final isJoined = registeredPlayers.containsKey(userPhone);
     final isFull = teams.length >= maxTeams;
@@ -104,7 +124,7 @@ class TournamentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // شريط العنوان والحالة مع زر الحذف للمالك
+            // العنوان والحالة مع زر الحذف للمالك
             Row(
               children: [
                 Icon(
@@ -134,7 +154,7 @@ class TournamentCard extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    status == 'completed' ? 'منتهية وتم التتويج 🏆' : (status == 'running' ? 'جارية الآن ⚽' : 'التسجيل مفتوح ⏳'),
+                    status == 'completed' ? 'منتهية 🏆' : (status == 'running' ? 'جارية ⚽' : 'التسجيل مفتوح ⏳'),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -146,14 +166,14 @@ class TournamentCard extends StatelessWidget {
                 ),
                 if (isOwner)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
-                    tooltip: 'حذف البطولة',
+                    icon: const Icon(Icons.delete_forever_rounded, color: Colors.red, size: 22),
+                    tooltip: 'حذف البطولة نهائياً',
                     onPressed: () => _confirmDeleteTournament(context),
                   ),
               ],
             ),
 
-            // لافتة تتويج البطل إذا انتهت البطولة
+            // لافتة تتويج البطل
             if (status == 'completed' && champion != null) ...[
               const SizedBox(height: 10),
               Container(
@@ -177,7 +197,8 @@ class TournamentCard extends StatelessWidget {
             ],
 
             const SizedBox(height: 8),
-            // الملعب وأزرار التواصل وموقع Waze
+
+            // اسم الملعب مع زر موقع Waze
             Row(
               children: [
                 Expanded(
@@ -187,7 +208,11 @@ class TournamentCard extends StatelessWidget {
                   onTap: () => _launchWazeToPitch(context, pitchName),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.lightBlue.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.lightBlue)),
+                    decoration: BoxDecoration(
+                      color: Colors.lightBlue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.lightBlue),
+                    ),
                     child: const Row(
                       children: [
                         Icon(Icons.near_me_rounded, color: Colors.blueAccent, size: 14),
@@ -206,7 +231,11 @@ class TournamentCard extends StatelessWidget {
             if (startDate.isNotEmpty && status == 'registering') ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
                 child: Row(
                   children: [
                     const Icon(Icons.event_available, size: 16, color: Colors.deepOrange),
@@ -224,15 +253,78 @@ class TournamentCard extends StatelessWidget {
               children: [
                 Text('👥 الفرق: ${teams.length} / $maxTeams', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const Spacer(),
-                Text(fee > 0 ? 'الاشتراك: ${currencyFormatter.format(fee)} د.ع' : 'مجانية 🎉', style: const TextStyle(fontSize: 12, color: Colors.teal, fontWeight: FontWeight.bold)),
+                Text(
+                  fee > 0 ? 'الاشتراك: ${currencyFormatter.format(fee)} د.ع' : 'مجانية 🎉',
+                  style: const TextStyle(fontSize: 12, color: Colors.teal, fontWeight: FontWeight.bold),
+                ),
               ],
             ),
             const SizedBox(height: 4),
             Text('🎁 الجائزة: $prize', style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.bold)),
 
+            // شريط أزرار الاتصال والواتساب مع صاحب الملعب (يظهر للكابتن دائماً)
+            if (!isOwner) ...[
+              const SizedBox(height: 10),
+              FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('pitches').doc(pitchName).get(),
+                builder: (ctx, pSnap) {
+                  final fetchedPhone = pSnap.data?.get('phone') ?? '';
+                  final targetPhone = (contactPhone.toString().isNotEmpty ? contactPhone : fetchedPhone).toString().trim();
+
+                  if (targetPhone.isEmpty) return const SizedBox.shrink();
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F8F1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.support_agent_rounded, size: 18, color: Color(0xFF1B5E20)),
+                        const SizedBox(width: 6),
+                        const Text('تواصل مع المنظم:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => _makeCall(targetPhone),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: Colors.green.shade700, borderRadius: BorderRadius.circular(8)),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.call, size: 12, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text('اتصال', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () => _openWhatsApp(targetPhone),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: const Color(0xFF25D366), borderRadius: BorderRadius.circular(8)),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.chat, size: 12, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text('واتساب', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+
             const Divider(height: 20),
 
-            // شريط الإجراءات
+            // شريط الإجراءات الأساسي
             Row(
               children: [
                 if (matches.isNotEmpty) ...[
@@ -250,7 +342,7 @@ class TournamentCard extends StatelessWidget {
                   const SizedBox(width: 6),
                 ],
 
-                // المالك: إضافة فرق يدوياً
+                // المالك: إضافة فريق يدوياً
                 if (isOwner && status == 'registering' && !isFull) ...[
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -265,31 +357,6 @@ class TournamentCard extends StatelessWidget {
 
                 const Spacer(),
 
-                // تواصل مع صاحب البطولة للكباتن
-                if (!isOwner) ...[
-                  FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance.collection('pitches').doc(pitchName).get(),
-                    builder: (ctx, pSnap) {
-                      final pPhone = pSnap.data?.get('phone') ?? '';
-                      if (pPhone.toString().isEmpty) return const SizedBox.shrink();
-                      return Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.green, size: 20),
-                            tooltip: 'اتصال بالملعب',
-                            onPressed: () => launchCallDirect(pPhone),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 20),
-                            tooltip: 'واتساب الملعب',
-                            onPressed: () => launchWhatsAppDirect(pPhone),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-
                 // تسجيل الكابتن
                 if (!isOwner && status == 'registering') ...[
                   if (isJoined)
@@ -302,7 +369,11 @@ class TournamentCard extends StatelessWidget {
                     const Chip(label: Text('اكتمل العدد ❌', style: TextStyle(fontSize: 11, color: Colors.grey)))
                   else
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber.shade800,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
                       onPressed: () {
                         showModalBottomSheet(
                           context: context,
@@ -318,7 +389,11 @@ class TournamentCard extends StatelessWidget {
                 // إجراء القرعة للمالك
                 if (isOwner && status == 'registering') ...[
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade800,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                     onPressed: teams.length >= 2
                         ? () => _startTournament(context, doc.reference, teams, maxTeams, startDate, data['defaultSlot'] ?? '', pitchName, doc.id)
                         : () {
@@ -337,64 +412,85 @@ class TournamentCard extends StatelessWidget {
     );
   }
 
-  // إضافة فريق يدوياً للمالك
   void _openAddManualTeamDialog(BuildContext context) {
     final teamCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('إضافة فريق يدوي للبطولة 👥'),
-        content: TextField(
-          controller: teamCtrl,
-          decoration: const InputDecoration(labelText: 'اسم الفريق الشعبي', border: OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-            onPressed: () async {
-              final name = teamCtrl.text.trim();
-              if (name.isNotEmpty) {
-                await doc.reference.update({
-                  'teams': FieldValue.arrayUnion([name]),
-                  'registeredPlayers.manual_${DateTime.now().millisecondsSinceEpoch}': name,
-                });
-                if (context.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('إضافة الفريق', style: TextStyle(color: Colors.white)),
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('إضافة فريق شعبي للبطولة 👥'),
+          content: TextField(
+            controller: teamCtrl,
+            decoration: const InputDecoration(labelText: 'اسم الفريق', border: OutlineInputBorder()),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () async {
+                final name = teamCtrl.text.trim();
+                if (name.isNotEmpty) {
+                  await doc.reference.update({
+                    'teams': FieldValue.arrayUnion([name]),
+                    'registeredPlayers.manual_${DateTime.now().millisecondsSinceEpoch}': name,
+                  });
+                  if (ctx.mounted) Navigator.pop(ctx);
+                }
+              },
+              child: const Text('إضافة الفريق', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // حذف البطولة نهائياً
+  // نافذة تأكيد الحذف وتطهير البيانات فوراً
   void _confirmDeleteTournament(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('حذف البطولة نهائياً؟ ⚠️'),
-        content: const Text('هل أنت متأكد من حذف هذه البطولة؟ سيتم إزالة جميع المباريات المرتبطة بها في جدول الملعب.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final firestore = FirebaseFirestore.instance;
-              // حذف مباريات البطولة من الجدول
-              final bSnap = await firestore.collection('bookings').where('tournamentId', isEqualTo: doc.id).get();
-              for (var b in bSnap.docs) {
-                await b.reference.delete();
-              }
-              await doc.reference.delete();
-              if (context.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('نعم، حذف نهائي', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      builder: (dialogCtx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('حذف البطولة نهائياً؟ ⚠️'),
+          content: const Text('هل أنت متأكد من حذف هذه البطولة؟ سيتم إزالتها فوراً وحذف كافة مبارياتها المحجوزة في جدول الملعب.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                // إغلاق نافذة التأكيد فوراً لتختفي من الشاشة بدون تعليق
+                Navigator.pop(dialogCtx);
+
+                final firestore = FirebaseFirestore.instance;
+                // حذف حجوزات البطولة من جدول الملعب
+                final bSnap = await firestore.collection('bookings').where('tournamentId', isEqualTo: doc.id).get();
+                for (var b in bSnap.docs) {
+                  await b.reference.delete();
+                }
+
+                // حذف وثيقة البطولة نفسها
+                await doc.reference.delete();
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم حذف البطولة وكافة مبارياتها بنجاح ✔️'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('تأكيد الحذف 🗑️', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
