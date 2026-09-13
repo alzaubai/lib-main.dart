@@ -147,7 +147,6 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
             dayFrequency.forEach((k, v) {
               if (v > peakDayCount) {
                 peakDayCount = v;
-                peakDay = v;
                 peakDay = k;
               }
             });
