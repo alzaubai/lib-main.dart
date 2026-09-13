@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class OwnerAnalyticsScreen extends StatefulWidget {
   final String pitchName;
@@ -12,152 +12,169 @@ class OwnerAnalyticsScreen extends StatefulWidget {
 }
 
 class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
-  String _selectedFilter = 'كل الأوقات'; 
-  final currencyFormatter = NumberFormat('#,###');
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final NumberFormat currencyFormatter = NumberFormat('#,###');
+
+  // مدى الفلترة: 7 (أسبوع)، 30 (شهر)، 90 (3 أشهر)، 0 (الكل)
+  int _selectedFilterDays = 30;
 
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
+        backgroundColor: const Color(0xFFF4F6F9),
         appBar: AppBar(
           backgroundColor: const Color(0xFF1B5E20),
-          title: Text('تحليلات وأداء ${widget.pitchName}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          actions: [
-            DropdownButton<String>(
-              dropdownColor: const Color(0xFF1B5E20),
-              value: _selectedFilter,
-              underline: const SizedBox(),
-              icon: const Icon(Icons.filter_alt, color: Colors.white),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-              items: const [
-                DropdownMenuItem(value: 'كل الأوقات', child: Text('كل الأوقات')),
-                DropdownMenuItem(value: 'هذا الشهر', child: Text('هذا الشهر')),
-              ],
-              onChanged: (val) {
-                if (val != null) setState(() => _selectedFilter = val);
-              },
-            ),
-            const SizedBox(width: 8),
-          ],
+          elevation: 0,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('تحليلات الملعب والذروة 📊',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+              Text('الملعب: ${widget.pitchName}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11)),
+            ],
+          ),
         ),
         body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('bookings').where('pitchName', isEqualTo: widget.pitchName).snapshots(),
+          stream: _firestore
+              .collection('bookings')
+              .where('pitchName', isEqualTo: widget.pitchName)
+              .snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
+            }
 
-            final docs = snapshot.data?.docs ?? [];
+            final allDocs = snapshot.data?.docs ?? [];
+            if (allDocs.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.query_stats_rounded, size: 70, color: Colors.grey.shade400),
+                    const SizedBox(height: 12),
+                    const Text('لا توجد بيانات حجوزات كافية للتحليل بعد',
+                        style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              );
+            }
+
+            // تطبيق فلترة التاريخ
             final now = DateTime.now();
-            final currentMonthPrefix = DateFormat('yyyy-MM').format(now);
-
-            final filteredDocs = docs.where((d) {
-              final data = d.data() as Map<String, dynamic>;
-              if (_selectedFilter == 'هذا الشهر') {
-                final dateStr = data['date']?.toString() ?? '';
-                return dateStr.startsWith(currentMonthPrefix);
-              }
-              return true;
+            final filteredDocs = allDocs.where((doc) {
+              if (_selectedFilterDays == 0) return true;
+              final d = doc.data() as Map<String, dynamic>;
+              final dateStr = (d['date'] ?? '').toString();
+              final bookingDate = DateTime.tryParse(dateStr);
+              if (bookingDate == null) return true;
+              return now.difference(bookingDate).inDays <= _selectedFilterDays;
             }).toList();
 
-            double totalRevenue = 0.0;
-            int completedMatches = 0;
-            int upcomingMatches = 0;
+            // معالجة الأرقام والإحصائيات
+            double actualRevenue = 0.0;
+            double upcomingRevenue = 0.0;
+            int totalHoursPlayed = 0;
+            int completedCount = 0;
+            int cancelledCount = 0;
 
-            final Map<String, int> slotPopularity = {};
+            final Map<String, int> slotFrequency = {};
+            final Map<String, int> dayFrequency = {};
             final Map<String, Map<String, dynamic>> teamStats = {};
-            final Map<String, int> dayOfWeekStats = {
-              'الجمعة': 0, 'السبت': 0, 'الأحد': 0, 'الإثنين': 0, 'الثلاثاء': 0, 'الأربعاء': 0, 'الخميس': 0,
-            };
 
-            // دالة مساعدة لتسجيل إحصائيات الفريق
-            void recordTeamStat(String teamName, double price, String matchStatus) {
-              if (teamName.isNotEmpty && teamName != 'بانتظار الخصم') {
-                if (!teamStats.containsKey(teamName)) {
-                  teamStats[teamName] = {'count': 0, 'spent': 0.0};
-                }
-                teamStats[teamName]!['count'] = (teamStats[teamName]!['count'] as int) + 1;
-                if (matchStatus == 'completed') {
-                  // تقسيم المبلغ على 2 بافتراض أن الفريقين يتشاركان الدفع
-                  teamStats[teamName]!['spent'] = (teamStats[teamName]!['spent'] as double) + (price / 2);
-                }
-              }
-            }
+            for (var doc in filteredDocs) {
+              final d = doc.data() as Map<String, dynamic>;
+              final price = (d['price'] as num?)?.toDouble() ?? 0.0;
+              final status = d['status'] ?? 'pending';
+              final slot = (d['startTime'] ?? '').toString().trim();
+              final team1 = (d['teamOne'] ?? '').toString().trim();
+              final isTrusted = d['teamTrustedRated'] == true;
 
-            for (var d in filteredDocs) {
-              final data = d.data() as Map<String, dynamic>;
-              final status = data['status'];
-              final price = (data['price'] as num?)?.toDouble() ?? 0.0;
-              final slot = '${data['startTime']} - ${data['endTime']}';
-              final team1 = data['teamOne']?.toString().trim() ?? '';
-              final team2 = data['teamTwo']?.toString().trim() ?? ''; // إضافة قراءة الفريق الثاني
-              final dateStr = data['date']?.toString() ?? '';
-
+              // حساب الإيرادات وساعات التشغيل
               if (status == 'completed') {
-                totalRevenue += price;
-                completedMatches++;
-              } else if (status == 'upcoming') {
-                upcomingMatches++;
+                actualRevenue += price;
+                totalHoursPlayed += 1;
+                completedCount++;
+              } else if (status == 'upcoming' || status == 'tournament_match') {
+                upcomingRevenue += price;
+              } else if (status == 'rejected') {
+                cancelledCount++;
               }
 
-              if (slot.isNotEmpty && slot != ' - ') {
-                slotPopularity[slot] = (slotPopularity[slot] ?? 0) + 1;
+              // حساب ساعات الذروة
+              if (slot.isNotEmpty && (status == 'completed' || status == 'upcoming')) {
+                slotFrequency[slot] = (slotFrequency[slot] ?? 0) + 1;
               }
 
-              // تسجيل إحصائيات كلا الفريقين بدلاً من فريق واحد
-              recordTeamStat(team1, price, status);
-              recordTeamStat(team2, price, status);
+              // حساب أيام الذروة
+              final dateStr = (d['date'] ?? '').toString();
+              final bookingDate = DateTime.tryParse(dateStr);
+              if (bookingDate != null && (status == 'completed' || status == 'upcoming')) {
+                final dayName = _getArabicDayName(bookingDate);
+                dayFrequency[dayName] = (dayFrequency[dayName] ?? 0) + 1;
+              }
 
-              try {
-                if (dateStr.isNotEmpty) {
-                  final dt = DateTime.parse(dateStr);
-                  final arabicDay = _getArabicDay(dt.weekday);
-                  if (dayOfWeekStats.containsKey(arabicDay)) {
-                    dayOfWeekStats[arabicDay] = dayOfWeekStats[arabicDay]! + 1;
-                  }
+              // إحصائيات الفرق
+              if (team1.isNotEmpty && !team1.startsWith('مباراة بطولة')) {
+                if (!teamStats.containsKey(team1)) {
+                  teamStats[team1] = {'count': 0, 'paid': 0.0, 'trusted': isTrusted};
                 }
-              } catch (_) {}
+                teamStats[team1]!['count'] = (teamStats[team1]!['count'] as int) + 1;
+                if (status == 'completed') {
+                  teamStats[team1]!['paid'] = (teamStats[team1]!['paid'] as double) + price;
+                }
+                if (isTrusted) {
+                  teamStats[team1]!['trusted'] = true;
+                }
+              }
             }
 
-            final sortedSlots = slotPopularity.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-            final sortedTeams = teamStats.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
+            // استخراج ساعة الذروة الأولى
+            String peakSlot = 'غير محدد';
+            int peakSlotCount = 0;
+            slotFrequency.forEach((k, v) {
+              if (v > peakSlotCount) {
+                peakSlotCount = v;
+                peakSlot = k;
+              }
+            });
+
+            // استخراج يوم الذروة
+            String peakDay = 'غير محدد';
+            int peakDayCount = 0;
+            dayFrequency.forEach((k, v) {
+              if (v > peakDayCount) {
+                peakDayCount = v;
+                peakDay = v;
+                peakDay = k;
+              }
+            });
+
+            // حساب نسبة الإشغال التقديرية (بافتراض 7 ساعات تشغيل يومياً)
+            final int daysCount = _selectedFilterDays == 0 ? 30 : _selectedFilterDays;
+            final int maxCapacityHours = daysCount * 7;
+            final double occupancyRate = maxCapacityHours > 0
+                ? ((totalHoursPlayed / maxCapacityHours) * 100).clamp(0, 100).toDouble()
+                : 0.0;
+
+            // ترتيب الفرق تنازلياً حسب عدد مرات الحجز
+            final sortedTeams = teamStats.entries.toList()
+              ..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ... [نفس واجهة كروت الإحصائيات وبناء الأعمدة البيانية تم الحفاظ عليها هنا]
-                  // تم اقتصاص واجهة الرسوم البيانية لتوضيح التعديل البرمجي الأهم (يمكنك لصق كود الواجهة القديم هنا فهو سليم تماماً)
-                  const Text('أفضل الفرق والزبائن الأكثر حجزاً 🏅', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                  const SizedBox(height: 10),
-                  Container(
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
-                    child: sortedTeams.isEmpty
-                        ? const Padding(padding: EdgeInsets.all(20), child: Center(child: Text('لا توجد فرق مسجلة بعد', style: TextStyle(color: Colors.grey))))
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: sortedTeams.take(5).length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (context, idx) {
-                              final item = sortedTeams[idx];
-                              final teamName = item.key;
-                              final count = item.value['count'] as int;
-                              final spent = item.value['spent'] as double;
-
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: idx == 0 ? Colors.amber : (idx == 1 ? Colors.grey.shade400 : Colors.brown.shade300),
-                                  foregroundColor: Colors.white,
-                                  child: Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                                title: Text(teamName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                subtitle: Text('عدد الحجوزات: $count مباراة'),
-                                trailing: Text('${currencyFormatter.format(spent)} د.ع', style: const TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold, fontSize: 13)),
-                              );
-                            },
-                          ),
-                  ),
+                  _buildTimeFilterChips(),
+                  const SizedBox(height: 16),
+                  _buildFinancialCards(actualRevenue, upcomingRevenue, totalHoursPlayed, occupancyRate),
+                  const SizedBox(height: 18),
+                  _buildPeakAnalyticsCard(peakSlot, peakSlotCount, peakDay, peakDayCount, completedCount, cancelledCount),
+                  const SizedBox(height: 18),
+                  _buildTopTeamsCard(sortedTeams),
                 ],
               ),
             );
@@ -167,16 +184,304 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
     );
   }
 
-  String _getArabicDay(int weekday) {
-    switch (weekday) {
-      case DateTime.friday: return 'الجمعة';
-      case DateTime.saturday: return 'السبت';
-      case DateTime.sunday: return 'الأحد';
-      case DateTime.monday: return 'الإثنين';
-      case DateTime.tuesday: return 'الثلاثاء';
-      case DateTime.wednesday: return 'الأربعاء';
-      case DateTime.thursday: return 'الخميس';
-      default: return '';
+  // شرائح فلترة المدة الزمنية
+  Widget _buildTimeFilterChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _filterChipItem('آخر 7 أيام', 7),
+          const SizedBox(width: 8),
+          _filterChipItem('آخر 30 يوماً', 30),
+          const SizedBox(width: 8),
+          _filterChipItem('آخر 3 أشهر (90 يوم)', 90),
+          const SizedBox(width: 8),
+          _filterChipItem('كل الحجوزات ♾️', 0),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChipItem(String label, int days) {
+    final isSelected = _selectedFilterDays == days;
+    return ChoiceChip(
+      label: Text(label,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: isSelected ? Colors.white : Colors.black87)),
+      selected: isSelected,
+      selectedColor: const Color(0xFF1B5E20),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      onSelected: (val) {
+        if (val) setState(() => _selectedFilterDays = days);
+      },
+    );
+  }
+
+  // كروت الأرقام المالية ومعدل الإشغال
+  Widget _buildFinancialCards(double actual, double upcoming, int hours, double occupancy) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                title: 'الوارد الفعلي المقبوض',
+                value: '${currencyFormatter.format(actual)} د.ع',
+                icon: Icons.payments_rounded,
+                bgColor: const Color(0xFFE8F5E9),
+                accentColor: const Color(0xFF1B5E20),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricCard(
+                title: 'الإيراد المتوقع القادم',
+                value: '${currencyFormatter.format(upcoming)} د.ع',
+                icon: Icons.hourglass_top_rounded,
+                bgColor: const Color(0xFFFFF8E1),
+                accentColor: Colors.amber.shade900,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                title: 'ساعات العمل الملعوبة',
+                value: '$hours ساعة تشغيل',
+                icon: Icons.timer_rounded,
+                bgColor: const Color(0xFFE1F5FE),
+                accentColor: Colors.blue.shade800,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricCard(
+                title: 'نسبة إشغال الملعب',
+                value: '${occupancy.toStringAsFixed(1)}%',
+                icon: Icons.pie_chart_rounded,
+                bgColor: const Color(0xFFF3E5F5),
+                accentColor: Colors.purple.shade800,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetricCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color bgColor,
+    required Color accentColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: accentColor, size: 20),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(value,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: accentColor),
+              overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  // بطاقة ساعات وأيام الذروة
+  Widget _buildPeakAnalyticsCard(
+      String peakSlot, int slotCount, String peakDay, int dayCount, int completed, int cancelled) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.bolt_rounded, color: Colors.amber, size: 22),
+                SizedBox(width: 8),
+                Text('أوقات الذروة والنشاط الذهبي ⚡',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1B5E20))),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _buildPeakRow(
+              icon: Icons.access_time_filled_rounded,
+              title: 'الساعة الذهبية الأكثر طلباً:',
+              value: peakSlot != 'غير محدد' ? '$peakSlot ($slotCount حجز)' : 'لا تتوفر حجوزات كافية',
+              color: Colors.orange.shade800,
+            ),
+            const Divider(height: 20),
+            _buildPeakRow(
+              icon: Icons.calendar_month_rounded,
+              title: 'اليوم الأكثر نشاطاً في الأسبوع:',
+              value: peakDay != 'غير محدد' ? 'يوم $peakDay ($dayCount حجز)' : 'لا تتوفر حجوزات كافية',
+              color: Colors.blue.shade800,
+            ),
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('مباريات لُعبت: $completed ✔️',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12)),
+                Text('طلبات مرفوضة/ملغاة: $cancelled ❌',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade700, fontSize: 12)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPeakRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 8),
+        Text(title, style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w600)),
+        const Spacer(),
+        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+
+  // بطاقة الفرق الأكثر نشاطاً ودفعاً
+  Widget _buildTopTeamsCard(List<MapEntry<String, Map<String, dynamic>>> teams) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.leaderboard_rounded, color: Color(0xFF1B5E20), size: 22),
+                SizedBox(width: 8),
+                Text('الفرق الأكثر حجزاً والتزاماً 🏆',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1B5E20))),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (teams.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Text('لا توجد بيانات فرق مسجلة بعد', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: teams.length > 5 ? 5 : teams.length,
+                separatorBuilder: (_, __) => const Divider(height: 16),
+                itemBuilder: (context, idx) {
+                  final tName = teams[idx].key;
+                  final count = teams[idx].value['count'] as int;
+                  final paid = teams[idx].value['paid'] as double;
+                  final isTrusted = teams[idx].value['trusted'] == true;
+
+                  return Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: idx == 0 ? Colors.amber : const Color(0xFFE8F5E9),
+                        child: Text('${idx + 1}',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: idx == 0 ? Colors.black87 : const Color(0xFF1B5E20))),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(tName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                                if (isTrusted) ...[
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.verified_rounded, color: Colors.blue, size: 15),
+                                ],
+                              ],
+                            ),
+                            Text('حجز $count مباراة • إجمالي الدفع: ${currencyFormatter.format(paid)} د.ع',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getArabicDayName(DateTime date) {
+    switch (date.weekday) {
+      case DateTime.friday:
+        return 'الجمعة';
+      case DateTime.thursday:
+        return 'الخميس';
+      case DateTime.saturday:
+        return 'السبت';
+      case DateTime.sunday:
+        return 'الأحد';
+      case DateTime.monday:
+        return 'الإثنين';
+      case DateTime.tuesday:
+        return 'الثلاثاء';
+      case DateTime.wednesday:
+        return 'الأربعاء';
+      default:
+        return '';
     }
   }
 }
