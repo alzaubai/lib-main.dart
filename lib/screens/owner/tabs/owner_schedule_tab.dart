@@ -16,6 +16,27 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final NumberFormat currencyFormatter = NumberFormat('#,###');
 
+  // دالة ذكية لتحويل أي وقت بنظام (08:00 م) أو (11:00 ص) إلى دقائق لترتيبها بدقة متناهية
+  int _parseTimeToMinutes(String timeStr) {
+    if (timeStr.isEmpty) return 9999;
+    try {
+      final clean = timeStr.trim();
+      final isPM = clean.contains('م') || clean.toLowerCase().contains('pm');
+      
+      // استخراج الأرقام فقط (الساعة والدقيقة)
+      final parts = clean.replaceAll(RegExp(r'[^\d:]'), '').split(':');
+      int hour = int.tryParse(parts[0]) ?? 0;
+      int minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (!isPM && hour == 12) hour = 0;
+
+      return (hour * 60) + minute;
+    } catch (_) {
+      return 9999;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -29,7 +50,32 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        var docs = List<DocumentSnapshot>.from(snapshot.data?.docs ?? []);
+
+        // الترتيب الزمني الدقيق: التاريخ الأقرب أولاً، ثم الساعة الأبكر أولاً
+        docs.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+
+          final dateA = (dataA['date'] ?? '').toString();
+          final dateB = (dataB['date'] ?? '').toString();
+
+          // المقارنة أولاً بالتاريخ (yyyy-MM-dd)
+          int dateComp = dateA.compareTo(dateB);
+          if (dateComp != 0) {
+            return dateComp; // الأقرب يظهر في الأعلى
+          }
+
+          // إذا كان نفس اليوم، الترتيب حسب وقت البداية
+          final timeA = (dataA['startTime'] ?? '').toString();
+          final timeB = (dataB['startTime'] ?? '').toString();
+
+          final minA = _parseTimeToMinutes(timeA);
+          final minB = _parseTimeToMinutes(timeB);
+
+          return minA.compareTo(minB);
+        });
+
         double actualRevenueReceived = 0.0;
         double expectedRevenueUpcoming = 0.0;
 
@@ -113,7 +159,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
               ),
             ),
 
-            // قائمة المباريات
+            // قائمة المباريات المرتبة تصاعدياً
             Expanded(
               child: docs.isEmpty
                   ? Center(
