@@ -25,7 +25,7 @@ class _AuthScreenState extends State<AuthScreen> {
   String _selectedGov = 'بغداد';
   String _selectedArea = 'الكرخ';
   String _selectedPitchType = 'سباعي (7 ضد 7)';
-  String _selectedSurface = 'ثيل 🌿';
+  String _selectedSurface = 'ثيل 🌿'; // القيمة الافتراضية المحدثة
   bool _isLogin = true;
   bool _isLoading = false;
 
@@ -279,7 +279,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 children: [
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      value: _selectedPitchType,
+                                      value: pitchTypesList.contains(_selectedPitchType) ? _selectedPitchType : 'سباعي (7 ضد 7)',
                                       decoration: InputDecoration(
                                         labelText: 'حجم الملعب',
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -295,7 +295,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      value: _selectedSurface,
+                                      value: pitchSurfaceTypesList.contains(_selectedSurface) ? _selectedSurface : 'ثيل 🌿',
                                       decoration: InputDecoration(
                                         labelText: 'الأرضية',
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
