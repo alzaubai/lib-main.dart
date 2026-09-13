@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
 import 'tournaments/tournament_screen.dart';
@@ -248,7 +249,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
     final rateCtrl = TextEditingController(text: '${data['hourlyRate']?.toInt() ?? 25000}');
     final descCtrl = TextEditingController(text: data['description'] ?? '');
 
-    // معالجة وحماية أنواع الأرضيات من القيم القديمة
     String rawType = data['pitchType'] ?? 'سباعي (7 ضد 7)';
     String currentType = pitchTypesList.contains(rawType) && rawType != 'الكل'
         ? rawType
@@ -341,62 +341,172 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     maxLines: 2,
                     decoration: const InputDecoration(labelText: 'العنوان التفصيلي / نقطة دالة', border: OutlineInputBorder()),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 14),
+
+                  // قسم تثبيت الـ GPS مع المعاينة المباشرة
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: currentLat != null ? Colors.green.shade50 : Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: currentLat != null ? Colors.green.shade200 : Colors.blue.shade200),
+                    ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          currentLat != null ? 'تم ربط موقع الملعب عبر الـ GPS بنجاح' : 'لم يتم تثبيت الموقع على الخريطة بعد',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: currentLat != null ? Colors.green.shade900 : Colors.blue.shade900,
-                          ),
+                        Row(
+                          children: [
+                            Icon(
+                              currentLat != null ? Icons.location_on_rounded : Icons.location_off_rounded,
+                              color: currentLat != null ? const Color(0xFF1B5E20) : Colors.blue.shade800,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                currentLat != null ? 'تم تثبيت الموقع الجغرافي عبر الـ GPS' : 'لم يتم تثبيت موقع الملعب بعد',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: currentLat != null ? const Color(0xFF1B5E20) : Colors.blue.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                        if (currentLat != null && currentLng != null) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                            child: Text(
+                              'الإحداثيات: ${currentLat!.toStringAsFixed(5)}, ${currentLng!.toStringAsFixed(5)}',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                              textDirection: ui.TextDirection.ltr,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.blue.shade800,
+                                    side: BorderSide(color: Colors.blue.shade300),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.map_rounded, size: 16),
+                                  label: const Text('معاينة على الخريطة', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () async {
+                                    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$currentLat,$currentLng');
+                                    if (await canLaunchUrl(uri)) {
+                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                                tooltip: 'إزالة الإحداثيات',
+                                onPressed: () {
+                                  setModalState(() {
+                                    currentLat = null;
+                                    currentLng = null;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: currentLat != null ? Colors.teal.shade700 : Colors.blue.shade700,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
                           icon: isLocating
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.my_location),
-                          label: Text(isLocating ? 'جاري التحديد...' : 'تثبيت موقع الملعب الحالي'),
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.my_location_rounded, size: 18),
+                          label: Text(
+                            isLocating
+                                ? 'جاري التقاط الإحداثيات من القمر الصناعي...'
+                                : (currentLat != null ? 'تحديث الموقع لموقعي الحالي 📍' : 'تثبيت موقع الملعب الحالي عبر الـ GPS 📍'),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
                           onPressed: isLocating
                               ? null
                               : () async {
                                   setModalState(() => isLocating = true);
                                   try {
-                                    LocationPermission perm = await Geolocator.requestPermission();
+                                    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+                                    if (!serviceEnabled) {
+                                      throw 'يرجى تشغيل الـ GPS (خدمة الموقع) في الهاتف أولاً';
+                                    }
+
+                                    LocationPermission perm = await Geolocator.checkPermission();
+                                    if (perm == LocationPermission.denied) {
+                                      perm = await Geolocator.requestPermission();
+                                      if (perm == LocationPermission.denied) {
+                                        throw 'تم رفض إذن الوصول إلى الموقع';
+                                      }
+                                    }
+
+                                    if (perm == LocationPermission.deniedForever) {
+                                      throw 'إذن الموقع مرفوض نهائياً من إعدادات الهاتف';
+                                    }
+
                                     final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
                                     setModalState(() {
                                       currentLat = pos.latitude;
                                       currentLng = pos.longitude;
                                       isLocating = false;
                                     });
-                                  } catch (_) {
+                                  } catch (e) {
                                     setModalState(() => isLocating = false);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('$e'), backgroundColor: Colors.red.shade800),
+                                      );
+                                    }
                                   }
                                 },
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+
+                  const SizedBox(height: 16),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(vertical: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B5E20),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                     onPressed: () async {
-                      await _firestore.collection('pitches').doc(widget.pitchName).update({
+                      final updateData = <String, dynamic>{
                         'phone': phoneCtrl.text.trim(),
                         'hourlyRate': double.tryParse(rateCtrl.text.trim()) ?? 25000.0,
                         'pitchType': currentType,
                         'surfaceType': currentSurface,
                         'description': descCtrl.text.trim(),
-                        if (currentLat != null) 'latitude': currentLat,
-                        if (currentLng != null) 'longitude': currentLng,
-                      });
+                      };
+
+                      if (currentLat != null && currentLng != null) {
+                        updateData['latitude'] = currentLat;
+                        updateData['longitude'] = currentLng;
+                      } else {
+                        updateData['latitude'] = FieldValue.delete();
+                        updateData['longitude'] = FieldValue.delete();
+                      }
+
+                      await _firestore.collection('pitches').doc(widget.pitchName).update(updateData);
                       if (mounted) Navigator.pop(ctx);
                     },
-                    child: const Text('حفظ الإعدادات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: const Text('حفظ الإعدادات والتعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
                 ],
               ),
