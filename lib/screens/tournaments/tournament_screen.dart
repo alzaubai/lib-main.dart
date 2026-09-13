@@ -69,59 +69,34 @@ class TournamentScreen extends StatelessWidget {
             );
           }
 
-          return CustomScrollView(
+          return ListView.builder(
             physics: const ClampingScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data() as Map<String, dynamic>;
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data() as Map<String, dynamic>;
 
-                      return TournamentCard(
-                        doc: doc,
-                        userPhone: userPhone,
-                        isOwner: isOwner,
-                        onOpenBracket: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => TournamentBracketSheet(
-                              tournamentId: doc.id,
-                              tournamentTitle: data['title'] ?? 'البطولة',
-                              pitchName: data['pitchName'] ?? '',
-                              isOwner: isOwner,
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    childCount: docs.length,
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.sports_soccer, size: 16, color: Colors.grey.shade400),
-                      const SizedBox(width: 8),
-                      Text(
-                        'نهاية قائمة البطولات',
-                        style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(Icons.sports_soccer, size: 16, color: Colors.grey.shade400),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+              return TournamentCard(
+                doc: doc,
+                userPhone: userPhone,
+                isOwner: isOwner,
+                onOpenBracket: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => TournamentBracketSheet(
+                      tournamentId: doc.id,
+                      tournamentTitle: data['title'] ?? 'البطولة',
+                      pitchName: data['pitchName'] ?? '',
+                      isOwner: isOwner,
+                    ),
+                  );
+                },
+              );
+            },
           );
         },
       ),
