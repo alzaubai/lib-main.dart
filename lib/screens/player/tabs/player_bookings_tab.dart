@@ -6,6 +6,27 @@ class PlayerBookingsTab extends StatelessWidget {
   final String userPhone;
   const PlayerBookingsTab({super.key, required this.userPhone});
 
+  // دالة تحويل التاريخ والوقت (مثال: 2026-09-14 و 08:00 م) إلى كائن DateTime للمقارنة الدقيقة
+  DateTime? _parseMatchDateTime(String dateStr, String timeStr) {
+    try {
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) return null;
+
+      final clean = timeStr.trim();
+      final isPM = clean.contains('م') || clean.toLowerCase().contains('pm');
+      final parts = clean.replaceAll(RegExp(r'[^\d:]'), '').split(':');
+      int hour = int.tryParse(parts[0]) ?? 0;
+      int minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (!isPM && hour == 12) hour = 0;
+
+      return DateTime(date.year, date.month, date.day, hour, minute);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -37,6 +58,8 @@ class PlayerBookingsTab extends StatelessWidget {
               final doc = docs[index];
               final data = doc.data() as Map<String, dynamic>;
               final status = data['status'] ?? 'pending';
+              final dateStr = (data['date'] ?? '').toString();
+              final startTimeStr = (data['startTime'] ?? '').toString();
 
               Color statusColor = Colors.amber;
               String statusText = 'قيد المراجعة ⏳';
@@ -51,7 +74,14 @@ class PlayerBookingsTab extends StatelessWidget {
                 statusText = 'مكتمل ولُعب ⚽';
               }
 
-              final bool canCancel = status == 'pending' || status == 'upcoming';
+              // حساب الوقت المتبقي للمباراة
+              final matchDateTime = _parseMatchDateTime(dateStr, startTimeStr);
+              final now = DateTime.now();
+              final difference = matchDateTime != null ? matchDateTime.difference(now) : null;
+              final bool isLessThan3Hours = difference != null && difference.inMinutes < 180;
+              final bool isPassed = difference != null && difference.isNegative;
+
+              final bool canCancel = status == 'pending' || (status == 'upcoming' && !isPassed);
 
               return Card(
                 elevation: 2,
@@ -78,7 +108,7 @@ class PlayerBookingsTab extends StatelessWidget {
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                 ),
                                 Text(
-                                  '📅 ${data['date'] ?? ''}',
+                                  '📅 $dateStr',
                                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                                 ),
                               ],
@@ -120,13 +150,21 @@ class PlayerBookingsTab extends StatelessWidget {
                       if (canCancel) ...[
                         const Divider(height: 18),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Text(
-                              status == 'pending' ? 'يمكنك سحب الطلب قبل موافقة الملعب' : 'إلغاء الموعد وإفساح المجال لغيرك',
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            Expanded(
+                              child: Text(
+                                status == 'pending'
+                                    ? 'طلب معلق (يمكنك سحبه بأي وقت)'
+                                    : (isLessThan3Hours
+                                        ? '⚠️ لا يمكن الإلغاء قبل أقل من 3 ساعات'
+                                        : 'متاح الإلغاء قبل 3 ساعات من المباراة'),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: (status == 'upcoming' && isLessThan3Hours) ? Colors.red.shade700 : Colors.grey,
+                                  fontWeight: (status == 'upcoming' && isLessThan3Hours) ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
                             ),
-                            const Spacer(),
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.red.shade700,
@@ -139,7 +177,13 @@ class PlayerBookingsTab extends StatelessWidget {
                                 status == 'pending' ? 'سحب الطلب ❌' : 'إلغاء الحجز ❌',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                               ),
-                              onPressed: () => _confirmCancelBooking(context, doc.reference, status),
+                              onPressed: () {
+                                if (status == 'upcoming' && isLessThan3Hours) {
+                                  _showTimeRestrictedDialog(context);
+                                } else {
+                                  _confirmCancelBooking(context, doc.reference, status, data);
+                                }
+                              },
                             ),
                           ],
                         ),
@@ -155,7 +199,37 @@ class PlayerBookingsTab extends StatelessWidget {
     );
   }
 
-  void _confirmCancelBooking(BuildContext context, DocumentReference docRef, String currentStatus) {
+  void _showTimeRestrictedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.timer_off_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text('لا يمكن إلغاء الحجز!', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'حسب سياسة حجوزات الملاعب، لا يمكن إلغاء الموعد المؤكد قبل أقل من 3 ساعات من انطلاق المباراة، وذلك لحفظ حق إدارة الملعب في حجز الساعة. يرجى التواصل مباشرة مع صاحب الملعب هاتفياً.',
+            style: TextStyle(fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('حسناً، فهمت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmCancelBooking(BuildContext context, DocumentReference docRef, String currentStatus, Map<String, dynamic> bData) {
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
@@ -166,7 +240,7 @@ class PlayerBookingsTab extends StatelessWidget {
           content: Text(
             currentStatus == 'pending'
                 ? 'هل أنت متأكد من سحب هذا الطلب المعلق؟ سيتم حذفه ولن يظهر لإدارة الملعب.'
-                : 'هل أنت متأكد من إلغاء هذا الحجز المؤكد؟ سيتم إخطار صاحب الملعب وإتاحة هذه الساعة للفرق الأخرى.',
+                : 'هل أنت متأكد من إلغاء هذا الحجز المؤكد؟ سيتم إرسال إشعار فوري لمالك الملعب وتفريغ هذه الساعة بالجدول.',
           ),
           actions: [
             TextButton(
@@ -179,16 +253,20 @@ class PlayerBookingsTab extends StatelessWidget {
                 if (currentStatus == 'pending') {
                   await docRef.delete();
                 } else {
+                  // تحويل الحجز إلى ملغي مع حفظ بيانات الإلغاء لإشعار صاحب الملعب فوراً
                   await docRef.update({
                     'status': 'rejected',
                     'cancelledByPlayer': true,
+                    'cancellationSeenByOwner': false,
+                    'cancelledAt': FieldValue.serverTimestamp(),
+                    'cancellingTeamName': bData['teamOne'] ?? 'فريق كابتن',
                   });
                 }
                 if (context.mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(currentStatus == 'pending' ? 'تم سحب الطلب بنجاح' : 'تم إلغاء الحجز بنجاح'),
+                      content: Text(currentStatus == 'pending' ? 'تم سحب الطلب بنجاح' : 'تم إلغاء الحجز وإبلاغ إدارة الملعب ✔️'),
                       backgroundColor: Colors.red.shade700,
                     ),
                   );
