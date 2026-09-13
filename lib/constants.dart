@@ -86,9 +86,8 @@ const List<String> pitchTypesList = [
 const List<String> pitchSurfaceTypesList = [
   'الكل',
   'ثيل 🌿',
-  'ثيل تركي ممتاز 🇹🇷',
   'تارتان صلب 🔴',
-  'رمل شاطئي 🏖️',
+  'ترابي 🏜️',
 ];
 
 // توليد فترات وساعات اللعب من العصر حتى الفجر
