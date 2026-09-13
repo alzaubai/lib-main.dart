@@ -65,14 +65,18 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.amber.shade300)),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
                       child: const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 28),
                     ),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('إطلاق بطولة جديدة 🏆', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                        const Text('إطلاق بطولة رسمية جديدة 🏆', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
                         Text('الملعب: ${widget.pitchName}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                       ],
                     ),
@@ -84,7 +88,7 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                   controller: _titleController,
                   decoration: InputDecoration(
                     labelText: 'اسم أو عنوان البطولة',
-                    hintText: 'مثال: بطولة أبطال الرافدين الرمضانية',
+                    hintText: 'مثال: بطولة رمضان الكبرى',
                     prefixIcon: const Icon(Icons.military_tech_rounded, color: Color(0xFF1B5E20)),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   ),
@@ -92,20 +96,20 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                 ),
                 const SizedBox(height: 14),
 
-                // سعة الفرق
+                // سعة الفرق (4، 8، 16)
                 const Text('عدد الفرق المشاركة بالبطولة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 8),
                 Row(
-                  children: [4, 8].map((capacity) {
+                  children: [4, 8, 16].map((capacity) {
                     final isSel = _maxTeams == capacity;
                     return Expanded(
                       child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
                         child: ChoiceChip(
                           label: Center(
                             child: Text(
-                              '$capacity فرق (${capacity == 4 ? "نصف نهائي + نهائي" : "ربع نهائي + نصف + نهائي"})',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.black87),
+                              '$capacity فرق',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.black87),
                             ),
                           ),
                           selected: isSel,
@@ -121,7 +125,6 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                 ),
                 const SizedBox(height: 14),
 
-                // الرسوم والجوائز
                 Row(
                   children: [
                     Expanded(
@@ -140,7 +143,7 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                       child: TextFormField(
                         controller: _prizeController,
                         decoration: InputDecoration(
-                          labelText: 'جائزة المركز الأول',
+                          labelText: 'جوائز البطولة',
                           prefixIcon: const Icon(Icons.workspace_premium_rounded, color: Colors.amber),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                         ),
@@ -150,7 +153,7 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                 ),
                 const SizedBox(height: 14),
 
-                // جدولة انطلاق مباريات الدور الأول
+                // موعد الافتتاح وساعة الانطلاق
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -163,9 +166,9 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.schedule_send_rounded, size: 18, color: Color(0xFF1B5E20)),
+                          Icon(Icons.calendar_month_rounded, size: 18, color: Color(0xFF1B5E20)),
                           SizedBox(width: 6),
-                          Text('تحديد موعد انطلاق مباريات الدور الأول تلقائياً:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1B5E20))),
+                          Text('تاريخ افتتاح البطولة وساعة الانطلاق:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1B5E20))),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -173,7 +176,7 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.calendar_today, size: 14),
+                              icon: const Icon(Icons.event_note, size: 14),
                               label: Text(DateFormat('yyyy-MM-dd').format(_startDate), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               onPressed: () async {
                                 final p = await showDatePicker(
@@ -200,7 +203,7 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
 
                 SizedBox(
                   height: 48,
@@ -224,22 +227,23 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                                 'startDate': dateStr,
                                 'defaultSlot': _defaultSlot,
                                 'teams': <String>[],
-                                'registeredPlayers': <String, String>{}, // phone -> teamName
+                                'registeredPlayers': <String, String>{},
                                 'matches': [],
+                                'champion': null,
                                 'createdAt': FieldValue.serverTimestamp(),
                               });
 
                               if (mounted) {
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تم نشر البطولة وفتح باب التسجيل بنجاح 🏆'), backgroundColor: Color(0xFF1B5E20)),
+                                  const SnackBar(content: Text('تم إطلاق البطولة بنجاح! 🏆'), backgroundColor: Color(0xFF1B5E20)),
                                 );
                               }
                             }
                           },
                     child: _isCreating
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('نشر البطولة وفتح باب التسجيل 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        : const Text('نشر البطولة وفتح التسجيل 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                   ),
                 ),
               ],
