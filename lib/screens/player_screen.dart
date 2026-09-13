@@ -56,7 +56,7 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: Colors.red,
+        backgroundColor: const Color(0xFFF4F6F8),
         appBar: AppBar(
           elevation: 0,
           backgroundColor: const Color(0xFF1B5E20),
