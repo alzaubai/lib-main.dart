@@ -7,7 +7,7 @@ class BracketGenerator {
   }) {
     final List<String> teams = List.from(registeredTeams)..shuffle();
 
-    // ملء الفراغات بـ "باي (تأهل تلقائي)" في حال لم يكتمل العدد
+    // إكمال الفراغات في حال نقص عدد الفرق بـ "تأهل تلقائي"
     while (teams.length < maxCapacity) {
       teams.add('باي (تأهل تلقائي)');
     }
@@ -15,7 +15,6 @@ class BracketGenerator {
     final List<Map<String, dynamic>> matches = [];
 
     if (maxCapacity == 4) {
-      // نصف النهائي
       matches.add({
         'id': 'semi_1',
         'round': 'نصف النهائي',
@@ -40,7 +39,6 @@ class BracketGenerator {
         'time': defaultSlot,
       });
 
-      // النهائي
       matches.add({
         'id': 'final_match',
         'round': 'المباراة النهائية 🏆',
@@ -52,7 +50,6 @@ class BracketGenerator {
         'time': '',
       });
     } else if (maxCapacity == 8) {
-      // ربع النهائي (4 مباريات)
       for (int i = 0; i < 4; i++) {
         final tA = teams[i * 2];
         final tB = teams[(i * 2) + 1];
@@ -71,7 +68,6 @@ class BracketGenerator {
         });
       }
 
-      // نصف النهائي (مباراتان)
       matches.add({
         'id': 'semi_1',
         'round': 'نصف النهائي',
@@ -89,6 +85,76 @@ class BracketGenerator {
         'round': 'نصف النهائي',
         'teamA': matches[2]['winner'] ?? 'بانتظار الفائز',
         'teamB': matches[3]['winner'] ?? 'بانتظار الفائز',
+        'winner': null,
+        'nextMatchId': 'final_match',
+        'nextMatchSlot': 'teamB',
+        'date': '',
+        'time': '',
+      });
+
+      matches.add({
+        'id': 'final_match',
+        'round': 'المباراة النهائية 🏆',
+        'teamA': 'بانتظار الفائز',
+        'teamB': 'بانتظار الفائز',
+        'winner': null,
+        'nextMatchId': null,
+        'date': '',
+        'time': '',
+      });
+    } else if (maxCapacity == 16) {
+      // دور الـ 16 (8 مباريات)
+      for (int i = 0; i < 8; i++) {
+        final tA = teams[i * 2];
+        final tB = teams[(i * 2) + 1];
+        final isAuto = tB.contains('تأهل تلقائي');
+
+        matches.add({
+          'id': 'r16_${i + 1}',
+          'round': 'ثمن النهائي (دور الـ 16)',
+          'teamA': tA,
+          'teamB': tB,
+          'winner': isAuto ? tA : null,
+          'nextMatchId': 'qf_${(i ~/ 2) + 1}',
+          'nextMatchSlot': (i % 2 == 0) ? 'teamA' : 'teamB',
+          'date': startDate,
+          'time': defaultSlot,
+        });
+      }
+
+      // ربع النهائي (4 مباريات)
+      for (int i = 0; i < 4; i++) {
+        matches.add({
+          'id': 'qf_${i + 1}',
+          'round': 'ربع النهائي',
+          'teamA': matches[i * 2]['winner'] ?? 'بانتظار الفائز',
+          'teamB': matches[(i * 2) + 1]['winner'] ?? 'بانتظار الفائز',
+          'winner': null,
+          'nextMatchId': i < 2 ? 'semi_1' : 'semi_2',
+          'nextMatchSlot': (i % 2 == 0) ? 'teamA' : 'teamB',
+          'date': '',
+          'time': '',
+        });
+      }
+
+      // نصف النهائي
+      matches.add({
+        'id': 'semi_1',
+        'round': 'نصف النهائي',
+        'teamA': 'بانتظار الفائز',
+        'teamB': 'بانتظار الفائز',
+        'winner': null,
+        'nextMatchId': 'final_match',
+        'nextMatchSlot': 'teamA',
+        'date': '',
+        'time': '',
+      });
+
+      matches.add({
+        'id': 'semi_2',
+        'round': 'نصف النهائي',
+        'teamA': 'بانتظار الفائز',
+        'teamB': 'بانتظار الفائز',
         'winner': null,
         'nextMatchId': 'final_match',
         'nextMatchSlot': 'teamB',
