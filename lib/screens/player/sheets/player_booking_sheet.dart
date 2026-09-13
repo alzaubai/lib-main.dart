@@ -22,6 +22,7 @@ class PlayerBookingSheet extends StatefulWidget {
 
 class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final NumberFormat currencyFormatter = NumberFormat('#,###');
   DateTime _selectedDate = DateTime.now();
   final List<String> _availableSlots = buildPitchSlots(60);
 
@@ -54,58 +55,100 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.85,
+        height: MediaQuery.of(context).size.height * 0.88,
         decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          color: Color(0xFFF7FAF7),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+            // مقبض النافذة
+            const SizedBox(height: 10),
+            Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+
+            // رأس النافذة مع اختيار اليوم
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B5E20),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF1B5E20).withOpacity(0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      'جدول مواعيد: ${widget.pitchName}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B5E20)),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.stadium_rounded, color: Colors.amberAccent, size: 24),
                     ),
-                    Text(
-                      'يوم $dayNameArabic ($dateStr)',
-                      style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontWeight: FontWeight.bold),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.pitchName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'يوم $dayNameArabic • $dateStr',
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF1B5E20),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.calendar_month_rounded, size: 16),
+                      label: const Text('تغيير اليوم', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      onPressed: () async {
+                        final p = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 30)),
+                        );
+                        if (p != null) setState(() => _selectedDate = p);
+                      },
                     ),
                   ],
                 ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade100, foregroundColor: Colors.black87, elevation: 0),
-                  icon: const Icon(Icons.calendar_today, size: 16),
-                  label: const Text('تغيير اليوم', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  onPressed: () async {
-                    final p = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 30)),
-                    );
-                    if (p != null) setState(() => _selectedDate = p);
-                  },
-                ),
-              ],
+              ),
             ),
-            const Divider(height: 20),
 
-            // دمج قراءة حجوزات اليوم + قواعد التكرار الأسبوعي لنفس اليوم
+            const SizedBox(height: 12),
+
+            // قائمة الساعات
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: _firestore
@@ -123,30 +166,28 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         .snapshots(),
                     builder: (context, recurringSnapshot) {
                       if (bookingSnapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
                       }
 
                       final bookings = bookingSnapshot.data?.docs ?? [];
                       final recurringRules = recurringSnapshot.data?.docs ?? [];
 
                       return ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         itemCount: _availableSlots.length,
                         itemBuilder: (context, idx) {
                           final slot = _availableSlots[idx];
                           final parts = slot.split(' - ');
                           final sTime = parts[0].trim();
 
-                          // فحص حجز عادي أو بطولة
                           final matchingBooking = bookings.cast<DocumentSnapshot?>().firstWhere(
                             (b) {
                               final d = b!.data() as Map<String, dynamic>;
-                              final bookStartTime = (d['startTime'] ?? '').toString().trim();
-                              return bookStartTime == sTime;
+                              return (d['startTime'] ?? '').toString().trim() == sTime;
                             },
                             orElse: () => null,
                           );
 
-                          // فحص حجز أسبوعي دائم
                           final matchingRecurring = recurringRules.cast<DocumentSnapshot?>().firstWhere(
                             (r) {
                               final d = r!.data() as Map<String, dynamic>;
@@ -163,57 +204,102 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
 
                           Map<String, dynamic>? bData = isRegularBooked ? matchingBooking.data() as Map<String, dynamic> : null;
                           Map<String, dynamic>? rData = isRecurringBooked ? matchingRecurring.data() as Map<String, dynamic> : null;
-
                           final isTournament = bData?['status'] == 'tournament_match';
 
-                          String subtitleText = 'متاح للحجز المباشر ✔️';
-                          Color textColor = Colors.green.shade900;
-                          IconData leadingIcon = Icons.check_circle;
-                          Color themeColor = Colors.green;
+                          Color cardBg = Colors.white;
+                          Color borderColor = Colors.grey.shade200;
+                          Widget statusBadge;
 
                           if (isTournament) {
-                            subtitleText = '🏆 بطولة رسمية: ${bData?['teamOne']} ⚔️ ${bData?['teamTwo']}';
-                            textColor = Colors.amber.shade900;
-                            leadingIcon = Icons.emoji_events;
-                            themeColor = Colors.amber;
+                            cardBg = Colors.amber.shade50;
+                            borderColor = Colors.amber.shade300;
+                            statusBadge = Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(8)),
+                              child: Text('🏆 بطولة', style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.bold)),
+                            );
                           } else if (isRecurringBooked) {
-                            subtitleText = '🔒 حجز أسبوعي دائم: ${rData?['teamName']} ⚔️ ${rData?['teamTwo'] ?? ''}';
-                            textColor = Colors.purple.shade900;
-                            leadingIcon = Icons.repeat_rounded;
-                            themeColor = Colors.purple;
+                            cardBg = Colors.purple.shade50;
+                            borderColor = Colors.purple.shade200;
+                            statusBadge = Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.purple.shade100, borderRadius: BorderRadius.circular(8)),
+                              child: Text('🔒 حجز دائم', style: TextStyle(color: Colors.purple.shade900, fontSize: 11, fontWeight: FontWeight.bold)),
+                            );
                           } else if (isRegularBooked) {
-                            subtitleText = 'هذا الموعد محجوز مسبقاً ❌';
-                            textColor = Colors.red.shade900;
-                            leadingIcon = Icons.cancel;
-                            themeColor = Colors.red;
+                            cardBg = Colors.red.shade50;
+                            borderColor = Colors.red.shade200;
+                            statusBadge = Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(8)),
+                              child: Text('❌ محجوز', style: TextStyle(color: Colors.red.shade900, fontSize: 11, fontWeight: FontWeight.bold)),
+                            );
+                          } else {
+                            statusBadge = ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1B5E20),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              ),
+                              onPressed: () => _openModernBookingRequestSheet(context, dateStr, slot, dayNameArabic),
+                              child: const Text('طلب حجز ⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            );
                           }
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: isBooked ? (isRecurringBooked ? Colors.purple.shade50 : Colors.red.shade50) : Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isBooked ? (isRecurringBooked ? Colors.purple.shade200 : Colors.red.shade200) : Colors.green.shade300,
-                              ),
+                          return Card(
+                            elevation: isBooked ? 0 : 2,
+                            shadowColor: Colors.black12,
+                            color: cardBg,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: borderColor),
                             ),
-                            child: ListTile(
-                              leading: Icon(leadingIcon, color: themeColor),
-                              title: Text(slot, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
-                              subtitle: Text(subtitleText, style: TextStyle(fontSize: 11, fontWeight: isBooked ? FontWeight.bold : FontWeight.normal, color: textColor)),
-                              trailing: isBooked
-                                  ? Chip(
-                                      label: Text(
-                                        isRecurringBooked ? 'دائم' : (isTournament ? 'بطولة' : 'محجوز'),
-                                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
-                                      ),
-                                      backgroundColor: isRecurringBooked ? Colors.purple.shade800 : (isTournament ? Colors.amber.shade800 : Colors.red),
-                                    )
-                                  : ElevatedButton(
-                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), padding: const EdgeInsets.symmetric(horizontal: 12)),
-                                      onPressed: () => _openRequestDialog(context, dateStr, slot),
-                                      child: const Text('احجز الآن', style: TextStyle(color: Colors.white, fontSize: 12)),
+                            margin: const EdgeInsets.only(bottom: 10),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.access_time_rounded,
+                                    size: 20,
+                                    color: isBooked ? Colors.grey.shade600 : const Color(0xFF1B5E20),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          slot,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            color: isBooked ? Colors.black54 : Colors.black87,
+                                          ),
+                                        ),
+                                        if (isTournament)
+                                          Text(
+                                            '${bData?['teamOne']} ⚔️ ${bData?['teamTwo']}',
+                                            style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.bold),
+                                          )
+                                        else if (isRecurringBooked)
+                                          Text(
+                                            'محجوز لـ: ${rData?['teamName']}',
+                                            style: TextStyle(color: Colors.purple.shade900, fontSize: 11, fontWeight: FontWeight.bold),
+                                          )
+                                        else if (!isBooked)
+                                          Text(
+                                            '${currencyFormatter.format(widget.hourlyRate)} د.ع / ساعة',
+                                            style: const TextStyle(color: Colors.teal, fontSize: 11, fontWeight: FontWeight.bold),
+                                          ),
+                                      ],
                                     ),
+                                  ),
+                                  statusBadge,
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -229,59 +315,225 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     );
   }
 
-  void _openRequestDialog(BuildContext context, String date, String slot) {
+  // الشيت العصري لتثبيت طلب الحجز
+  void _openModernBookingRequestSheet(
+    BuildContext context,
+    String dateStr,
+    String slot,
+    String dayName,
+  ) {
     final teamCtrl = TextEditingController();
-    final times = slot.split(' - ');
+    final opponentCtrl = TextEditingController();
+    bool isOpenChallenge = true;
+    bool isSubmitting = false;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('تأكيد طلب الحجز'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('الملعب: ${widget.pitchName}'),
-              Text('الموعد: $date ($slot)'),
-              const SizedBox(height: 10),
-              TextField(
-                controller: teamCtrl,
-                decoration: const InputDecoration(labelText: 'اسم فريقك', border: OutlineInputBorder()),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-              onPressed: () async {
-                final tName = teamCtrl.text.trim();
-                if (tName.isNotEmpty) {
-                  await _firestore.collection('bookings').add({
-                    'pitchName': widget.pitchName,
-                    'teamOne': tName,
-                    'teamTwo': 'تحدي',
-                    'date': date,
-                    'startTime': times[0].trim(),
-                    'endTime': times.length > 1 ? times[1].trim() : '',
-                    'price': widget.hourlyRate,
-                    'phone': widget.userPhone,
-                    'status': 'pending',
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
-                  if (mounted) {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('تم إرسال طلب الحجز للملعب بنجاح!'), backgroundColor: Colors.green),
-                    );
-                  }
-                }
-              },
-              child: const Text('إرسال الطلب', style: TextStyle(color: Colors.white)),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
-          ],
+            padding: EdgeInsets.only(
+              top: 14,
+              left: 20,
+              right: 20,
+              bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // كارت تذكرة المباراة
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F8F1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(widget.pitchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B5E20))),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                              child: Text(
+                                '${currencyFormatter.format(widget.hourlyRate)} د.ع',
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 16),
+                        Row(
+                          children: [
+                            Icon(Icons.event_available_rounded, size: 16, color: Colors.grey.shade700),
+                            const SizedBox(width: 6),
+                            Text('يوم $dayName ($dateStr)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            const Spacer(),
+                            Icon(Icons.schedule_rounded, size: 16, color: Colors.grey.shade700),
+                            const SizedBox(width: 6),
+                            Text(slot, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+                  const Text('بيانات المباراة والفريقين:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1B5E20))),
+                  const SizedBox(height: 10),
+
+                  // إدخال اسم الفريق
+                  TextField(
+                    controller: teamCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'اسم فريقك (فريق الكابتن)',
+                      hintText: 'مثال: فريق الفرسان',
+                      prefixIcon: const Icon(Icons.shield_outlined, color: Color(0xFF1B5E20)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      filled: true,
+                      fillColor: const Color(0xFFFAFAFA),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // خيار نوع المباراة (تحدي مفتوح أو منافس محدد)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('⚔️ تحدي مفتوح (أي فريق)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                          selected: isOpenChallenge,
+                          selectedColor: const Color(0xFF1B5E20),
+                          labelStyle: TextStyle(color: isOpenChallenge ? Colors.white : Colors.black87),
+                          onSelected: (val) {
+                            if (val) setSheetState(() => isOpenChallenge = true);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('ضد فريق محدد 🛡️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                          selected: !isOpenChallenge,
+                          selectedColor: const Color(0xFF1B5E20),
+                          labelStyle: TextStyle(color: !isOpenChallenge ? Colors.white : Colors.black87),
+                          onSelected: (val) {
+                            if (val) setSheetState(() => isOpenChallenge = false);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  if (!isOpenChallenge) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: opponentCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'اسم الفريق المنافس',
+                        hintText: 'مثال: فريق النجوم',
+                        prefixIcon: const Icon(Icons.sports_soccer, color: Colors.teal),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        filled: true,
+                        fillColor: const Color(0xFFFAFAFA),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+
+                  // زر إرسال الطلب
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1B5E20),
+                        foregroundColor: Colors.white,
+                        elevation: 3,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: isSubmitting
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.send_rounded),
+                      label: const Text('إرسال طلب الحجز للملعب 🚀', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      onPressed: isSubmitting
+                          ? null
+                          : () async {
+                              final myTeam = teamCtrl.text.trim();
+                              if (myTeam.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('يرجى كتابة اسم فريقك أولاً')),
+                                );
+                                return;
+                              }
+
+                              final opponentTeam = isOpenChallenge ? 'تحدي مفتوح ⚔️' : opponentCtrl.text.trim();
+                              if (!isOpenChallenge && opponentTeam.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('يرجى كتابة اسم الفريق المنافس')),
+                                );
+                                return;
+                              }
+
+                              setSheetState(() => isSubmitting = true);
+                              final times = slot.split(' - ');
+
+                              try {
+                                await _firestore.collection('bookings').add({
+                                  'pitchName': widget.pitchName,
+                                  'teamOne': myTeam,
+                                  'teamTwo': opponentTeam,
+                                  'date': dateStr,
+                                  'startTime': times[0].trim(),
+                                  'endTime': times.length > 1 ? times[1].trim() : '',
+                                  'price': widget.hourlyRate,
+                                  'phone': widget.userPhone,
+                                  'status': 'pending',
+                                  'createdAt': FieldValue.serverTimestamp(),
+                                });
+
+                                if (mounted) {
+                                  Navigator.pop(sheetCtx);
+                                  Navigator.pop(context); // إغلاق شيت المواعيد والعودة للاستكشاف
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم إرسال طلب الحجز بنجاح، ستجده في تبويب "حجوزاتي" ⚽'),
+                                      backgroundColor: Color(0xFF1B5E20),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setSheetState(() => isSubmitting = false);
+                              }
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
