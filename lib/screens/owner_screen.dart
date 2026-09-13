@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -26,6 +27,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
   late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   int _lastSeenPendingCount = 0;
+  StreamSubscription<QuerySnapshot>? _cancellationSubscription;
 
   @override
   void initState() {
@@ -36,6 +38,96 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
       setState(() {});
       if (_tabController.index == 1) _markPendingAsSeen();
     });
+
+    // استماع لحظي لإشعارات إلغاء الحجوزات من قبل اللاعبين
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _listenToPlayerCancellations();
+    });
+  }
+
+  void _listenToPlayerCancellations() {
+    _cancellationSubscription = _firestore
+        .collection('bookings')
+        .where('pitchName', isEqualTo: widget.pitchName)
+        .where('cancelledByPlayer', isEqualTo: true)
+        .where('cancellationSeenByOwner', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) {
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final teamName = data['cancellingTeamName'] ?? data['teamOne'] ?? 'فريق';
+        final date = data['date'] ?? '';
+        final time = '${data['startTime'] ?? ''} - ${data['endTime'] ?? ''}';
+
+        _showCancellationNotificationDialog(doc.reference, teamName, date, time);
+      }
+    });
+  }
+
+  void _showCancellationNotificationDialog(DocumentReference docRef, String teamName, String date, String time) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          titlePadding: EdgeInsets.zero,
+          title: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade800,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.notification_important_rounded, color: Colors.white, size: 26),
+                SizedBox(width: 8),
+                Text('إلغاء حجز من قبل الكابتن ⚠️', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'قام الكابتن بإلغاء حجز فريقه رسميًا قبل موعد المباراة بأكثر من 3 ساعات:',
+                style: const TextStyle(fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.shade200)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('الفريق: $teamName', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.red.shade900)),
+                    const SizedBox(height: 4),
+                    Text('التاريخ: $date', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text('الوقت: $time', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text('تم إخلاء هذا الوقت بالجدول وأصبح متاحاً للحجز العام مجدداً.', style: TextStyle(fontSize: 11, color: Colors.grey)),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () async {
+                // تعليم الإشعار كمقروء حتى لا يظهر مجدداً
+                await docRef.update({'cancellationSeenByOwner': true});
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('تم الاطلاع وإخلاء الموعد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _loadPendingSeenCache() async {
@@ -58,6 +150,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
 
   @override
   void dispose() {
+    _cancellationSubscription?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -122,6 +215,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                   icon: const Icon(Icons.logout_rounded, color: Colors.white70),
                   tooltip: 'تسجيل خروج',
                   onPressed: () async {
+                    _cancellationSubscription?.cancel();
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.clear();
                     if (mounted) {
@@ -342,8 +436,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                     decoration: const InputDecoration(labelText: 'العنوان التفصيلي / نقطة دالة', border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 14),
-
-                  // قسم تثبيت الـ GPS مع المعاينة المباشرة
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -478,7 +570,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
