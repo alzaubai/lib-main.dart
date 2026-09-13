@@ -1,99 +1,174 @@
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class PlayerNotificationService {
+  static StreamSubscription<QuerySnapshot>? _bookingSubscription;
+  static final Map<String, String> _lastKnownStatuses = {};
+  static bool _isInitialLoad = true;
+
+  /// بدء الاستماع لتحديثات حجوزات اللاعب
   static void listenToBookingUpdates(BuildContext context, String userPhone) {
-    FirebaseFirestore.instance
+    // إلغاء أي استماع سابق لتجنب التكرار
+    stopListening();
+    _isInitialLoad = true;
+    _lastKnownStatuses.clear();
+
+    _bookingSubscription = FirebaseFirestore.instance
         .collection('bookings')
         .where('phone', isEqualTo: userPhone)
         .snapshots()
-        .listen((snapshot) async {
-      final prefs = await SharedPreferences.getInstance();
+        .listen((snapshot) {
+      if (_isInitialLoad) {
+        // حفظ الحالات الحالية عند فتح التطبيق أول مرة دون إطلاق إشعارات قديمة
+        for (var doc in snapshot.docs) {
+          final data = doc.data();
+          _lastKnownStatuses[doc.id] = (data['status'] ?? '').toString();
+        }
+        _isInitialLoad = false;
+        return;
+      }
 
       for (var change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.modified) {
-          final data = change.doc.data() as Map<String, dynamic>;
-          final bookingId = change.doc.id;
-          final status = data['status'] ?? '';
-          final pitchName = data['pitchName'] ?? 'الملعب';
-          final date = data['date'] ?? '';
-          final time = data['startTime'] ?? '';
+        final doc = change.doc;
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final newStatus = (data['status'] ?? '').toString();
+        final oldStatus = _lastKnownStatuses[doc.id];
 
-          // التحقق من أن هذا الإشعار لم يُعرض من قبل
-          final lastSeenStatus = prefs.getString('notif_seen_$bookingId');
-          if (lastSeenStatus == status) continue;
+        // التحقق من حدوث تغيير حقيقي في حالة الحجز
+        if (oldStatus != null && oldStatus != newStatus) {
+          _lastKnownStatuses[doc.id] = newStatus;
 
-          if (status == 'upcoming') {
-            await prefs.setString('notif_seen_$bookingId', 'upcoming');
-            if (context.mounted) {
-              _showBookingAlert(
-                context,
-                title: 'تم تأكيد حجزك بنجاح! ⚽🎉',
-                message: 'وافق صاحب $pitchName على حجزك لموعد ($date الساعة $time). جهز فريقك!',
-                isSuccess: true,
-              );
-            }
-          } else if (status == 'rejected') {
-            await prefs.setString('notif_seen_$bookingId', 'rejected');
-            if (context.mounted) {
-              _showBookingAlert(
-                context,
-                title: 'تم رفض طلب الحجز ❌',
-                message: 'نعتذر، تعذر تثبيت حجزك في $pitchName لموعد ($date الساعة $time). يمكنك اختيار موعد آخر.',
-                isSuccess: false,
-              );
-            }
+          if (newStatus == 'upcoming') {
+            _showNotificationDialog(
+              context,
+              isApproved: true,
+              pitchName: data['pitchName'] ?? 'الملعب',
+              date: data['date'] ?? '',
+              time: '${data['startTime'] ?? ''} إلى ${data['endTime'] ?? ''}',
+            );
+          } else if (newStatus == 'rejected' && data['cancelledByPlayer'] != true) {
+            _showNotificationDialog(
+              context,
+              isApproved: false,
+              pitchName: data['pitchName'] ?? 'الملعب',
+              date: data['date'] ?? '',
+              time: '${data['startTime'] ?? ''} إلى ${data['endTime'] ?? ''}',
+            );
           }
+        } else {
+          _lastKnownStatuses[doc.id] = newStatus;
         }
       }
     });
   }
 
-  static void _showBookingAlert(
+  /// إيقاف الاستماع عند تسجيل الخروج أو إغلاق الشاشة
+  static void stopListening() {
+    _bookingSubscription?.cancel();
+    _bookingSubscription = null;
+    _isInitialLoad = true;
+  }
+
+  /// عرض بطاقة التنبيه المنبثقة للاعب
+  static void _showNotificationDialog(
     BuildContext context, {
-    required String title,
-    required String message,
-    required bool isSuccess,
+    required bool isApproved,
+    required String pitchName,
+    required String date,
+    required String time,
   }) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(
-              isSuccess ? Icons.check_circle_rounded : Icons.cancel_rounded,
-              color: isSuccess ? Colors.green : Colors.red,
-              size: 28,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          titlePadding: EdgeInsets.zero,
+          title: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+            decoration: BoxDecoration(
+              color: isApproved ? const Color(0xFF1B5E20) : Colors.red.shade800,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isSuccess ? Colors.green.shade900 : Colors.red.shade900,
+            child: Row(
+              children: [
+                Icon(
+                  isApproved ? Icons.check_circle_outline_rounded : Icons.highlight_off_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  isApproved ? 'تم تأكيد حجزك! ⚽' : 'تم رفض طلب الحجز ❌',
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isApproved
+                    ? 'مبروك! وافق صاحب الملعب على موعد مباراتك وتم تثبيتها بالجدول رسمياً.'
+                    : 'نعتذر منك، لم يتمكن صاحب الملعب من قبول طلب الحجز لهذا الموعد.',
+                style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F6F9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.stadium_rounded, size: 16, color: Color(0xFF1B5E20)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            pitchName,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.event_available_rounded, size: 16, color: Colors.grey),
+                        const SizedBox(width: 6),
+                        Text('اليوم: $date', style: const TextStyle(fontSize: 12)),
+                        const Spacer(),
+                        const Icon(Icons.access_time_rounded, size: 16, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(time, style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ],
                 ),
               ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isApproved ? const Color(0xFF1B5E20) : Colors.grey.shade800,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('حسناً، فهمت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 13, height: 1.5, color: Colors.black87),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isSuccess ? const Color(0xFF1B5E20) : Colors.grey.shade800,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('حسناً فهمت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }
