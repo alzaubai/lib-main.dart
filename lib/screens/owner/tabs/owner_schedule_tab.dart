@@ -16,14 +16,12 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final NumberFormat currencyFormatter = NumberFormat('#,###');
 
-  // دالة ذكية لتحويل أي وقت بنظام (08:00 م) أو (11:00 ص) إلى دقائق لترتيبها بدقة متناهية
   int _parseTimeToMinutes(String timeStr) {
     if (timeStr.isEmpty) return 9999;
     try {
       final clean = timeStr.trim();
       final isPM = clean.contains('م') || clean.toLowerCase().contains('pm');
       
-      // استخراج الأرقام فقط (الساعة والدقيقة)
       final parts = clean.replaceAll(RegExp(r'[^\d:]'), '').split(':');
       int hour = int.tryParse(parts[0]) ?? 0;
       int minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
@@ -50,23 +48,43 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        var docs = List<DocumentSnapshot>.from(snapshot.data?.docs ?? []);
+        final allDocs = snapshot.data?.docs ?? [];
 
-        // الترتيب الزمني الدقيق: التاريخ الأقرب أولاً، ثم الساعة الأبكر أولاً
-        docs.sort((a, b) {
+        // حساب الإيرادات من جميع الحجوزات حتى لو تم إخفاؤها من الجدول
+        double actualRevenueReceived = 0.0;
+        double expectedRevenueUpcoming = 0.0;
+
+        for (var doc in allDocs) {
+          final d = doc.data() as Map<String, dynamic>;
+          final price = (d['price'] as num?)?.toDouble() ?? 0.0;
+          final status = d['status'];
+
+          if (status == 'completed') {
+            actualRevenueReceived += price;
+          } else if (status == 'upcoming' && d['isDeleted'] != true) {
+            expectedRevenueUpcoming += price;
+          }
+        }
+
+        // استبعاد الحجوزات المخفية من قائمة العرض بالجدول
+        var visibleDocs = allDocs.where((doc) {
+          final d = doc.data() as Map<String, dynamic>;
+          return d['isDeleted'] != true;
+        }).toList();
+
+        // الترتيب الزمني الدقيق
+        visibleDocs.sort((a, b) {
           final dataA = a.data() as Map<String, dynamic>;
           final dataB = b.data() as Map<String, dynamic>;
 
           final dateA = (dataA['date'] ?? '').toString();
           final dateB = (dataB['date'] ?? '').toString();
 
-          // المقارنة أولاً بالتاريخ (yyyy-MM-dd)
           int dateComp = dateA.compareTo(dateB);
           if (dateComp != 0) {
-            return dateComp; // الأقرب يظهر في الأعلى
+            return dateComp;
           }
 
-          // إذا كان نفس اليوم، الترتيب حسب وقت البداية
           final timeA = (dataA['startTime'] ?? '').toString();
           final timeB = (dataB['startTime'] ?? '').toString();
 
@@ -75,21 +93,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
 
           return minA.compareTo(minB);
         });
-
-        double actualRevenueReceived = 0.0;
-        double expectedRevenueUpcoming = 0.0;
-
-        for (var doc in docs) {
-          final d = doc.data() as Map<String, dynamic>;
-          final price = (d['price'] as num?)?.toDouble() ?? 0.0;
-          final status = d['status'];
-
-          if (status == 'completed') {
-            actualRevenueReceived += price;
-          } else if (status == 'upcoming') {
-            expectedRevenueUpcoming += price;
-          }
-        }
 
         return Column(
           children: [
@@ -161,7 +164,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
 
             // قائمة المباريات المرتبة تصاعدياً
             Expanded(
-              child: docs.isEmpty
+              child: visibleDocs.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -175,9 +178,9 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.all(14),
-                      itemCount: docs.length,
+                      itemCount: visibleDocs.length,
                       itemBuilder: (context, index) {
-                        final doc = docs[index];
+                        final doc = visibleDocs[index];
                         final data = doc.data() as Map<String, dynamic>;
                         final status = data['status'];
                         final isDone = status == 'completed';
@@ -324,7 +327,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                       ),
                                       icon: const Icon(Icons.delete_forever_rounded, size: 18),
                                       label: const Text('حذف', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      onPressed: () => _confirmDeleteMatch(context, doc.reference),
+                                      onPressed: () => _confirmDeleteMatch(context, doc.reference, isDone),
                                     ),
                                     const SizedBox(width: 8),
                                     if (!isDone && !isTour)
@@ -445,24 +448,35 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     );
   }
 
-  void _confirmDeleteMatch(BuildContext context, DocumentReference docRef) {
+  void _confirmDeleteMatch(BuildContext context, DocumentReference docRef, bool isDone) {
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('حذف هذا الحجز نهائياً؟'),
-          content: const Text('هل أنت متأكد من حذف هذه المباراة من الجدول؟ لن يتم احتسابها في الحسابات.'),
+          title: Text(isDone ? 'إخفاء المباراة من الجدول؟' : 'حذف هذا الحجز؟'),
+          content: Text(
+            isDone
+                ? 'المباراة مكتملة وتم قبض مبلغها مسبقاً. سيتم إخفاؤها من الجدول لتنظيف القائمة، مع الاحتفاظ الكامل بالمبلغ ضمن الوارد الفعلي المقبوض والتحليلات المالية.'
+                : 'هل أنت متأكد من حذف هذه المباراة من الجدول؟ لن يتم احتسابها في الحسابات لأنها لم تلعب بعد.',
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () async {
-                await docRef.delete();
+                if (isDone) {
+                  // إذا كانت مقبوضة: إخفاء فقط من الجدول وحفظ المال في الوارد
+                  await docRef.update({'isDeleted': true});
+                } else {
+                  // إذا لم تلعب أصلاً: حذف نهائي
+                  await docRef.delete();
+                }
                 if (mounted) Navigator.pop(ctx);
               },
-              child: const Text('نعم، حذف الحجز', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text(isDone ? 'نعم، إخفاء من الجدول' : 'نعم، حذف الحجز',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
