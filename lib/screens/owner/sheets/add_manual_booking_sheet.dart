@@ -40,6 +40,27 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
     _priceController = TextEditingController(text: '${widget.defaultRate.toInt()}');
   }
 
+  String _getArabicDayName(DateTime date) {
+    switch (date.weekday) {
+      case DateTime.friday:
+        return 'الجمعة';
+      case DateTime.thursday:
+        return 'الخميس';
+      case DateTime.saturday:
+        return 'السبت';
+      case DateTime.sunday:
+        return 'الأحد';
+      case DateTime.monday:
+        return 'الإثنين';
+      case DateTime.tuesday:
+        return 'الثلاثاء';
+      case DateTime.wednesday:
+        return 'الأربعاء';
+      default:
+        return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -160,7 +181,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                       children: [
                         const Icon(Icons.calendar_today_rounded, color: Color(0xFF1B5E20), size: 20),
                         const SizedBox(width: 10),
-                        Text('موعد المباراة: ${DateFormat('yyyy/MM/dd').format(_selectedDate)}',
+                        Text('موعد المباراة: ${_getArabicDayName(_selectedDate)} (${DateFormat('yyyy/MM/dd').format(_selectedDate)})',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         const Spacer(),
                         const Text('تغيير 📅', style: TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold, fontSize: 12)),
@@ -238,17 +259,70 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                     onPressed: _isSaving
                         ? null
                         : () async {
-                            if (_formKey.currentState!.validate()) {
-                              setState(() => _isSaving = true);
-                              final times = _selectedSlot.split(' - ');
-                              final sTime = times[0];
-                              final eTime = times.length > 1 ? times[1] : '';
+                            if (!_formKey.currentState!.validate()) return;
 
-                              await FirebaseFirestore.instance.collection('bookings').add({
+                            setState(() => _isSaving = true);
+                            final firestore = FirebaseFirestore.instance;
+                            final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+                            final dayNameArabic = _getArabicDayName(_selectedDate);
+                            final times = _selectedSlot.split(' - ');
+                            final sTime = times[0].trim();
+                            final eTime = times.length > 1 ? times[1].trim() : '';
+
+                            try {
+                              // 1. فحص التعارض في الحجوزات العادية والمباريات القائمة
+                              final existingBookings = await firestore
+                                  .collection('bookings')
+                                  .where('pitchName', isEqualTo: widget.pitchName)
+                                  .where('date', isEqualTo: dateStr)
+                                  .where('status', whereIn: ['upcoming', 'completed', 'tournament_match', 'pending'])
+                                  .get();
+
+                              for (var doc in existingBookings.docs) {
+                                final d = doc.data();
+                                if (d['isDeleted'] == true) continue;
+                                if ((d['startTime'] ?? '').toString().trim() == sTime) {
+                                  setState(() => _isSaving = false);
+                                  if (!mounted) return;
+                                  _showConflictDialog(
+                                    context,
+                                    conflictReason: 'يوجد حجز مسبق بالفعل في هذه الساعة!',
+                                    details: 'محجوز لـ: ${d['teamOne']} ⚔️ ${d['teamTwo']}\nالحالة: ${_getStatusArabic(d['status'])}',
+                                  );
+                                  return;
+                                }
+                              }
+
+                              // 2. فحص التعارض مع الاشتراكات الأسبوعية الدائمة
+                              final recurringCheck = await firestore
+                                  .collection('recurring_rules')
+                                  .where('pitchName', isEqualTo: widget.pitchName)
+                                  .where('dayOfWeek', isEqualTo: dayNameArabic)
+                                  .get();
+
+                              for (var doc in recurringCheck.docs) {
+                                final d = doc.data();
+                                final rStart = (d['startTime'] ?? '').toString().trim();
+                                final rSlot = (d['timeSlot'] ?? '').toString().trim();
+
+                                if (rStart == sTime || rSlot == _selectedSlot) {
+                                  setState(() => _isSaving = false);
+                                  if (!mounted) return;
+                                  _showConflictDialog(
+                                    context,
+                                    conflictReason: 'هذه الساعة محجوزة باشتراك أسبوعي دائم!',
+                                    details: 'محجوزة بشكل دائم كل يوم $dayNameArabic لفريق: (${d['teamName']})',
+                                  );
+                                  return;
+                                }
+                              }
+
+                              // 3. التثبيت في حال عدم وجود أي تعارض
+                              await firestore.collection('bookings').add({
                                 'pitchName': widget.pitchName,
                                 'teamOne': _teamOneController.text.trim(),
                                 'teamTwo': _teamTwoController.text.trim(),
-                                'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+                                'date': dateStr,
                                 'startTime': sTime,
                                 'endTime': eTime,
                                 'phone': _phoneController.text.trim(),
@@ -260,7 +334,17 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                               if (mounted) {
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تم تثبيت المباراة في الجدول بنجاح'), backgroundColor: Colors.green),
+                                  const SnackBar(
+                                    content: Text('تم تثبيت المباراة في الجدول بنجاح ✔️'),
+                                    backgroundColor: Color(0xFF1B5E20),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setState(() => _isSaving = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('حدث خطأ أثناء الحفظ: $e'), backgroundColor: Colors.red),
                                 );
                               }
                             }
@@ -273,5 +357,57 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
         ),
       ),
     );
+  }
+
+  void _showConflictDialog(BuildContext context, {required String conflictReason, required String details}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text('تعارض في الموعد!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(conflictReason, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 8),
+              Text(details, style: const TextStyle(color: Colors.black87, fontSize: 13)),
+              const SizedBox(height: 12),
+              const Text('يرجى اختيار ساعة أخرى أو يوم آخر لتفادي تداخل المباريات.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('حسناً، سأغير الوقت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getStatusArabic(String? status) {
+    switch (status) {
+      case 'upcoming':
+        return 'مباراة مؤكدة ⏳';
+      case 'completed':
+        return 'مباراة ملعوبة ومقبوضة ✔️';
+      case 'tournament_match':
+        return 'مباراة بطولة رسمية 🏆';
+      case 'pending':
+        return 'طلب قيد المراجعة ⏳';
+      default:
+        return 'محجوز';
+    }
   }
 }
