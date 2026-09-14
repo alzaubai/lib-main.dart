@@ -23,10 +23,14 @@ dependencies:
   url_launcher: ^6.3.0
 
   # Location & Geolocation
-  geolocator: 10.1.0
+  geolocator: ^10.1.0
 
   # Media & Images
   image_picker: ^1.1.2
+
+dependency_overrides:
+  # تثبيت البلجن الأندرويدي على نسخة متوافقة مع Gradle 8 ولا تحتوي على كود flutter property المكسور
+  geolocator_android: 4.5.5
 
 dev_dependencies:
   flutter_test:
