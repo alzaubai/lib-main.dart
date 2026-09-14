@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../auth_screen.dart';
+import '../../services/pitch_image_service.dart';
+import '../common/widgets/pitch_image_gallery.dart';
 
 class OwnerSettingsScreen extends StatefulWidget {
   final String userPhone;
@@ -25,7 +27,9 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isPickingImage = false;
   String? _pitchDocId;
+  List<String> _pitchImages = [];
 
   @override
   void initState() {
@@ -48,6 +52,7 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
         _phoneController.text = (data['phone'] ?? data['ownerPhone'] ?? widget.userPhone).toString();
         _rateController.text = (data['hourlyRate'] ?? 25000).toString();
         _descController.text = (data['description'] ?? '').toString();
+        _pitchImages = List<String>.from(data['images'] ?? []);
       } else {
         _phoneController.text = widget.userPhone;
         _rateController.text = '25000';
@@ -57,6 +62,36 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
       _rateController.text = '25000';
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    setState(() => _isPickingImage = true);
+    final success = await PitchImageService.pickImageDirectly(widget.pitchName);
+    if (success) {
+      await _loadPitchData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تمت إضافة الصورة بنجاح'),
+            backgroundColor: Color(0xFF1B5E20),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _isPickingImage = false);
+  }
+
+  Future<void> _removeImage(String img) async {
+    await PitchImageService.removeImage(widget.pitchName, img);
+    await _loadPitchData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم حذف الصورة'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -138,6 +173,60 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // قسم صور ومرافق الملعب
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.photo_library_rounded, color: Color(0xFF1B5E20), size: 20),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'صور الملعب والمرافق',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                              ),
+                              const Spacer(),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1B5E20),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: _isPickingImage
+                                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                    : const Icon(Icons.add_a_photo_rounded, size: 16),
+                                label: const Text('إضافة صورة', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                onPressed: _isPickingImage ? null : _pickImage,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          PitchImageGallery(
+                            images: _pitchImages,
+                            height: 160,
+                            isEditable: true,
+                            onRemoveImage: _removeImage,
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'يمكنك التقاط أو اختيار صور للأرضية والإنارة وغرف التبديل لعرضها للفرق.',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // قسم البيانات الأساسية
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
