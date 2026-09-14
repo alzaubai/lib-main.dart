@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../../constants.dart';
 import '../../../services/booking_service.dart';
+import '../../../services/slot_lock_service.dart';
 import '../../../utils/time_parser_util.dart';
 import '../widgets/slot_selection_grid.dart';
 
@@ -38,12 +39,71 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     _loadCaptainTeamName();
   }
 
+  @override
+  void dispose() {
+    _releaseActiveLock();
+    _teamOneCtrl.dispose();
+    _teamTwoCtrl.dispose();
+    super.dispose();
+  }
+
+  void _releaseActiveLock() {
+    if (_selectedSlot != null) {
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      SlotLockService.releaseLock(
+        pitchName: widget.pitchName,
+        dateStr: dateStr,
+        timeSlot: _selectedSlot!,
+        userPhone: widget.userPhone,
+      );
+    }
+  }
+
+  Future<void> _handleSlotSelection(String slot) async {
+    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+    // تحرير القفل القديم إن وجد
+    if (_selectedSlot != null && _selectedSlot != slot) {
+      await SlotLockService.releaseLock(
+        pitchName: widget.pitchName,
+        dateStr: dateStr,
+        timeSlot: _selectedSlot!,
+        userPhone: widget.userPhone,
+      );
+    }
+
+    // محاولة حجز قفل مؤقت للساعة المحددة لمدة 5 دقائق
+    final locked = await SlotLockService.acquireTemporaryLock(
+      pitchName: widget.pitchName,
+      dateStr: dateStr,
+      timeSlot: slot,
+      userPhone: widget.userPhone,
+    );
+
+    if (locked) {
+      setState(() => _selectedSlot = slot);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('هذه الساعة قيد التحديد حالياً من كابتن آخر، يرجى الانتظار أو اختيار توقيت آخر'),
+            backgroundColor: Colors.amber,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _loadCaptainTeamName() async {
     try {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(widget.userPhone).get();
       if (userDoc.exists && mounted) {
-        final name = userDoc.data()?['name'] ?? 'الكابتن';
-        setState(() => _teamOneCtrl.text = 'فريق $name');
+        final data = userDoc.data();
+        final name = data?['name'] ?? 'الكابتن';
+        final team = data?['teamName'] ?? '';
+        setState(() {
+          _teamOneCtrl.text = (team.toString().isNotEmpty) ? team : 'فريق $name';
+        });
       }
     } catch (_) {}
   }
@@ -63,7 +123,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
         ),
         child: Column(
           children: [
-            // المقبض العلوي
             Container(
               margin: const EdgeInsets.only(top: 10, bottom: 8),
               width: 38,
@@ -73,8 +132,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-
-            // الهيدر الرئيسي لنافذة الحجز
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
@@ -112,15 +169,12 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ),
             ),
             const Divider(height: 1, color: Color(0xFFE2E8F0)),
-
-            // محتوى الحقول والاختيارات
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // بطاقة اختيار اليوم
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -164,6 +218,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                                 lastDate: DateTime.now().add(const Duration(days: 30)),
                               );
                               if (p != null) {
+                                _releaseActiveLock();
                                 setState(() {
                                   _selectedDate = p;
                                   _selectedSlot = null;
@@ -175,8 +230,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                       ),
                     ),
                     const SizedBox(height: 14),
-
-                    // بيانات الفرق
                     Row(
                       children: [
                         Expanded(
@@ -213,30 +266,24 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                       ],
                     ),
                     const SizedBox(height: 18),
-
-                    // عنوان قسم اختيار الوقت
                     const Text(
                       'تحديد الساعة',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                     ),
                     const SizedBox(height: 8),
-
-                    // ودجت الساعات حسب الفترات
                     SlotSelectionGrid(
                       pitchName: widget.pitchName,
                       dateStr: dateStr,
                       dayNameArabic: dayNameArabic,
                       allSlots: _allSlots,
                       selectedSlot: _selectedSlot,
-                      onSlotSelected: (slot) => setState(() => _selectedSlot = slot),
+                      onSlotSelected: _handleSlotSelection,
                     ),
                     const SizedBox(height: 16),
                   ],
                 ),
               ),
             ),
-
-            // شريط التأكيد والإرسال السفلي
             Container(
               padding: EdgeInsets.only(
                 left: 20,
@@ -285,7 +332,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                             setState(() => _isLoading = true);
                             final parts = _selectedSlot!.split(' - ');
 
-                            await BookingService.createBookingRequest(
+                            final success = await BookingService.createBookingRequest(
                               pitchName: widget.pitchName,
                               teamOne: _teamOneCtrl.text.trim().isEmpty ? 'فريق الكابتن' : _teamOneCtrl.text.trim(),
                               teamTwo: _teamTwoCtrl.text.trim().isEmpty ? 'تحدي مفتوح' : _teamTwoCtrl.text.trim(),
@@ -297,13 +344,26 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                             );
 
                             if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('تم إرسال طلب الحجز بنجاح، بانتظار تأكيد الملعب'),
-                                  backgroundColor: Color(0xFF1B5E20),
-                                ),
-                              );
+                              setState(() => _isLoading = false);
+                              if (success) {
+                                // تحرير القفل بعد اعتماد الطلب رسمياً
+                                _releaseActiveLock();
+                                _selectedSlot = null;
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('تم إرسال طلب الحجز بنجاح، بانتظار تأكيد الملعب'),
+                                    backgroundColor: Color(0xFF1B5E20),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('نعتذر منك، تم حجز هذه الساعة للتو من قبل فريق آخر'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             }
                           },
                     child: _isLoading
