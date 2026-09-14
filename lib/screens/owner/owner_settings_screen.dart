@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,7 +8,6 @@ import '../auth_screen.dart';
 import '../../../constants.dart';
 import '../../../services/location_service.dart';
 import '../../../services/pitch_image_service.dart';
-import '../../common/widgets/pitch_image_gallery.dart';
 
 class OwnerSettingsScreen extends StatefulWidget {
   final String userPhone;
@@ -252,6 +252,96 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
     }
   }
 
+  // ويدجت مدمج لعرض وحذف صور الملعب بدون اعتمادات خارجية
+  Widget _buildInternalImagesGallery() {
+    if (_pitchImages.isEmpty) {
+      return Container(
+        height: 120,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined, size: 38, color: Colors.grey),
+            SizedBox(height: 6),
+            Text(
+              'لم تتم إضافة أي صور للملعب بعد',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 130,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _pitchImages.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final rawImage = _pitchImages[index];
+          Widget imgWidget;
+
+          if (!rawImage.startsWith('http')) {
+            try {
+              final bytes = base64Decode(rawImage);
+              imgWidget = Image.memory(bytes, fit: BoxFit.cover, width: 140, height: 130);
+            } catch (_) {
+              imgWidget = Container(
+                width: 140,
+                height: 130,
+                color: Colors.grey.shade200,
+                child: const Icon(Icons.broken_image, color: Colors.grey),
+              );
+            }
+          } else {
+            imgWidget = Image.network(
+              rawImage,
+              fit: BoxFit.cover,
+              width: 140,
+              height: 130,
+              errorBuilder: (_, __, ___) => Container(
+                width: 140,
+                height: 130,
+                color: Colors.grey.shade200,
+                child: const Icon(Icons.broken_image, color: Colors.grey),
+              ),
+            );
+          }
+
+          return Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: imgWidget,
+              ),
+              Positioned(
+                top: 4,
+                left: 4,
+                child: InkWell(
+                  onTap: () => _removeImage(rawImage),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final availableAreas = getAreasListForGov(_selectedGov).where((a) => a != 'الكل').toList();
@@ -321,12 +411,7 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    PitchImageGallery(
-                      images: _pitchImages,
-                      height: 150,
-                      isEditable: true,
-                      onRemoveImage: _removeImage,
-                    ),
+                    _buildInternalImagesGallery(),
                   ],
                 ),
               ),
