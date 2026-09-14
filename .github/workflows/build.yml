@@ -31,26 +31,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Prepare Permanent Keystore
-        run: |
-          if [ ! -f "keystore.jks" ]; then
-            keytool -genkeypair -v \
-              -keystore keystore.jks \
-              -storepass "malabi_secure_2026" \
-              -alias "malabi_key" \
-              -keypass "malabi_secure_2026" \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Malabi, OU=App, O=Malabi, L=Baghdad, ST=Baghdad, C=IQ"
-            
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add keystore.jks
-            git commit -m "chore: save permanent keystore [skip ci]" || true
-            git push origin main || true
-          fi
-
       - name: Create Clean Android Platform
         run: |
           rm -rf android
@@ -58,6 +38,63 @@ jobs:
           mkdir -p android/app
           cp google-services.json android/app/
           cp keystore.jks android/app/upload-keystore.jks
+
+      - name: Force Fix Android SDK 35 Across All Plugins
+        run: |
+          # 1. إجبار كافة البلجنات الفرعية (مثل geolocator) على استخدام SDK 35 لتفادي انهيار البناء
+          cat << 'EOF' >> android/build.gradle
+
+          allprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 35
+                          if (project.android.hasProperty('defaultConfig')) {
+                              project.android.defaultConfig {
+                                  targetSdkVersion 35
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          # 2. ضبط قيم SDK في تطبيق التطبيق الأساسي
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle || true
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle || true
+
+      - name: Configure Gradle Signing
+        run: |
+          cat << 'EOF' > configure_signing.py
+          import re
+          path = 'android/app/build.gradle'
+          with open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          signing_config = """
+              signingConfigs {
+                  release {
+                      storeFile file("upload-keystore.jks")
+                      storePassword "malabi_secure_2026"
+                      keyAlias "malabi_key"
+                      keyPassword "malabi_secure_2026"
+                  }
+              }
+          """
+          if 'signingConfigs {' not in content:
+              content = content.replace('buildTypes {', signing_config + '\n    buildTypes {')
+
+          content = re.sub(r'signingConfig\s*=\s*signingConfigs\.debug', 'signingConfig = signingConfigs.release', content)
+          content = re.sub(r'signingConfig\s+signingConfigs\.debug', 'signingConfig signingConfigs.release', content)
+
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(content)
+          EOF
+          python3 configure_signing.py
+          rm configure_signing.py
 
       - name: Set App Name To ملعبي
         run: |
@@ -76,24 +113,10 @@ jobs:
             convert ball.png -resize 192x192 "$dir/ic_launcher.png"
           done
 
-      - name: Configure Gradle Signing
-        run: |
-          sed -i '/buildTypes {/i \
-              signingConfigs {\
-                  release {\
-                      storeFile file("upload-keystore.jks")\
-                      storePassword "malabi_secure_2026"\
-                      keyAlias "malabi_key"\
-                      keyPassword "malabi_secure_2026"\
-                  }\
-              }' android/app/build.gradle
-          sed -i 's/signingConfig = signingConfigs.debug/signingConfig = signingConfigs.release/g' android/app/build.gradle
-
       - name: Inject Firebase Gradle Config
         run: |
           sed -i '/id "org.jetbrains.kotlin.android"/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
           sed -i '/id "dev.flutter.flutter-gradle-plugin"/a \    id "com.google.gms.google-services"' android/app/build.gradle
-          # استخدام سيرفر رسمي وموثوق لتنزيل gradle
           sed -i 's/services.gradle.org\/distributions/downloads.gradle.org\/distributions/g' android/gradle/wrapper/gradle-wrapper.properties || true
 
       - name: Install dependencies
