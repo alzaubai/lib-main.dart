@@ -6,7 +6,7 @@ import 'owner/tabs/owner_schedule_tab.dart';
 import 'owner/tabs/owner_requests_tab.dart';
 import 'owner/tabs/owner_recurring_tab.dart';
 import 'owner/owner_analytics_screen.dart';
-import 'tournaments/tournament_screen.dart';
+import 'tournaments/tournament_screen.dart'; // هذا هو السطر الذي كان مفقوداً
 import 'auth_screen.dart';
 
 class OwnerScreen extends StatefulWidget {
@@ -121,7 +121,6 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // التحديد الصريح لنوع القائمة يمنع أخطاء البناء
     final List<Widget> tabs = <Widget>[
       OwnerScheduleTab(pitchName: widget.pitchName),
       OwnerRequestsTab(pitchName: widget.pitchName),
