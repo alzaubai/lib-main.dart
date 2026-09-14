@@ -5,57 +5,45 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PlayerNotificationService {
   static StreamSubscription<QuerySnapshot>? _bookingSubscription;
-  static final Map<String, String> _lastKnownStatuses = {};
-  static bool _isInitialLoad = true;
 
   static void listenToBookingUpdates(BuildContext context, String userPhone) {
     stopListening();
-    _isInitialLoad = true;
-    _lastKnownStatuses.clear();
 
+    // الاستماع المباشر لأي حجز تغيرت حالته ولم يشاهده اللاعب بعد
     _bookingSubscription = FirebaseFirestore.instance
         .collection('bookings')
         .where('phone', isEqualTo: userPhone)
+        .where('seenByPlayer', isEqualTo: false)
         .snapshots()
         .listen((snapshot) {
-      if (_isInitialLoad) {
-        for (var doc in snapshot.docs) {
-          final data = doc.data();
-          _lastKnownStatuses[doc.id] = (data['status'] ?? '').toString();
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final status = (data['status'] ?? '').toString();
+
+        // إشعار القبول والتثبيت
+        if (status == 'upcoming') {
+          _showNotificationDialog(
+            context,
+            docRef: doc.reference,
+            isApproved: true,
+            pitchName: data['pitchName'] ?? 'الملعب',
+            date: data['date'] ?? '',
+            time: '${data['startTime'] ?? ''} إلى ${data['endTime'] ?? ''}',
+          );
+          break; // إظهار إشعار واحد في المرة لتجنب تراكم النوافذ
         }
-        _isInitialLoad = false;
-        return;
-      }
-
-      for (var change in snapshot.docChanges) {
-        final doc = change.doc;
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        final newStatus = (data['status'] ?? '').toString();
-        final oldStatus = _lastKnownStatuses[doc.id];
-
-        if (oldStatus != null && oldStatus != newStatus) {
-          _lastKnownStatuses[doc.id] = newStatus;
-
-          if (newStatus == 'upcoming') {
-            _showNotificationDialog(
-              context,
-              isApproved: true,
-              pitchName: data['pitchName'] ?? 'الملعب',
-              date: data['date'] ?? '',
-              time: '${data['startTime'] ?? ''} إلى ${data['endTime'] ?? ''}',
-            );
-          } else if (newStatus == 'rejected' && data['cancelledByPlayer'] != true) {
-            _showNotificationDialog(
-              context,
-              isApproved: false,
-              pitchName: data['pitchName'] ?? 'الملعب',
-              date: data['date'] ?? '',
-              time: '${data['startTime'] ?? ''} إلى ${data['endTime'] ?? ''}',
-              rejectionReason: data['rejectionReason'] ?? 'لم يتم تحديد سبب من قبل إدارة الملعب',
-            );
-          }
-        } else {
-          _lastKnownStatuses[doc.id] = newStatus;
+        // إشعار الرفض مع بيان السبب
+        else if (status == 'rejected' && data['cancelledByPlayer'] != true) {
+          _showNotificationDialog(
+            context,
+            docRef: doc.reference,
+            isApproved: false,
+            pitchName: data['pitchName'] ?? 'الملعب',
+            date: data['date'] ?? '',
+            time: '${data['startTime'] ?? ''} إلى ${data['endTime'] ?? ''}',
+            rejectionReason: data['rejectionReason'] ?? 'اعتذار لعدم توفر الموعد في هذا الوقت',
+          );
+          break;
         }
       }
     });
@@ -64,11 +52,11 @@ class PlayerNotificationService {
   static void stopListening() {
     _bookingSubscription?.cancel();
     _bookingSubscription = null;
-    _isInitialLoad = true;
   }
 
   static void _showNotificationDialog(
     BuildContext context, {
+    required DocumentReference docRef,
     required bool isApproved,
     required String pitchName,
     required String date,
@@ -97,9 +85,11 @@ class PlayerNotificationService {
                   size: 28,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  isApproved ? 'تم تأكيد حجزك! ⚽' : 'تم رفض طلب الحجز ❌',
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    isApproved ? 'تم تأكيد حجزك! ⚽' : 'تم رفض طلب الحجز ❌',
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -110,7 +100,7 @@ class PlayerNotificationService {
             children: [
               Text(
                 isApproved
-                    ? 'مبروك! وافق صاحب الملعب على موعد مباراتك وتم تثبيتها بالجدول رسمياً.'
+                    ? 'وافق صاحب الملعب على موعد مباراتك وتم تثبيتها بالجدول رسمياً.'
                     : 'نعتذر منك، لقد تم رفض طلب الحجز من قبل إدارة الملعب.',
                 style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
               ),
@@ -118,10 +108,10 @@ class PlayerNotificationService {
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.red.shade200),
                   ),
                   child: Column(
@@ -129,13 +119,16 @@ class PlayerNotificationService {
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.info_outline, size: 16, color: Colors.red),
-                          SizedBox(width: 4),
+                          Icon(Icons.report_problem_rounded, size: 16, color: Colors.red),
+                          SizedBox(width: 6),
                           Text('سبب الرفض:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red)),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(rejectionReason, style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600)),
+                      Text(
+                        rejectionReason,
+                        style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.bold),
+                      ),
                     ],
                   ),
                 ),
@@ -186,7 +179,11 @@ class PlayerNotificationService {
                 backgroundColor: isApproved ? const Color(0xFF1B5E20) : Colors.grey.shade800,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () async {
+                // تعليم الإشعار كمقروء لعدم تكرار النافذة
+                await docRef.update({'seenByPlayer': true});
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
               child: const Text('حسناً، فهمت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
