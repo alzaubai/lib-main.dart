@@ -7,7 +7,7 @@ class PitchImageService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final ImagePicker _picker = ImagePicker();
 
-  /// اختيار وضغط الصورة محلياً لضمان عدم تجاوز حد وثيقة Firestore
+  /// اختيار وضغط الصورة بجودة عالية وواضحة (Full HD) مع البقاء في الحد الآمن
   static Future<bool> pickImageDirectly(String pitchName) async {
     try {
       final docSnap = await _firestore.collection('pitches').doc(pitchName).get();
@@ -18,11 +18,12 @@ class PitchImageService {
         }
       }
 
+      // أبعاد عالية ونسبة جودة 82% تضمن حدة تفاصيل الأرضية والإنارة
       final XFile? picked = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 600,
-        maxHeight: 400,
-        imageQuality: 45,
+        maxWidth: 1600,
+        maxHeight: 1200,
+        imageQuality: 82,
       );
 
       if (picked == null) return false;
@@ -40,7 +41,7 @@ class PitchImageService {
     }
   }
 
-  /// حذف صورة من الملعب
+  /// حذف صورة من صور الملعب
   static Future<void> removeImage(String pitchName, String imageBase64) async {
     try {
       await _firestore.collection('pitches').doc(pitchName).update({
