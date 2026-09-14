@@ -31,6 +31,26 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Prepare Permanent Keystore
+        run: |
+          if [ ! -f "keystore.jks" ]; then
+            keytool -genkeypair -v \
+              -keystore keystore.jks \
+              -storepass "malabi_secure_2026" \
+              -alias "malabi_key" \
+              -keypass "malabi_secure_2026" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Malabi, OU=App, O=Malabi, L=Baghdad, ST=Baghdad, C=IQ"
+            
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add keystore.jks
+            git commit -m "chore: save permanent keystore [skip ci]" || true
+            git push origin main || true
+          fi
+
       - name: Create Clean Android Platform
         run: |
           rm -rf android
@@ -41,26 +61,19 @@ jobs:
 
       - name: Force Fix Android SDK 35 Across All Plugins
         run: |
-          # 1. إجبار كافة البلجنات الفرعية (مثل geolocator) على استخدام SDK 35 لتفادي انهيار البناء
           cat << 'EOF' >> android/build.gradle
 
-          allprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
+          subprojects {
+              afterEvaluate { subproject ->
+                  if (subproject.hasProperty("android")) {
+                      subproject.android {
                           compileSdkVersion 35
-                          if (project.android.hasProperty('defaultConfig')) {
-                              project.android.defaultConfig {
-                                  targetSdkVersion 35
-                              }
-                          }
                       }
                   }
               }
           }
           EOF
 
-          # 2. ضبط قيم SDK في تطبيق التطبيق الأساسي
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle || true
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
