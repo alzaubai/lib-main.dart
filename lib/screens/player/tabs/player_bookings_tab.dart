@@ -83,7 +83,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
 
           final allDocs = snapshot.data?.docs ?? [];
 
-          // تصفية الحجوزات النشطة والأرشيف
           final activeDocs = allDocs.where((d) {
             final status = (d.data() as Map<String, dynamic>)['status'];
             return status == 'pending' || status == 'upcoming';
@@ -94,7 +93,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
             return status == 'completed' || status == 'rejected';
           }).toList();
 
-          // حساب الحجوزات غير المقروءة للتنبيه
           final unreadActiveCount = activeDocs.where((d) {
             final data = d.data() as Map<String, dynamic>;
             return data['status'] == 'upcoming' && data['seenByPlayer'] == false;
@@ -276,7 +274,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                   ),
                 ),
 
-                // إظهار سبب الرفض داخل الأرشيف
                 if (status == 'rejected' && rejectionReason != null) ...[
                   const SizedBox(height: 10),
                   Container(
@@ -409,14 +406,16 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
           title: Text(currentStatus == 'pending' ? 'سحب طلب الحجز؟' : 'إلغاء موعد الحجز؟'),
           content: Text(
             currentStatus == 'pending'
-                ? 'هل أنت متأكد من سحب هذا الطلب المعلق؟ سيتم حذفه ولن يظهر لإدارة الملعب.'
-                : 'هل أنت متأكد من إلغاء هذا الحجز المؤكد؟ سيتم إرسال إشعار فوري لمالك الملعب وتفريغ هذه الساعة بالجدول.',
+                ? 'هل أنت متأكد من سحب هذا الطلب المعلق؟ سيتم حذفه فوراً.'
+                : 'هل أنت متأكد من إلغاء هذا الحجز المؤكد؟ سيتم إشعار صاحب الملعب وإخلاء الموعد.',
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () async {
+                Navigator.pop(ctx); // إغلاق نافذة التأكيد فوراً
+
                 if (currentStatus == 'pending') {
                   await docRef.delete();
                 } else {
@@ -424,14 +423,14 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                     'status': 'rejected',
                     'cancelledByPlayer': true,
                     'cancellationSeenByOwner': false,
-                    'seenByPlayer': true,
+                    'seenByPlayer': true, // منع تنبيه اللاعب بنفس الإلغاء الذي قام به
                     'cancelledAt': FieldValue.serverTimestamp(),
                     'cancellingTeamName': bData['teamOne'] ?? 'فريق كابتن',
                     'rejectionReason': 'تم الإلغاء برغبة الكابتن',
                   });
                 }
+
                 if (context.mounted) {
-                  Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(currentStatus == 'pending' ? 'تم سحب الطلب بنجاح' : 'تم إلغاء الحجز وإبلاغ إدارة الملعب ✔️'),
