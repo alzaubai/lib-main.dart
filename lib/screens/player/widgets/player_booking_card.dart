@@ -67,13 +67,22 @@ class PlayerBookingCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text(data['pitchName'] ?? 'ملعب رياضي', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text(
+                            data['pitchName'] ?? 'ملعب رياضي',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
                           if (isUnread) ...[
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(6)),
-                              child: const Text('جديد', style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.bold)),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade100,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'جديد',
+                                style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ],
                         ],
@@ -83,7 +92,10 @@ class PlayerBookingCard extends StatelessWidget {
                   ),
                 ),
                 Chip(
-                  label: Text(statusText, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                  label: Text(
+                    statusText,
+                    style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                   backgroundColor: statusColor,
                 ),
               ],
@@ -91,15 +103,24 @@ class PlayerBookingCard extends StatelessWidget {
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(color: const Color(0xFFF7FAF7), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7FAF7),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Row(
                 children: [
                   const Icon(Icons.access_time_rounded, size: 16, color: Color(0xFF1B5E20)),
                   const SizedBox(width: 6),
-                  Text('الفترة: ${data['startTime']} إلى ${data['endTime']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(
+                    'الفترة: ${data['startTime']} إلى ${data['endTime']}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                   const Spacer(),
                   if (data['price'] != null)
-                    Text('${data['price']} د.ع', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal)),
+                    Text(
+                      '${data['price']} د.ع',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+                    ),
                 ],
               ),
             ),
@@ -120,11 +141,17 @@ class PlayerBookingCard extends StatelessWidget {
                       children: [
                         Icon(Icons.report_problem_rounded, color: Colors.red, size: 16),
                         SizedBox(width: 6),
-                        Text('سبب الرفض من صاحب الملعب:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.red)),
+                        Text(
+                          'سبب الرفض من صاحب الملعب:',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.red),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('$rejectionReason', style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600)),
+                    Text(
+                      '$rejectionReason',
+                      style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -137,7 +164,9 @@ class PlayerBookingCard extends StatelessWidget {
                     child: Text(
                       status == 'pending'
                           ? 'طلب معلق (يمكنك سحبه بأي وقت)'
-                          : (isLess3Hrs ? '⚠️ لا يمكن الإلغاء قبل أقل من 3 ساعات' : 'متاح الإلغاء قبل 3 ساعات من المباراة'),
+                          : (isLess3Hrs
+                              ? '⚠️ لا يمكن الإلغاء قبل أقل من 3 ساعات'
+                              : 'متاح الإلغاء قبل 3 ساعات من المباراة'),
                       style: TextStyle(
                         fontSize: 11,
                         color: (status == 'upcoming' && isLess3Hrs) ? Colors.red.shade700 : Colors.grey,
@@ -153,7 +182,10 @@ class PlayerBookingCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     ),
                     icon: const Icon(Icons.cancel_outlined, size: 16),
-                    label: Text(status == 'pending' ? 'سحب الطلب ❌' : 'إلغاء الحجز ❌', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    label: Text(
+                      status == 'pending' ? 'سحب الطلب ❌' : 'إلغاء الحجز ❌',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
                     onPressed: () {
                       if (status == 'upcoming' && isLess3Hrs) {
                         CancelBookingDialog.showTimeRestricted(context);
@@ -182,7 +214,7 @@ class PlayerBookingCard extends StatelessWidget {
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
