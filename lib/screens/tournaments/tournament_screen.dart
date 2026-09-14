@@ -1,8 +1,139 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'widgets/tournament_card.dart';
+import 'sheets/create_tournament_sheet.dart';
+import 'sheets/tournament_bracket_sheet.dart';
 import '../../services/tournament_service.dart';
 import 'dialogs/remove_team_dialog.dart';
+
+class TournamentScreen extends StatefulWidget {
+  final String userPhone;
+  final bool isOwner;
+  final String? pitchName;
+
+  const TournamentScreen({
+    super.key,
+    required this.userPhone,
+    required this.isOwner,
+    this.pitchName,
+  });
+
+  @override
+  State<TournamentScreen> createState() => _TournamentScreenState();
+}
+
+class _TournamentScreenState extends State<TournamentScreen> {
+  @override
+  Widget build(BuildContext context) {
+    Query query = FirebaseFirestore.instance.collection('tournaments');
+    if (widget.isOwner && widget.pitchName != null && widget.pitchName!.isNotEmpty) {
+      query = query.where('pitchName', isEqualTo: widget.pitchName);
+    }
+
+    return Directionality(
+      textDirection: ui.TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: StreamBuilder<QuerySnapshot>(
+          stream: query.snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF1B5E20)),
+              );
+            }
+
+            final docs = snapshot.data?.docs ?? [];
+            if (docs.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.emoji_events_outlined,
+                        size: 60,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      widget.isOwner
+                          ? 'لم تقم بإنشاء أي بطولة حتى الآن'
+                          : 'لا توجد بطولات متاحة حالياً',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.isOwner
+                          ? 'اضغط على زر الإضافة بالأسفل لإطلاق بطولتك الأولى'
+                          : 'انتظر إعلان أصحاب الملاعب عن البطولات القادمة',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(14),
+              itemCount: docs.length,
+              itemBuilder: (context, index) {
+                final doc = docs[index];
+                final data = doc.data() as Map<String, dynamic>;
+
+                return TournamentCard(
+                  doc: doc,
+                  userPhone: widget.userPhone,
+                  isOwner: widget.isOwner,
+                  onOpenBracket: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => TournamentBracketSheet(
+                        tournamentId: doc.id,
+                        tournamentTitle: data['title'] ?? data['name'] ?? 'البطولة',
+                        pitchName: data['pitchName'] ?? widget.pitchName ?? '',
+                        isOwner: widget.isOwner,
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
+        floatingActionButton: widget.isOwner && widget.pitchName != null
+            ? FloatingActionButton.extended(
+                backgroundColor: const Color(0xFF1B5E20),
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('إنشاء بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => CreateTournamentSheet(pitchName: widget.pitchName!),
+                  );
+                },
+              )
+            : null,
+      ),
+    );
+  }
+}
 
 class TournamentDetailsScreen extends StatefulWidget {
   final String tournamentId;
@@ -38,7 +169,7 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
       final List<Map<String, dynamic>> teams =
           rawTeams.map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-      teams.shuffle(); // خلط الفرق عشوائياً للقرعة
+      teams.shuffle();
 
       final List<Map<String, dynamic>> fixtures = [];
       final now = DateTime.now();
@@ -48,7 +179,8 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
           final t1 = teams[i];
           final t2 = teams[i + 1];
           final matchDate = now.add(Duration(days: (i ~/ 2) + 1));
-          final dateStr = '${matchDate.year}-${matchDate.month.toString().padLeft(2, '0')}-${matchDate.day.toString().padLeft(2, '0')}';
+          final dateStr =
+              '${matchDate.year}-${matchDate.month.toString().padLeft(2, '0')}-${matchDate.day.toString().padLeft(2, '0')}';
           final timeStr = '${8 + (i % 3)}:00 م';
 
           fixtures.add({
@@ -112,19 +244,18 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
               return const Center(child: Text('البطولة غير موجودة'));
             }
 
-            final name = data['name'] ?? 'بطولة كروية';
+            final name = data['title'] ?? data['name'] ?? 'بطولة كروية';
             final status = data['status'] ?? 'registration_open';
             final teams = (data['teams'] as List<dynamic>?) ?? [];
             final fixtures = (data['fixtures'] as List<dynamic>?) ?? [];
-            final capacity = data['capacity'] ?? 8;
-            final isDrawConfirmed = status == 'draw_confirmed';
+            final capacity = data['maxTeams'] ?? data['capacity'] ?? 8;
+            final isDrawConfirmed = status == 'draw_confirmed' || status == 'running';
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // بطاقة معلومات البطولة
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -140,12 +271,18 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                           children: [
                             Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                               child: const Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20), size: 24),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                              child: Text(
+                                name,
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              ),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -165,13 +302,14 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Text('الفرق المسجلة: ${teams.length} من أصل $capacity', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        Text(
+                          'الفرق المسجلة: ${teams.length} من أصل $capacity',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // قائمة الفرق المسجلة مع زر الاستبعاد وكتابة السبب
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -180,7 +318,6 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-
                   if (teams.isEmpty)
                     Container(
                       width: double.infinity,
@@ -196,7 +333,8 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                       itemCount: teams.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
-                        final team = Map<String, dynamic>.from(teams[i] as Map);
+                        final raw = teams[i];
+                        final team = raw is Map ? Map<String, dynamic>.from(raw) : {'name': raw.toString(), 'phone': ''};
                         final tName = team['teamName'] ?? team['name'] ?? 'فريق';
                         final tPhone = team['phone'] ?? '';
 
@@ -243,11 +381,8 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                         );
                       },
                     ),
-
                   const SizedBox(height: 20),
-
-                  // جدول مباريات القرعة إن كانت مثبتة
-                  if (isDrawConfirmed) ...[
+                  if (isDrawConfirmed && fixtures.isNotEmpty) ...[
                     const Text('جدول مباريات الدور الأول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
                     const SizedBox(height: 10),
                     ListView.separated(
@@ -289,8 +424,6 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                       },
                     ),
                   ],
-
-                  // زر تثبيت القرعة لصاحب الملعب
                   if (widget.isOwner && !isDrawConfirmed) ...[
                     const SizedBox(height: 24),
                     SizedBox(
@@ -302,9 +435,7 @@ class _TournamentDetailsScreenState extends State<TournamentDetailsScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 0,
                         ),
-                        onPressed: _isStarting
-                            ? null
-                            : () => _startTournamentAndGenerateDraw(name, teams),
+                        onPressed: _isStarting ? null : () => _startTournamentAndGenerateDraw(name, teams),
                         child: _isStarting
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Text('تثبيت القرعة وبدء البطولة وإشعار الفرق', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
