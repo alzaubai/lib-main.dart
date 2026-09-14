@@ -2,40 +2,76 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/player_notification_service.dart';
-import 'tabs/player_explore_tab.dart';
-import 'tabs/player_bookings_tab.dart';
-import '../tournaments/tournament_list_tab.dart';
-import '../auth_screen.dart';
+import '../services/player_notification_service.dart';
+import 'player/tabs/player_explore_tab.dart';
+import 'player/tabs/player_bookings_tab.dart';
+import 'tournaments/tournament_list_tab.dart';
+import 'auth_screen.dart';
 
-class PlayerHomeScreen extends StatefulWidget {
+class PlayerScreen extends StatefulWidget {
   final String userPhone;
-  final String userName;
-  final String userProvince;
-  final String userDistrict;
+  final String? userName;
+  final String? userProvince;
+  final String? userDistrict;
 
-  const PlayerHomeScreen({
+  const PlayerScreen({
     super.key,
     required this.userPhone,
-    required this.userName,
-    required this.userProvince,
-    required this.userDistrict,
+    this.userName,
+    this.userProvince,
+    this.userDistrict,
   });
 
   @override
-  State<PlayerHomeScreen> createState() => _PlayerHomeScreenState();
+  State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerHomeScreenState extends State<PlayerHomeScreen> {
+class _PlayerScreenState extends State<PlayerScreen> {
   int _currentIndex = 0;
+  String _displayName = 'الكابتن';
+  String _province = '';
+  String _district = '';
+  bool _isLoadingUserData = true;
 
   @override
   void initState() {
     super.initState();
-    // تفعيل الاستماع الفوري لإشعارات استبعاد البطولة ومواعيد القرعة
+    _fetchUserData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       PlayerNotificationService.listen(context, widget.userPhone);
     });
+  }
+
+  Future<void> _fetchUserData() async {
+    if (widget.userName != null && widget.userName!.isNotEmpty) {
+      setState(() {
+        _displayName = widget.userName!;
+        _province = widget.userProvince ?? '';
+        _district = widget.userDistrict ?? '';
+        _isLoadingUserData = false;
+      });
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userPhone)
+          .get();
+      if (doc.exists && mounted) {
+        final data = doc.data();
+        setState(() {
+          _displayName = data?['name'] ?? 'الكابتن';
+          _province = data?['province'] ?? '';
+          _district = data?['district'] ?? '';
+          _isLoadingUserData = false;
+        });
+      } else if (mounted) {
+        setState(() => _isLoadingUserData = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingUserData = false);
+    }
   }
 
   Future<void> _logout() async {
@@ -53,11 +89,20 @@ class _PlayerHomeScreenState extends State<PlayerHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = [
+    if (_isLoadingUserData) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF8FAFC),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF1B5E20)),
+        ),
+      );
+    }
+
+    final List<Widget> tabs = [
       PlayerExploreTab(
         userPhone: widget.userPhone,
-        userProvince: widget.userProvince,
-        userDistrict: widget.userDistrict,
+        userProvince: _province,
+        userDistrict: _district,
       ),
       PlayerBookingsTab(
         userPhone: widget.userPhone,
@@ -95,20 +140,21 @@ class _PlayerHomeScreenState extends State<PlayerHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'كابتن ${widget.userName}',
+                    'كابتن $_displayName',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF0F172A),
                     ),
                   ),
-                  Text(
-                    '${widget.userProvince} - ${widget.userDistrict}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF64748B),
+                  if (_province.isNotEmpty)
+                    Text(
+                      '$_province - $_district',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ],
