@@ -22,6 +22,40 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
   String _selectedGov = 'الكل';
   String _selectedArea = 'الكل';
   String _selectedSurface = 'الكل';
+  bool _isLoadingUserLocation = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserDefaultLocation();
+  }
+
+  Future<void> _loadUserDefaultLocation() async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(widget.userPhone).get();
+      if (userDoc.exists && mounted) {
+        final data = userDoc.data();
+        final userGov = (data?['governorate'] ?? '').toString().trim();
+        final userArea = (data?['area'] ?? '').toString().trim();
+
+        setState(() {
+          if (userGov.isNotEmpty && iraqGovernoratesList.contains(userGov)) {
+            _selectedGov = userGov;
+            final availableAreas = getAreasListForGov(userGov);
+            if (userArea.isNotEmpty && availableAreas.contains(userArea)) {
+              _selectedArea = userArea;
+            }
+          }
+          _isLoadingUserLocation = false;
+        });
+        return;
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _isLoadingUserLocation = false);
+    }
+  }
 
   void _openWhatsApp(String phone) async {
     String cleanPhone = phone.replaceAll(RegExp(r'\s+|-'), '');
@@ -101,7 +135,9 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                       const SizedBox(width: 8),
                       // فلتر المنطقة
                       DropdownButton<String>(
-                        value: _selectedArea,
+                        value: getAreasListForGov(_selectedGov).contains(_selectedArea)
+                            ? _selectedArea
+                            : 'الكل',
                         underline: const SizedBox(),
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
                         items: getAreasListForGov(_selectedGov)
@@ -120,6 +156,22 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                             .toList(),
                         onChanged: (v) => setState(() => _selectedSurface = v!),
                       ),
+                      if (_selectedGov != 'الكل' || _selectedArea != 'الكل' || _selectedSurface != 'الكل') ...[
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          avatar: const Icon(Icons.refresh, size: 14, color: Colors.red),
+                          label: const Text('عرض الكل', style: TextStyle(fontSize: 11, color: Colors.red)),
+                          backgroundColor: Colors.red.shade50,
+                          side: BorderSide(color: Colors.red.shade200),
+                          onPressed: () {
+                            setState(() {
+                              _selectedGov = 'الكل';
+                              _selectedArea = 'الكل';
+                              _selectedSurface = 'الكل';
+                            });
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -129,202 +181,220 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
 
           // قائمة الملاعب
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore.collection('pitches').snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
-                }
+            child: _isLoadingUserLocation
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)))
+                : StreamBuilder<QuerySnapshot>(
+                    stream: _firestore.collection('pitches').snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
+                      }
 
-                final docs = snapshot.data?.docs ?? [];
-                final filteredPitches = docs.where((doc) {
-                  final d = doc.data() as Map<String, dynamic>;
-                  final name = (d['name'] ?? '').toString().toLowerCase();
-                  final gov = (d['governorate'] ?? '').toString();
-                  final area = (d['area'] ?? '').toString();
-                  final surface = (d['surfaceType'] ?? '').toString();
+                      final docs = snapshot.data?.docs ?? [];
+                      final filteredPitches = docs.where((doc) {
+                        final d = doc.data() as Map<String, dynamic>;
+                        final name = (d['name'] ?? '').toString().toLowerCase();
+                        final gov = (d['governorate'] ?? '').toString();
+                        final area = (d['area'] ?? '').toString();
+                        final surface = (d['surfaceType'] ?? '').toString();
 
-                  final matchesQuery = _searchQuery.isEmpty ||
-                      name.contains(_searchQuery) ||
-                      gov.toLowerCase().contains(_searchQuery) ||
-                      area.toLowerCase().contains(_searchQuery);
+                        final matchesQuery = _searchQuery.isEmpty ||
+                            name.contains(_searchQuery) ||
+                            gov.toLowerCase().contains(_searchQuery) ||
+                            area.toLowerCase().contains(_searchQuery);
 
-                  final matchesGov = _selectedGov == 'الكل' || gov == _selectedGov;
-                  final matchesArea = _selectedArea == 'الكل' || area == _selectedArea;
-                  final matchesSurface = _selectedSurface == 'الكل' || surface == _selectedSurface;
+                        final matchesGov = _selectedGov == 'الكل' || gov == _selectedGov;
+                        final matchesArea = _selectedArea == 'الكل' || area == _selectedArea;
+                        final matchesSurface = _selectedSurface == 'الكل' || surface == _selectedSurface;
 
-                  return matchesQuery && matchesGov && matchesArea && matchesSurface;
-                }).toList();
+                        return matchesQuery && matchesGov && matchesArea && matchesSurface;
+                      }).toList();
 
-                if (filteredPitches.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.stadium_outlined, size: 60, color: Colors.grey.shade400),
-                        const SizedBox(height: 12),
-                        const Text('لا توجد ملاعب مطابقة للبحث أو الفلترة',
-                            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 14)),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(14),
-                  itemCount: filteredPitches.length,
-                  itemBuilder: (context, idx) {
-                    final d = filteredPitches[idx].data() as Map<String, dynamic>;
-                    final pName = d['name'] ?? 'ملعب رياضي';
-                    final phone = (d['phone'] ?? d['ownerPhone'] ?? '').toString().trim();
-                    final price = (d['hourlyRate'] as num?)?.toDouble() ?? 25000.0;
-                    final pType = d['pitchType'] ?? 'سباعي';
-                    final surface = d['surfaceType'] ?? 'ثيل 🌿';
-                    final gov = d['governorate'] ?? '';
-                    final area = d['area'] ?? '';
-                    final desc = d['description'] ?? '';
-                    final lat = (d['latitude'] as num?)?.toDouble();
-                    final lng = (d['longitude'] as num?)?.toDouble();
-
-                    return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE8F5E9),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 24),
+                      if (filteredPitches.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.stadium_outlined, size: 60, color: Colors.grey.shade400),
+                              const SizedBox(height: 12),
+                              Text(
+                                _selectedArea != 'الكل'
+                                    ? 'لا توجد ملاعب مسجلة حالياً في منطقة ($_selectedArea)'
+                                    : 'لا توجد ملاعب مطابقة للبحث أو الفلترة',
+                                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton.icon(
+                                icon: const Icon(Icons.explore_rounded, color: Color(0xFF1B5E20)),
+                                label: const Text(
+                                  'استكشاف ملاعب كافة المناطق',
+                                  style: TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedGov = 'الكل';
+                                    _selectedArea = 'الكل';
+                                    _selectedSurface = 'الكل';
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(14),
+                        itemCount: filteredPitches.length,
+                        itemBuilder: (context, idx) {
+                          final d = filteredPitches[idx].data() as Map<String, dynamic>;
+                          final pName = d['name'] ?? 'ملعب رياضي';
+                          final phone = (d['phone'] ?? d['ownerPhone'] ?? '').toString().trim();
+                          final price = (d['hourlyRate'] as num?)?.toDouble() ?? 25000.0;
+                          final pType = d['pitchType'] ?? 'سباعي';
+                          final surface = d['surfaceType'] ?? 'ثيل 🌿';
+                          final gov = d['governorate'] ?? '';
+                          final area = d['area'] ?? '';
+                          final desc = d['description'] ?? '';
+                          final lat = (d['latitude'] as num?)?.toDouble();
+                          final lng = (d['longitude'] as num?)?.toDouble();
+
+                          return Card(
+                            elevation: 2,
+                            margin: const EdgeInsets.only(bottom: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(pName,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                          overflow: TextOverflow.ellipsis),
-                                      const SizedBox(height: 2),
-                                      Text('📍 $gov - $area',
-                                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE8F5E9),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 24),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(pName,
+                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                                overflow: TextOverflow.ellipsis),
+                                            const SizedBox(height: 2),
+                                            Text('📍 $gov - $area',
+                                                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.shade50,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: Colors.green.shade300),
+                                        ),
+                                        child: Text('${currencyFormatter.format(price)} د.ع',
+                                            style: TextStyle(
+                                                color: Colors.green.shade900, fontWeight: FontWeight.bold, fontSize: 13)),
+                                      ),
                                     ],
                                   ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.green.shade300),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      _tagChip(pType, Icons.straighten_rounded, Colors.blue.shade50, Colors.blue.shade800),
+                                      _tagChip(surface, Icons.grass_rounded, Colors.teal.shade50, Colors.teal.shade800),
+                                      if (desc.toString().isNotEmpty)
+                                        _tagChip(desc, Icons.place_outlined, Colors.grey.shade100, Colors.grey.shade700),
+                                    ],
                                   ),
-                                  child: Text('${currencyFormatter.format(price)} د.ع',
-                                      style: TextStyle(
-                                          color: Colors.green.shade900, fontWeight: FontWeight.bold, fontSize: 13)),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                _tagChip(pType, Icons.straighten_rounded, Colors.blue.shade50, Colors.blue.shade800),
-                                _tagChip(surface, Icons.grass_rounded, Colors.teal.shade50, Colors.teal.shade800),
-                                if (desc.toString().isNotEmpty)
-                                  _tagChip(desc, Icons.place_outlined, Colors.grey.shade100, Colors.grey.shade700),
-                              ],
-                            ),
-                            const Divider(height: 20),
+                                  const Divider(height: 20),
 
-                            // شريط الإجراءات: حجز الموعد + Waze + زر الواتساب فقط
-                            Row(
-                              children: [
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1B5E20),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  icon: const Icon(Icons.event_available_rounded, size: 18),
-                                  label: const Text('حجز موعد ⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                  onPressed: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (_) => PlayerBookingSheet(
-                                        pitchName: pName,
-                                        hourlyRate: price,
-                                        userPhone: widget.userPhone,
+                                  Row(
+                                    children: [
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1B5E20),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        icon: const Icon(Icons.event_available_rounded, size: 18),
+                                        label: const Text('حجز موعد ⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        onPressed: () {
+                                          showModalBottomSheet(
+                                            context: context,
+                                            isScrollControlled: true,
+                                            backgroundColor: Colors.transparent,
+                                            builder: (_) => PlayerBookingSheet(
+                                              pitchName: pName,
+                                              hourlyRate: price,
+                                              userPhone: widget.userPhone,
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 8),
+                                      const SizedBox(width: 8),
 
-                                // زر Waze المباشر
-                                InkWell(
-                                  onTap: () => _launchWazeToPitch(pName, lat, lng),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.lightBlue.shade50,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: Colors.lightBlue.shade300),
-                                    ),
-                                    child: const Row(
-                                      children: [
-                                        Icon(Icons.near_me_rounded, color: Colors.blueAccent, size: 16),
-                                        SizedBox(width: 4),
-                                        Text('Waze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-
-                                const Spacer(),
-
-                                // أيقونة الواتساب المباشرة فقط
-                                if (phone.isNotEmpty)
-                                  InkWell(
-                                    onTap: () => _openWhatsApp(phone),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF25D366),
-                                        borderRadius: BorderRadius.circular(10),
+                                      InkWell(
+                                        onTap: () => _launchWazeToPitch(pName, lat, lng),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.lightBlue.shade50,
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: Colors.lightBlue.shade300),
+                                          ),
+                                          child: const Row(
+                                            children: [
+                                              Icon(Icons.near_me_rounded, color: Colors.blueAccent, size: 16),
+                                              SizedBox(width: 4),
+                                              Text('Waze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                      child: const Row(
-                                        children: [
-                                          Icon(Icons.chat_rounded, color: Colors.white, size: 16),
-                                          SizedBox(width: 6),
-                                          Text('واتساب', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                                        ],
-                                      ),
-                                    ),
+
+                                      const Spacer(),
+
+                                      if (phone.isNotEmpty)
+                                        InkWell(
+                                          onTap: () => _openWhatsApp(phone),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF25D366),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.chat_rounded, color: Colors.white, size: 16),
+                                                SizedBox(width: 6),
+                                                Text('واتساب', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),
