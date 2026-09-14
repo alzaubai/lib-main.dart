@@ -54,10 +54,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userPhone)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.userPhone).get();
       if (doc.exists && mounted) {
         final data = doc.data();
         setState(() {
@@ -79,11 +76,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     await prefs.clear();
 
     if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
-        (route) => false,
-      );
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (route) => false);
     }
   }
 
@@ -92,23 +85,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_isLoadingUserData) {
       return const Scaffold(
         backgroundColor: Color(0xFFF8FAFC),
-        body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF1B5E20)),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20))),
       );
     }
 
-    final List<Widget> tabs = [
-      PlayerExploreTab(
-        userPhone: widget.userPhone,
-      ),
-      PlayerBookingsTab(
-        userPhone: widget.userPhone,
-      ),
-      TournamentScreen(
-        userPhone: widget.userPhone,
-        isOwner: false,
-      ),
+    // التحديد الصريح لنوع القائمة يمنع أخطاء البناء
+    final List<Widget> tabs = <Widget>[
+      PlayerExploreTab(userPhone: widget.userPhone),
+      PlayerBookingsTab(userPhone: widget.userPhone),
+      TournamentScreen(userPhone: widget.userPhone, isOwner: false),
     ];
 
     return Directionality(
@@ -123,36 +108,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
               Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.sports_soccer_rounded,
-                  color: Color(0xFF1B5E20),
-                  size: 22,
-                ),
+                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 22),
               ),
               const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'كابتن $_displayName',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  if (_province.isNotEmpty)
-                    Text(
-                      '$_province - $_district',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
+                  Text('كابتن $_displayName', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                  if (_province.isNotEmpty) Text('$_province - $_district', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                 ],
               ),
             ],
@@ -160,33 +124,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
           actions: [
             IconButton(
               icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B)),
-              tooltip: 'تسجيل الخروج',
               onPressed: () {
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     title: const Text('تسجيل الخروج'),
-                    content: const Text('هل أنت متأكد من تسجيل الخروج من التطبيق؟'),
+                    content: const Text('هل أنت متأكد من تسجيل الخروج؟'),
                     actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('إلغاء'),
-                      ),
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.shade700,
-                        ),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
                         onPressed: () {
                           Navigator.pop(ctx);
                           _logout();
                         },
-                        child: const Text(
-                          'تأكيد الخروج',
-                          style: TextStyle(color: Colors.white),
-                        ),
+                        child: const Text('تأكيد الخروج', style: TextStyle(color: Colors.white)),
                       ),
                     ],
                   ),
@@ -195,66 +148,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
           ],
         ),
-        body: IndexedStack(
-          index: _currentIndex,
-          children: tabs,
-        ),
-        bottomNavigationBar: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('bookings')
-              .where('phone', isEqualTo: widget.userPhone)
-              .where('seenByPlayer', isEqualTo: false)
-              .snapshots(),
-          builder: (context, snapshot) {
-            final unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
-
-            return Container(
-              decoration: const BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-                ),
-              ),
-              child: NavigationBar(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
-                backgroundColor: Colors.white,
-                indicatorColor: const Color(0xFFE8F5E9),
-                destinations: [
-                  const NavigationDestination(
-                    icon: Icon(Icons.explore_outlined, color: Color(0xFF64748B)),
-                    selectedIcon: Icon(Icons.explore_rounded, color: Color(0xFF1B5E20)),
-                    label: 'استكشاف الملاعب',
-                  ),
-                  NavigationDestination(
-                    icon: Badge(
-                      isLabelVisible: unreadCount > 0,
-                      backgroundColor: Colors.redAccent,
-                      label: Text(
-                        '$unreadCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 10),
-                      ),
-                      child: const Icon(Icons.calendar_month_outlined, color: Color(0xFF64748B)),
-                    ),
-                    selectedIcon: Badge(
-                      isLabelVisible: unreadCount > 0,
-                      backgroundColor: Colors.redAccent,
-                      label: Text(
-                        '$unreadCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 10),
-                      ),
-                      child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)),
-                    ),
-                    label: 'حجوزاتي',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.emoji_events_outlined, color: Color(0xFF64748B)),
-                    selectedIcon: Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20)),
-                    label: 'البطولات',
-                  ),
-                ],
-              ),
-            );
-          },
+        body: IndexedStack(index: _currentIndex, children: tabs),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+          backgroundColor: Colors.white,
+          indicatorColor: const Color(0xFFE8F5E9),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore_rounded, color: Color(0xFF1B5E20)), label: 'الملاعب'),
+            NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)), label: 'حجوزاتي'),
+            NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20)), label: 'البطولات'),
+          ],
         ),
       ),
     );
