@@ -2,20 +2,19 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../dialogs/remove_team_dialog.dart';
-import '../dialogs/match_scheduling_dialog.dart';
-import '../dialogs/score_input_dialog.dart';
-import '../sheets/register_team_sheet.dart';
 
 class TournamentCard extends StatelessWidget {
   final DocumentSnapshot doc;
   final bool isOwner;
   final String userPhone;
+  final VoidCallback? onOpenBracket;
 
   const TournamentCard({
     super.key,
     required this.doc,
     required this.isOwner,
     required this.userPhone,
+    this.onOpenBracket,
   });
 
   void _openManageTeamsDialog(BuildContext context, Map<String, dynamic> data) {
@@ -23,7 +22,6 @@ class TournamentCard extends StatelessWidget {
     final registeredPlayers = Map<String, dynamic>.from(data['registeredPlayers'] ?? {});
     final tournamentName = data['title'] ?? 'البطولة';
 
-    // مطابقة اسم الفريق برقم هاتف الكابتن
     final Map<String, String> teamToPhone = {};
     registeredPlayers.forEach((phone, tName) {
       teamToPhone[tName.toString()] = phone;
@@ -100,6 +98,83 @@ class TournamentCard extends StatelessWidget {
     );
   }
 
+  void _showRegisterSheet(BuildContext context, String tournamentId, String tournamentTitle) {
+    final teamNameCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: Container(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'تسجيل فريق في ($tournamentTitle)',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: teamNameCtrl,
+                decoration: InputDecoration(
+                  labelText: 'اسم فريقك',
+                  hintText: 'مثال: نجوم بغداد',
+                  prefixIcon: const Icon(Icons.shield_rounded, color: Color(0xFF1B5E20)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B5E20),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  final tName = teamNameCtrl.text.trim();
+                  if (tName.isEmpty) return;
+                  Navigator.pop(sheetCtx);
+
+                  await FirebaseFirestore.instance.collection('tournaments').doc(tournamentId).update({
+                    'teams': FieldValue.arrayUnion([tName]),
+                    'registeredPlayers.$userPhone': tName,
+                  });
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('تم تسجيل فريق $tName بالبطولة بنجاح!'), backgroundColor: const Color(0xFF1B5E20)),
+                    );
+                  }
+                },
+                child: const Text('تأكيد الاشتراك', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = doc.data() as Map<String, dynamic>;
@@ -109,7 +184,7 @@ class TournamentCard extends StatelessWidget {
     final teams = List<String>.from(data['teams'] ?? []);
     final prize = data['prize'] ?? 'كأس البطولة وجوائز قيمة';
     final rules = data['rules'] ?? '';
-    final status = data['status'] ?? 'registering'; // registering, active, completed
+    final status = data['status'] ?? 'registering';
     final registeredPlayers = Map<String, dynamic>.from(data['registeredPlayers'] ?? {});
     final isFull = teams.length >= maxTeams;
     final isRegistered = registeredPlayers.containsKey(userPhone);
@@ -125,7 +200,6 @@ class TournamentCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // رأس بطاقة البطولة
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -159,7 +233,6 @@ class TournamentCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // شريط تقدم اكتمال الفرق
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -190,7 +263,6 @@ class TournamentCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // الجوائز والشروط
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
@@ -226,7 +298,6 @@ class TournamentCard extends StatelessWidget {
               ),
               const SizedBox(height: 14),
 
-              // الأزرار والإجراءات
               Row(
                 children: [
                   if (isOwner) ...[
@@ -243,7 +314,7 @@ class TournamentCard extends StatelessWidget {
                       onPressed: () => _openManageTeamsDialog(context, data),
                     ),
                     const SizedBox(width: 8),
-                    if (status == 'active') ...[
+                    if (onOpenBracket != null) ...[
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF1B5E20),
@@ -251,21 +322,9 @@ class TournamentCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        icon: const Icon(Icons.edit_calendar_rounded, size: 16),
-                        label: const Text('جدولة المباريات', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        onPressed: () => MatchSchedulingDialog.show(context, doc.id, data),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.orange.shade800,
-                          side: BorderSide(color: Colors.orange.shade800),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        icon: const Icon(Icons.scoreboard_rounded, size: 16),
-                        label: const Text('النتائج', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        onPressed: () => ScoreInputDialog.show(context, doc.id, data),
+                        icon: const Icon(Icons.account_tree_rounded, size: 16),
+                        label: const Text('المخطط والنتائج', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: onOpenBracket,
                       ),
                     ],
                   ] else ...[
@@ -285,19 +344,22 @@ class TournamentCard extends StatelessWidget {
                         ),
                         onPressed: (isRegistered || isFull)
                             ? null
-                            : () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  backgroundColor: Colors.transparent,
-                                  builder: (_) => RegisterTeamSheet(
-                                    tournamentDocId: doc.id,
-                                    userPhone: userPhone,
-                                    tournamentTitle: title,
-                                  ),
-                                );
-                              },
+                            : () => _showRegisterSheet(context, doc.id, title),
                       ),
+                    if (onOpenBracket != null) ...[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1B5E20),
+                          side: const BorderSide(color: Color(0xFF1B5E20)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.account_tree_rounded, size: 16),
+                        label: const Text('جدول المباريات', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: onOpenBracket,
+                      ),
+                    ],
                   ],
                 ],
               ),
