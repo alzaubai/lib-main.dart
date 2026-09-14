@@ -1,25 +1,32 @@
-name: football
-description: "تطبيق ملعبي لحجز الملاعب"
+name: malaabi
+description: "تطبيق إدارة وحجوزات الملاعب الرياضية"
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.4.0 <4.0.0'
+  sdk: ^3.5.0
 
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Firebase
   firebase_core: ^3.6.0
   cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+
+  # Local Storage & Utilities
   shared_preferences: ^2.3.2
   intl: ^0.19.0
   url_launcher: ^6.3.0
-  geolocator: 12.0.0
-  flutter_map: ^7.0.2
-  latlong2: ^0.9.1
 
-dependency_overrides:
-  geolocator_android: 4.6.1
+  # Location & Geolocation
+  geolocator: ^12.0.0
+
+  # Media & Images
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
