@@ -78,27 +78,18 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'قام كابتن ($teamName) بإلغاء موعد الحجز الخاص به.',
-                style: const TextStyle(fontSize: 13, height: 1.4),
-              ),
+              Text('قام كابتن ($teamName) بإلغاء موعد الحجز الخاص به.', style: const TextStyle(fontSize: 13, height: 1.4)),
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('📅 التاريخ: $date', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text('⏰ الساعة: $time', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    const Text('تم إخلاء هذه الساعة وأصبحت متاحة للحجز مجدداً.', style: TextStyle(fontSize: 11, color: Colors.grey)),
                   ],
                 ),
               ),
@@ -124,17 +115,14 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
     await prefs.clear();
 
     if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
-        (route) => false,
-      );
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (route) => false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tabs = [
+    // التحديد الصريح لنوع القائمة يمنع أخطاء البناء
+    final List<Widget> tabs = <Widget>[
       OwnerScheduleTab(pitchName: widget.pitchName),
       OwnerRequestsTab(pitchName: widget.pitchName),
       OwnerRecurringTab(pitchName: widget.pitchName),
@@ -152,10 +140,7 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.stadium_rounded, color: Color(0xFF1B5E20), size: 22),
               ),
               const SizedBox(width: 10),
@@ -163,19 +148,8 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.pitchName,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Text(
-                      'لوحة الإدارة والتحكم',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
+                    Text(widget.pitchName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis),
+                    const Text('لوحة الإدارة والتحكم', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
                 ),
               ),
@@ -184,19 +158,10 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
           actions: [
             IconButton(
               icon: const Icon(Icons.bar_chart_rounded, color: Color(0xFF1B5E20)),
-              tooltip: 'الإحصائيات والأرباح',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => OwnerAnalyticsScreen(pitchName: widget.pitchName),
-                  ),
-                );
-              },
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OwnerAnalyticsScreen(pitchName: widget.pitchName))),
             ),
             IconButton(
               icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B)),
-              tooltip: 'تسجيل الخروج',
               onPressed: () {
                 showDialog(
                   context: context,
@@ -205,10 +170,7 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
                     title: const Text('تسجيل الخروج'),
                     content: const Text('هل أنت متأكد من تسجيل الخروج من حساب الملعب؟'),
                     actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('إلغاء'),
-                      ),
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
                         onPressed: () {
@@ -224,63 +186,18 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
             ),
           ],
         ),
-        body: IndexedStack(
-          index: _currentIndex,
-          children: tabs,
-        ),
-        bottomNavigationBar: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('bookings')
-              .where('pitchName', isEqualTo: widget.pitchName)
-              .where('status', isEqualTo: 'pending')
-              .snapshots(),
-          builder: (context, snapshot) {
-            final pendingCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
-
-            return Container(
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-              ),
-              child: NavigationBar(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
-                backgroundColor: Colors.white,
-                indicatorColor: const Color(0xFFE8F5E9),
-                destinations: [
-                  const NavigationDestination(
-                    icon: Icon(Icons.calendar_month_outlined, color: Color(0xFF64748B)),
-                    selectedIcon: Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)),
-                    label: 'جدول المباريات',
-                  ),
-                  NavigationDestination(
-                    icon: Badge(
-                      isLabelVisible: pendingCount > 0,
-                      backgroundColor: Colors.orange.shade800,
-                      label: Text('$pendingCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                      child: const Icon(Icons.notifications_outlined, color: Color(0xFF64748B)),
-                    ),
-                    selectedIcon: Badge(
-                      isLabelVisible: pendingCount > 0,
-                      backgroundColor: Colors.orange.shade800,
-                      label: Text('$pendingCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                      child: const Icon(Icons.notifications_rounded, color: Color(0xFF1B5E20)),
-                    ),
-                    label: 'الطلبات المعلقة',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.repeat_rounded, color: Color(0xFF64748B)),
-                    selectedIcon: Icon(Icons.repeat_on_rounded, color: Color(0xFF1B5E20)),
-                    label: 'الحجوزات الدائمة',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.emoji_events_outlined, color: Color(0xFF64748B)),
-                    selectedIcon: Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20)),
-                    label: 'البطولات',
-                  ),
-                ],
-              ),
-            );
-          },
+        body: IndexedStack(index: _currentIndex, children: tabs),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+          backgroundColor: Colors.white,
+          indicatorColor: const Color(0xFFE8F5E9),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)), label: 'جدول المباريات'),
+            NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications_rounded, color: Color(0xFF1B5E20)), label: 'الطلبات'),
+            NavigationDestination(icon: Icon(Icons.repeat_rounded), selectedIcon: Icon(Icons.repeat_on_rounded, color: Color(0xFF1B5E20)), label: 'الحجوزات الدائمة'),
+            NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20)), label: 'البطولات'),
+          ],
         ),
       ),
     );
