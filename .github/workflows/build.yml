@@ -33,7 +33,6 @@ jobs:
 
       - name: Prepare Permanent Keystore
         run: |
-          # إذا لم يكن المفتاح موجوداً في المستودع مسبقاً، نقوم بتوليده وحفظه نهائياً
           if [ ! -f "keystore.jks" ]; then
             keytool -genkeypair -v \
               -keystore keystore.jks \
@@ -94,6 +93,8 @@ jobs:
         run: |
           sed -i '/id "org.jetbrains.kotlin.android"/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
           sed -i '/id "dev.flutter.flutter-gradle-plugin"/a \    id "com.google.gms.google-services"' android/app/build.gradle
+          # استخدام سيرفر رسمي وموثوق لتنزيل gradle
+          sed -i 's/services.gradle.org\/distributions/downloads.gradle.org\/distributions/g' android/gradle/wrapper/gradle-wrapper.properties || true
 
       - name: Install dependencies
         run: |
