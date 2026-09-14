@@ -77,15 +77,15 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.88,
+        height: MediaQuery.of(context).size.height * 0.90,
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: EdgeInsets.only(
           top: 14,
-          left: 20,
-          right: 20,
+          left: 18,
+          right: 18,
           bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
         child: SingleChildScrollView(
@@ -99,7 +99,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                   decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Container(
@@ -129,7 +129,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ),
               const SizedBox(height: 14),
 
-              // اختيار اليوم
+              // شريط التاريخ
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -168,12 +168,19 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              const Text('اختر وقت المباراة (الساعات المتاحة باللون الأخضر):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 10),
+              // دليل الألوان الإرشادي
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _statusLegendItem('متاحة تماماً', Colors.green.shade700, const Color(0xFFE8F5E9)),
+                  _statusLegendItem('عليها طلب سابق ⏳', Colors.orange.shade800, Colors.orange.shade50),
+                  _statusLegendItem('مثبتة ومقفلة 🔒', Colors.grey.shade600, Colors.grey.shade200),
+                ],
+              ),
+              const SizedBox(height: 12),
 
-              // عرض الساعات بالشكل الكلاسيكي المنظم والواضح
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('bookings')
@@ -189,18 +196,24 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         .snapshots(),
                     builder: (context, recurringSnap) {
                       final confirmedBookedSlots = <String>{};
+                      final pendingSlotsCount = <String, int>{};
 
+                      // فحص الحجوزات
                       if (bookingSnap.hasData) {
                         for (var doc in bookingSnap.data!.docs) {
                           final d = doc.data() as Map<String, dynamic>;
                           final status = d['status'];
+                          final slot = '${d['startTime']} - ${d['endTime']}';
+
                           if (status == 'upcoming' || status == 'completed' || status == 'tournament_match') {
-                            final slot = '${d['startTime']} - ${d['endTime']}';
                             confirmedBookedSlots.add(slot);
+                          } else if (status == 'pending') {
+                            pendingSlotsCount[slot] = (pendingSlotsCount[slot] ?? 0) + 1;
                           }
                         }
                       }
 
+                      // فحص الحجوزات الدائمة
                       if (recurringSnap.hasData) {
                         for (var doc in recurringSnap.data!.docs) {
                           final d = doc.data() as Map<String, dynamic>;
@@ -214,18 +227,78 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 2.5,
+                          childAspectRatio: 2.2,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                         ),
                         itemCount: _allSlots.length,
                         itemBuilder: (context, idx) {
                           final slot = _allSlots[idx];
-                          final isBooked = confirmedBookedSlots.contains(slot);
+                          final isConfirmed = confirmedBookedSlots.contains(slot);
+                          final pendingCount = pendingSlotsCount[slot] ?? 0;
+                          final hasPending = !isConfirmed && pendingCount > 0;
                           final isSelected = _selectedSlot == slot;
 
+                          Color bgColor;
+                          Color borderColor;
+                          Color textColor;
+                          Widget badgeWidget;
+
+                          if (isConfirmed) {
+                            bgColor = Colors.grey.shade200;
+                            borderColor = Colors.grey.shade300;
+                            textColor = Colors.grey.shade500;
+                            badgeWidget = Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.lock_rounded, size: 12, color: Colors.grey.shade600),
+                                const SizedBox(width: 4),
+                                Text('محجوزة رسمياً', style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                              ],
+                            );
+                          } else if (isSelected) {
+                            bgColor = const Color(0xFF1B5E20);
+                            borderColor = const Color(0xFF1B5E20);
+                            textColor = Colors.white;
+                            badgeWidget = const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded, size: 12, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text('تم الاختيار', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                              ],
+                            );
+                          } else if (hasPending) {
+                            bgColor = Colors.orange.shade50;
+                            borderColor = Colors.orange.shade300;
+                            textColor = Colors.orange.shade900;
+                            badgeWidget = Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.hourglass_top_rounded, size: 12, color: Colors.orange.shade800),
+                                const SizedBox(width: 4),
+                                Text(
+                                  pendingCount == 1 ? 'طلب قيد الانتظار' : '$pendingCount طلبات بالانتظار',
+                                  style: TextStyle(fontSize: 9, color: Colors.orange.shade900, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            );
+                          } else {
+                            bgColor = Colors.green.shade50;
+                            borderColor = Colors.green.shade300;
+                            textColor = const Color(0xFF1B5E20);
+                            badgeWidget = const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_rounded, size: 12, color: Color(0xFF1B5E20)),
+                                SizedBox(width: 4),
+                                Text('متاحة بالكامل', style: TextStyle(fontSize: 9, color: Color(0xFF1B5E20), fontWeight: FontWeight.bold)),
+                              ],
+                            );
+                          }
+
                           return InkWell(
-                            onTap: isBooked
+                            onTap: isConfirmed
                                 ? null
                                 : () {
                                     setState(() {
@@ -235,42 +308,25 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                             borderRadius: BorderRadius.circular(12),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 180),
-                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                               decoration: BoxDecoration(
-                                color: isBooked
-                                    ? Colors.grey.shade200
-                                    : (isSelected ? const Color(0xFF1B5E20) : Colors.green.shade50),
+                                color: bgColor,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isBooked
-                                      ? Colors.grey.shade300
-                                      : (isSelected ? const Color(0xFF1B5E20) : Colors.green.shade400),
-                                  width: isSelected ? 2 : 1,
-                                ),
+                                border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
                               ),
-                              child: Row(
+                              child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
-                                    isBooked
-                                        ? Icons.lock_outline_rounded
-                                        : (isSelected ? Icons.check_circle_rounded : Icons.access_time_rounded),
-                                    size: 16,
-                                    color: isBooked
-                                        ? Colors.grey.shade500
-                                        : (isSelected ? Colors.white : const Color(0xFF1B5E20)),
-                                  ),
-                                  const SizedBox(width: 6),
                                   Text(
                                     slot,
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      color: isBooked
-                                          ? Colors.grey.shade500
-                                          : (isSelected ? Colors.white : const Color(0xFF1B5E20)),
+                                      color: textColor,
                                     ),
                                   ),
+                                  const SizedBox(height: 4),
+                                  badgeWidget,
                                 ],
                               ),
                             ),
@@ -282,7 +338,37 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 },
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
+
+              // رسالة توضيحية في حال اختيار ساعة عليها طلبات معلقة
+              if (_selectedSlot != null) ...[
+                Builder(
+                  builder: (context) {
+                    return Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, size: 18, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'يحق لك إرسال طلبك حتى لو كانت الساعة مطلوبة؛ الاختيار النهائي لتأكيد الفريق يعود لصاحب الملعب.',
+                              style: TextStyle(fontSize: 11, color: Colors.blueGrey, height: 1.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+              ],
+
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
@@ -314,7 +400,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('تم إرسال طلب الحجز بنجاح! سيصلك إشعار فور رد الملعب ✔️'),
+                                content: Text('تم إرسال طلب الحجز بنجاح! سيصلك إشعار فور رد صاحب الملعب ✔️'),
                                 backgroundColor: Color(0xFF1B5E20),
                               ),
                             );
@@ -328,6 +414,21 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _statusLegendItem(String label, Color dotColor, Color bg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: dotColor)),
+        ],
       ),
     );
   }
