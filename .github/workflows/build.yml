@@ -61,14 +61,12 @@ jobs:
 
       - name: Configure Android SDK and Gradle Properties
         run: |
-          # 1. إجبار فلاتر وأندرويد على اعتماد إصدار SDK 35 عالمياً دون تعديل شجرة Gradle
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "flutter.compileSdkVersion=35" >> android/gradle.properties
           echo "flutter.targetSdkVersion=35" >> android/gradle.properties
           echo "flutter.minSdkVersion=21" >> android/gradle.properties
 
-          # 2. تعديل القيم المباشرة داخل app/build.gradle
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle || true
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
@@ -130,6 +128,11 @@ jobs:
       - name: Install dependencies
         run: |
           flutter pub get
+
+      - name: Patch geolocator_android Gradle Bug
+        run: |
+          find /home/runner/.pub-cache/hosted/pub.dev/geolocator_android* -name "build.gradle" -exec sed -i 's/project.android.flutter.compileSdkVersion/35/g' {} + || true
+          find /home/runner/.pub-cache/hosted/pub.dev/geolocator_android* -name "build.gradle" -exec sed -i 's/flutter.compileSdkVersion/35/g' {} + || true
 
       - name: Build Signed APK With Auto-Increment Version
         run: |
