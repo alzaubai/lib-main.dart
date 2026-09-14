@@ -27,9 +27,9 @@ class _SlotSelectionGridState extends State<SlotSelectionGrid> {
   int _selectedPeriodIndex = 1;
 
   final List<Map<String, dynamic>> _periods = [
-    {'title': 'العصر', 'icon': Icons.wb_twilight_rounded},
-    {'title': 'المساء والذروة 🔥', 'icon': Icons.nightlight_round},
-    {'title': 'الليل المتأخر', 'icon': Icons.bedtime_rounded},
+    {'title': 'فترة العصر', 'icon': Icons.wb_twilight_rounded},
+    {'title': 'فترة المساء', 'icon': Icons.nightlight_round},
+    {'title': 'الفترة الليلية', 'icon': Icons.bedtime_rounded},
   ];
 
   int _extractStartHour(String slot) {
@@ -44,11 +44,6 @@ class _SlotSelectionGridState extends State<SlotSelectionGrid> {
     } catch (_) {
       return 0;
     }
-  }
-
-  bool _isPeakHour(String slot) {
-    final hour = _extractStartHour(slot);
-    return hour >= 20 && hour <= 23; // ساعات الذروة المسائية بين 8 إلى 11 مساءً
   }
 
   List<String> _filterSlotsByPeriod(List<String> slots, int periodIndex) {
@@ -72,7 +67,6 @@ class _SlotSelectionGridState extends State<SlotSelectionGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // أزرار الفترات العلوية
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -100,10 +94,10 @@ class _SlotSelectionGridState extends State<SlotSelectionGrid> {
                       children: [
                         Icon(
                           _periods[idx]['icon'] as IconData,
-                          size: 14,
+                          size: 15,
                           color: isSelected ? const Color(0xFF1B5E20) : Colors.grey.shade600,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 5),
                         Text(
                           _periods[idx]['title'] as String,
                           style: TextStyle(
@@ -121,8 +115,6 @@ class _SlotSelectionGridState extends State<SlotSelectionGrid> {
           ),
         ),
         const SizedBox(height: 14),
-
-        // شبكة عرض الساعات (Grid)
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('bookings')
@@ -162,82 +154,140 @@ class _SlotSelectionGridState extends State<SlotSelectionGrid> {
                   }
                 }
 
-                return GridView.builder(
+                if (displayedSlots.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'لا توجد مواعيد مخصصة لهذه الفترة',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    ),
+                  );
+                }
+
+                return ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 2.3,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
                   itemCount: displayedSlots.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, idx) {
                     final slot = displayedSlots[idx];
                     final isConfirmed = confirmedSlots.contains(slot);
-                    final isSelected = widget.selectedSlot == slot;
-                    final isPeak = _isPeakHour(slot);
                     final pendingCount = pendingSlotsCount[slot] ?? 0;
+                    final hasPending = !isConfirmed && pendingCount > 0;
+                    final isSelected = widget.selectedSlot == slot;
 
-                    Color bg = Colors.white;
-                    Color border = const Color(0xFFE2E8F0);
-                    Color textColor = const Color(0xFF1E293B);
+                    Color cardBg;
+                    Color borderColor;
+                    Widget statusBadge;
 
                     if (isConfirmed) {
-                      bg = const Color(0xFFF1F5F9);
-                      border = const Color(0xFFE2E8F0);
-                      textColor = const Color(0xFF94A3B8);
+                      cardBg = const Color(0xFFF7F8F9);
+                      borderColor = Colors.grey.shade300;
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'محجوز رسمياً',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+                        ),
+                      );
                     } else if (isSelected) {
-                      bg = const Color(0xFF1B5E20);
-                      border = const Color(0xFF1B5E20);
-                      textColor = Colors.white;
-                    } else if (pendingCount > 0) {
-                      bg = const Color(0xFFFFFBEB);
-                      border = Colors.amber.shade300;
-                      textColor = Colors.amber.shade900;
+                      cardBg = const Color(0xFF1B5E20);
+                      borderColor = const Color(0xFF1B5E20);
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'تم التحديد',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      );
+                    } else if (hasPending) {
+                      cardBg = const Color(0xFFFFFBF2);
+                      borderColor = const Color(0xFFFFD599);
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFE8CC),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          pendingCount == 1 ? 'طلب قيد المراجعة' : '$pendingCount طلبات قيد المراجعة',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                        ),
+                      );
+                    } else {
+                      cardBg = Colors.white;
+                      borderColor = const Color(0xFFE2E8F0);
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'متاح للحجز',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                        ),
+                      );
                     }
 
                     return InkWell(
-                      onTap: isConfirmed ? null : () => widget.onSlotSelected(isSelected ? null : slot),
+                      onTap: isConfirmed
+                          ? null
+                          : () => widget.onSlotSelected(isSelected ? null : slot),
                       borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: bg,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: border, width: isSelected ? 1.8 : 1),
+                          border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Row(
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (isPeak && !isConfirmed && !isSelected) ...[
-                                  const Text('🔥', style: TextStyle(fontSize: 12)),
-                                  const SizedBox(width: 4),
-                                ],
-                                Text(
-                                  slot,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: textColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              isConfirmed
-                                  ? 'محجوز 🔒'
-                                  : (isSelected ? 'تم الاختيار ✔️' : (pendingCount > 0 ? '$pendingCount طلب معلق' : 'متاح ⚽')),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white70 : (isConfirmed ? Colors.grey : const Color(0xFF1B5E20)),
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white24
+                                    : (isConfirmed ? Colors.grey.shade200 : const Color(0xFFF1F5F2)),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isConfirmed
+                                    ? Icons.lock_outline_rounded
+                                    : (isSelected ? Icons.check_rounded : Icons.schedule_rounded),
+                                size: 16,
+                                color: isSelected
+                                    ? Colors.white
+                                    : (isConfirmed ? Colors.grey.shade500 : const Color(0xFF1B5E20)),
                               ),
                             ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                slot,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (isConfirmed ? Colors.grey.shade500 : const Color(0xFF1E293B)),
+                                ),
+                              ),
+                            ),
+                            statusBadge,
                           ],
                         ),
                       ),
