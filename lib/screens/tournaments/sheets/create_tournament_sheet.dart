@@ -17,8 +17,10 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
   final _titleController = TextEditingController();
   final _prizeController = TextEditingController(text: 'كأس البطولة + جوائز عينية');
   final _feeController = TextEditingController(text: '50000');
+  final _customCapacityController = TextEditingController();
   
   int _maxTeams = 8;
+  bool _isCustomCapacity = false;
   DateTime _startDate = DateTime.now().add(const Duration(days: 2));
   late final List<String> _slots;
   late String _defaultSlot;
@@ -96,33 +98,76 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                 ),
                 const SizedBox(height: 14),
 
-                // سعة الفرق (4، 8، 16)
+                // سعة الفرق (4، 8، 16 وخيار مخصص)
                 const Text('عدد الفرق المشاركة بالبطولة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 8),
                 Row(
-                  children: [4, 8, 16].map((capacity) {
-                    final isSel = _maxTeams == capacity;
-                    return Expanded(
+                  children: [
+                    ...[4, 8, 16].map((capacity) {
+                      final isSel = !_isCustomCapacity && _maxTeams == capacity;
+                      return Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          child: ChoiceChip(
+                            label: Center(
+                              child: Text(
+                                '$capacity فرق',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.black87),
+                              ),
+                            ),
+                            selected: isSel,
+                            selectedColor: const Color(0xFF1B5E20),
+                            backgroundColor: Colors.grey.shade100,
+                            onSelected: (val) {
+                              if (val) {
+                                setState(() {
+                                  _isCustomCapacity = false;
+                                  _maxTeams = capacity;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    }),
+                    Expanded(
                       child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
                         child: ChoiceChip(
                           label: Center(
                             child: Text(
-                              '$capacity فرق',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.black87),
+                              'مخصص ✍️',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isCustomCapacity ? Colors.white : Colors.black87),
                             ),
                           ),
-                          selected: isSel,
+                          selected: _isCustomCapacity,
                           selectedColor: const Color(0xFF1B5E20),
                           backgroundColor: Colors.grey.shade100,
                           onSelected: (val) {
-                            if (val) setState(() => _maxTeams = capacity);
+                            if (val) setState(() => _isCustomCapacity = true);
                           },
                         ),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ],
                 ),
+                if (_isCustomCapacity) ...[
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _customCapacityController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'اكتب عدد الفرق المشاركة (مثلاً: 10 أو 20 أو 50)',
+                      prefixIcon: const Icon(Icons.groups_rounded, color: Color(0xFF1B5E20)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    validator: (v) {
+                      final n = int.tryParse(v?.trim() ?? '');
+                      if (n == null || n < 2) return 'يرجى كتابة عدد فرق صحيح (2 فأكثر)';
+                      return null;
+                    },
+                  ),
+                ],
                 const SizedBox(height: 14),
 
                 Row(
@@ -153,7 +198,6 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                 ),
                 const SizedBox(height: 14),
 
-                // موعد الافتتاح وساعة الانطلاق
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -217,10 +261,14 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
                               final feeVal = double.tryParse(_feeController.text.trim()) ?? 0.0;
                               final dateStr = DateFormat('yyyy-MM-dd').format(_startDate);
 
+                              int finalCapacity = _isCustomCapacity
+                                  ? int.parse(_customCapacityController.text.trim())
+                                  : _maxTeams;
+
                               await FirebaseFirestore.instance.collection('tournaments').add({
                                 'title': _titleController.text.trim(),
                                 'pitchName': widget.pitchName,
-                                'maxTeams': _maxTeams,
+                                'maxTeams': finalCapacity,
                                 'entryFee': feeVal,
                                 'prize': _prizeController.text.trim(),
                                 'status': 'registering',
