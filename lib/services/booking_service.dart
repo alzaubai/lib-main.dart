@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class BookingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// إرسال طلب حجز جديد
-  static Future<void> createBookingRequest({
+  /// إرسال طلب حجز جديد مع إرجاع نتيجة نجاح العملية
+  static Future<bool> createBookingRequest({
     required String pitchName,
     required String teamOne,
     required String teamTwo,
@@ -14,19 +14,24 @@ class BookingService {
     required String endTime,
     required double price,
   }) async {
-    await _firestore.collection('bookings').add({
-      'pitchName': pitchName,
-      'teamOne': teamOne,
-      'teamTwo': teamTwo,
-      'phone': phone,
-      'date': dateStr,
-      'startTime': startTime,
-      'endTime': endTime,
-      'price': price,
-      'status': 'pending',
-      'seenByPlayer': true,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await _firestore.collection('bookings').add({
+        'pitchName': pitchName,
+        'teamOne': teamOne,
+        'teamTwo': teamTwo,
+        'phone': phone,
+        'date': dateStr,
+        'startTime': startTime,
+        'endTime': endTime,
+        'price': price,
+        'status': 'pending',
+        'seenByPlayer': true,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// إلغاء أو سحب حجز من قبل اللاعب
