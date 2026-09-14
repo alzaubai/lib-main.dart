@@ -91,7 +91,7 @@ class OwnerRequestsTab extends StatelessWidget {
                             style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
                             icon: const Icon(Icons.close, size: 16),
                             label: const Text('رفض'),
-                            onPressed: () => doc.reference.update({'status': 'rejected'}),
+                            onPressed: () => _openRejectDialog(context, doc.reference, data['teamOne'] ?? 'الكابتن'),
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton.icon(
@@ -109,6 +109,88 @@ class OwnerRequestsTab extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+
+  void _openRejectDialog(BuildContext context, DocumentReference docRef, String teamName) {
+    final reasonController = TextEditingController();
+    final List<String> quickReasons = [
+      'الملعب يخضع للصيانة الدورية',
+      'الموعد محجوز مسبقاً باتصال مباشر',
+      'عطلة رسمية أو ظرف طارئ بالملعب',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Icon(Icons.cancel_rounded, color: Colors.red.shade700, size: 26),
+                const SizedBox(width: 8),
+                const Text('رفض طلب الحجز', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('يرجى كتابة سبب رفض حجز فريق ($teamName) ليصل للاعب:', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'اكتب سبب الرفض هنا...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('أسباب سريعة وجاهزة:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: quickReasons.map((r) => ActionChip(
+                      label: Text(r, style: const TextStyle(fontSize: 10)),
+                      backgroundColor: Colors.grey.shade100,
+                      onPressed: () {
+                        setDlgState(() {
+                          reasonController.text = r;
+                        });
+                      },
+                    )).toList(),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () async {
+                  final reason = reasonController.text.trim().isEmpty
+                      ? 'اعتذار من إدارة الملعب لعدم توفر الموعد'
+                      : reasonController.text.trim();
+
+                  await docRef.update({
+                    'status': 'rejected',
+                    'rejectionReason': reason,
+                  });
+
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: const Text('تأكيد الرفض وإرسال السبب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
