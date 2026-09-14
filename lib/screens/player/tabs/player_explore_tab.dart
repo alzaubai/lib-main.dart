@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../constants.dart';
+import '../../../services/location_service.dart';
 import '../sheets/player_booking_sheet.dart';
 
 class PlayerExploreTab extends StatefulWidget {
@@ -31,14 +33,15 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
   String _selectedSurface = 'الكل';
   bool _isLoading = true;
   List<String> _favoritePitches = [];
+  Position? _currentPosition;
 
   @override
   void initState() {
     super.initState();
-    _loadFavoritesAndLocation();
+    _initDataAndLocation();
   }
 
-  Future<void> _loadFavoritesAndLocation() async {
+  Future<void> _initDataAndLocation() async {
     final prefs = await SharedPreferences.getInstance();
     _favoritePitches = prefs.getStringList('favorites_${widget.userPhone}') ?? [];
 
@@ -58,6 +61,9 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
         }
       }
     } catch (_) {}
+
+    // جلب موقع اللاعب عبر GPS
+    _currentPosition = await LocationService.getCurrentLocation();
 
     if (mounted) setState(() => _isLoading = false);
   }
@@ -111,7 +117,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // شريط البحث والفلاتر العلوية (يختفي في شاشة المفضلة للتنظيم)
           if (!widget.showOnlyFavorites) ...[
             Container(
               padding: const EdgeInsets.all(14),
@@ -186,7 +191,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
             ),
           ],
 
-          // قائمة الملاعب
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)))
@@ -198,7 +202,9 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                       }
 
                       final docs = snapshot.data?.docs ?? [];
-                      final filteredPitches = docs.where((doc) {
+                      List<Map<String, dynamic>> pitchesWithDistance = [];
+
+                      for (var doc in docs) {
                         final d = doc.data() as Map<String, dynamic>;
                         final name = (d['name'] ?? '').toString().toLowerCase();
                         final gov = (d['governorate'] ?? '').toString();
@@ -206,7 +212,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                         final surface = (d['surfaceType'] ?? '').toString();
 
                         if (widget.showOnlyFavorites && !_favoritePitches.contains(d['name'])) {
-                          return false;
+                          continue;
                         }
 
                         final matchesQuery = _searchQuery.isEmpty ||
@@ -218,10 +224,37 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                         final matchesArea = _selectedArea == 'الكل' || area == _selectedArea;
                         final matchesSurface = _selectedSurface == 'الكل' || surface == _selectedSurface;
 
-                        return matchesQuery && matchesGov && matchesArea && matchesSurface;
-                      }).toList();
+                        if (matchesQuery && matchesGov && matchesArea && matchesSurface) {
+                          double? distKm;
+                          final lat = (d['latitude'] as num?)?.toDouble();
+                          final lng = (d['longitude'] as num?)?.toDouble();
 
-                      if (filteredPitches.isEmpty) {
+                          if (_currentPosition != null && lat != null && lng != null) {
+                            distKm = LocationService.calculateDistanceKm(
+                              startLatitude: _currentPosition!.latitude,
+                              startLongitude: _currentPosition!.longitude,
+                              endLatitude: lat,
+                              endLongitude: lng,
+                            );
+                          }
+
+                          final mapItem = Map<String, dynamic>.from(d);
+                          mapItem['calculatedDistance'] = distKm;
+                          pitchesWithDistance.add(mapItem);
+                        }
+                      }
+
+                      // الترتيب التلقائي: الملاعب ذات المسافة المحسوبة تظهر أولاً من الأقرب إلى الأبعد
+                      pitchesWithDistance.sort((a, b) {
+                        final double? d1 = a['calculatedDistance'];
+                        final double? d2 = b['calculatedDistance'];
+                        if (d1 != null && d2 != null) return d1.compareTo(d2);
+                        if (d1 != null) return -1;
+                        if (d2 != null) return 1;
+                        return 0;
+                      });
+
+                      if (pitchesWithDistance.isEmpty) {
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -241,7 +274,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                               const SizedBox(height: 6),
                               Text(
                                 widget.showOnlyFavorites
-                                    ? 'اضغط على رمز النجمة بالملعب لحفظه هنا'
+                                    ? 'اضغط على رمز النجمة لحفظ الملعب في هذه القائمة'
                                     : 'جرب تغيير خيارات الفلترة أو المحافظة',
                                 style: const TextStyle(color: Colors.grey, fontSize: 12),
                               ),
@@ -252,9 +285,9 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
 
                       return ListView.builder(
                         padding: const EdgeInsets.all(14),
-                        itemCount: filteredPitches.length,
+                        itemCount: pitchesWithDistance.length,
                         itemBuilder: (context, idx) {
-                          final d = filteredPitches[idx].data() as Map<String, dynamic>;
+                          final d = pitchesWithDistance[idx];
                           final pName = d['name'] ?? 'ملعب رياضي';
                           final phone = (d['phone'] ?? d['ownerPhone'] ?? '').toString().trim();
                           final price = (d['hourlyRate'] as num?)?.toDouble() ?? 25000.0;
@@ -265,6 +298,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                           final desc = d['description'] ?? '';
                           final lat = (d['latitude'] as num?)?.toDouble();
                           final lng = (d['longitude'] as num?)?.toDouble();
+                          final double? distanceKm = d['calculatedDistance'];
                           final isFav = _favoritePitches.contains(pName);
 
                           return Card(
@@ -295,9 +329,11 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                             Row(
                                               children: [
                                                 Flexible(
-                                                  child: Text(pName,
-                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                                      overflow: TextOverflow.ellipsis),
+                                                  child: Text(
+                                                    pName,
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
                                                 ),
                                                 const SizedBox(width: 6),
                                                 IconButton(
@@ -314,7 +350,29 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                               ],
                                             ),
                                             const SizedBox(height: 2),
-                                            Text('$gov - $area', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                            Row(
+                                              children: [
+                                                Text('$gov - $area', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                                if (distanceKm != null) ...[
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.blue.shade50,
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(
+                                                      'يبعد ${LocationService.formatDistance(distanceKm)}',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.blue.shade800,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
                                           ],
                                         ),
                                       ),
@@ -325,9 +383,14 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                           borderRadius: BorderRadius.circular(8),
                                           border: Border.all(color: Colors.green.shade300),
                                         ),
-                                        child: Text('${currencyFormatter.format(price)} د.ع',
-                                            style: TextStyle(
-                                                color: Colors.green.shade900, fontWeight: FontWeight.bold, fontSize: 13)),
+                                        child: Text(
+                                          '${currencyFormatter.format(price)} د.ع',
+                                          style: TextStyle(
+                                            color: Colors.green.shade900,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
