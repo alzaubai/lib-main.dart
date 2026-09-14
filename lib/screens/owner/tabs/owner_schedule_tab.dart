@@ -103,7 +103,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
             ),
           ),
 
-          // عرض الحجوزات المدمجة لليوم المحدد (العادية + الدائمة)
+          // عرض الحجوزات المؤكدة فقط لهذا اليوم (استبعاد المعلق pending والملغي rejected)
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -124,10 +124,13 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                       return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
                     }
 
-                    // تجميع الحجوزات العادية غير المخفية
+                    // تصفية: استبعاد المعلق pending والمرفوض rejected والمحذوف
                     final regularDocs = (bookingSnap.data?.docs ?? []).where((d) {
                       final data = d.data() as Map<String, dynamic>;
-                      return data['isDeleted'] != true && data['status'] != 'rejected';
+                      final status = data['status'];
+                      return data['isDeleted'] != true &&
+                          status != 'pending' &&
+                          status != 'rejected';
                     }).map((d) {
                       final data = d.data() as Map<String, dynamic>;
                       data['docId'] = d.id;
@@ -135,7 +138,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                       return data;
                     }).toList();
 
-                    // تجميع الحجوزات الدائمة لهذا اليوم من الأسبوع
+                    // الحجوزات الدائمة لنفس اليوم
                     final recurringDocs = (recurringSnap.data?.docs ?? []).map((d) {
                       final data = d.data() as Map<String, dynamic>;
                       data['docId'] = d.id;
@@ -146,7 +149,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
 
                     final allMatches = [...regularDocs, ...recurringDocs];
 
-                    // ترتيب المباريات حسب وقت البداية
                     allMatches.sort((a, b) {
                       final aTime = (a['startTime'] ?? '').toString();
                       final bTime = (b['startTime'] ?? '').toString();
@@ -161,11 +163,11 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                             Icon(Icons.event_available_rounded, size: 64, color: Colors.grey.shade400),
                             const SizedBox(height: 10),
                             Text(
-                              'لا توجد حجوزات في يوم $dayNameArabic ($dateStr)',
+                              'لا توجد مباريات مثبتة في يوم $dayNameArabic ($dateStr)',
                               style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                             const SizedBox(height: 4),
-                            const Text('جميع ساعات هذا اليوم شاغرة ومتاحة للحجز', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            const Text('ساعات هذا اليوم شاغرة بالكامل أمام الحجز', style: TextStyle(color: Colors.grey, fontSize: 12)),
                           ],
                         ),
                       );
@@ -213,8 +215,12 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                 Row(
                                   children: [
                                     Icon(
-                                      isRecurring ? Icons.repeat_rounded : (status == 'tournament_match' ? Icons.emoji_events : Icons.sports_soccer),
-                                      color: isRecurring ? Colors.purple.shade800 : (status == 'tournament_match' ? Colors.amber.shade800 : const Color(0xFF1B5E20)),
+                                      isRecurring
+                                          ? Icons.repeat_rounded
+                                          : (status == 'tournament_match' ? Icons.emoji_events : Icons.sports_soccer),
+                                      color: isRecurring
+                                          ? Colors.purple.shade800
+                                          : (status == 'tournament_match' ? Colors.amber.shade800 : const Color(0xFF1B5E20)),
                                       size: 22,
                                     ),
                                     const SizedBox(width: 8),
