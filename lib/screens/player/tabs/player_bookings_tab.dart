@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../services/booking_service.dart';
+import '../widgets/player_booking_card.dart';
 
 class PlayerBookingsTab extends StatefulWidget {
   final String userPhone;
@@ -19,7 +21,8 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
     _bookingTabCtrl = TabController(length: 2, vsync: this);
     _bookingTabCtrl.addListener(() {
       if (_bookingTabCtrl.indexIsChanging) return;
-      _markCurrentTabAsSeen(_bookingTabCtrl.index);
+      final filter = _bookingTabCtrl.index == 0 ? ['upcoming', 'pending'] : ['rejected', 'completed'];
+      BookingService.markBookingsAsSeen(userPhone: widget.userPhone, statuses: filter);
     });
   }
 
@@ -27,44 +30,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
   void dispose() {
     _bookingTabCtrl.dispose();
     super.dispose();
-  }
-
-  void _markCurrentTabAsSeen(int tabIndex) async {
-    final firestore = FirebaseFirestore.instance;
-    final statusFilter = tabIndex == 0 ? ['upcoming', 'pending'] : ['rejected', 'completed'];
-
-    try {
-      final snap = await firestore
-          .collection('bookings')
-          .where('phone', isEqualTo: widget.userPhone)
-          .where('status', whereIn: statusFilter)
-          .where('seenByPlayer', isEqualTo: false)
-          .get();
-
-      for (var doc in snap.docs) {
-        await doc.reference.update({'seenByPlayer': true});
-      }
-    } catch (_) {}
-  }
-
-  DateTime? _parseMatchDateTime(String dateStr, String timeStr) {
-    try {
-      final date = DateTime.tryParse(dateStr);
-      if (date == null) return null;
-
-      final clean = timeStr.trim();
-      final isPM = clean.contains('م') || clean.toLowerCase().contains('pm');
-      final parts = clean.replaceAll(RegExp(r'[^\d:]'), '').split(':');
-      int hour = int.tryParse(parts[0]) ?? 0;
-      int minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
-
-      if (isPM && hour < 12) hour += 12;
-      if (!isPM && hour == 12) hour = 0;
-
-      return DateTime(date.year, date.month, date.day, hour, minute);
-    } catch (_) {
-      return null;
-    }
   }
 
   @override
@@ -82,26 +47,18 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
           }
 
           final allDocs = snapshot.data?.docs ?? [];
-
           final activeDocs = allDocs.where((d) {
-            final status = (d.data() as Map<String, dynamic>)['status'];
-            return status == 'pending' || status == 'upcoming';
+            final s = (d.data() as Map<String, dynamic>)['status'];
+            return s == 'pending' || s == 'upcoming';
           }).toList();
 
           final archiveDocs = allDocs.where((d) {
-            final status = (d.data() as Map<String, dynamic>)['status'];
-            return status == 'completed' || status == 'rejected';
+            final s = (d.data() as Map<String, dynamic>)['status'];
+            return s == 'completed' || s == 'rejected';
           }).toList();
 
-          final unreadActiveCount = activeDocs.where((d) {
-            final data = d.data() as Map<String, dynamic>;
-            return data['status'] == 'upcoming' && data['seenByPlayer'] == false;
-          }).length;
-
-          final unreadArchiveCount = archiveDocs.where((d) {
-            final data = d.data() as Map<String, dynamic>;
-            return data['status'] == 'rejected' && data['seenByPlayer'] == false;
-          }).length;
+          final unreadActive = activeDocs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'upcoming' && (d.data() as Map<String, dynamic>)['seenByPlayer'] == false).length;
+          final unreadArchive = archiveDocs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'rejected' && (d.data() as Map<String, dynamic>)['seenByPlayer'] == false).length;
 
           return Column(
             children: [
@@ -117,18 +74,18 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                   tabs: [
                     Tab(
                       icon: Badge(
-                        isLabelVisible: unreadActiveCount > 0,
+                        isLabelVisible: unreadActive > 0,
                         backgroundColor: Colors.green.shade700,
-                        label: Text('$unreadActiveCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                        label: Text('$unreadActive', style: const TextStyle(color: Colors.white, fontSize: 10)),
                         child: const Icon(Icons.flash_on_rounded, size: 18),
                       ),
                       text: 'الحجوزات النشطة ⚡',
                     ),
                     Tab(
                       icon: Badge(
-                        isLabelVisible: unreadArchiveCount > 0,
+                        isLabelVisible: unreadArchive > 0,
                         backgroundColor: Colors.redAccent,
-                        label: Text('$unreadArchiveCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                        label: Text('$unreadArchive', style: const TextStyle(color: Colors.white, fontSize: 10)),
                         child: const Icon(Icons.history_rounded, size: 18),
                       ),
                       text: 'أرشيف وسجل المواعيد 📁',
@@ -140,8 +97,8 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                 child: TabBarView(
                   controller: _bookingTabCtrl,
                   children: [
-                    _buildBookingsList(activeDocs, isActiveTab: true),
-                    _buildBookingsList(archiveDocs, isActiveTab: false),
+                    _buildList(activeDocs, isActive: true),
+                    _buildList(archiveDocs, isActive: false),
                   ],
                 ),
               ),
@@ -152,298 +109,19 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
     );
   }
 
-  Widget _buildBookingsList(List<QueryDocumentSnapshot> docs, {required bool isActiveTab}) {
+  Widget _buildList(List<QueryDocumentSnapshot> docs, {required bool isActive}) {
     if (docs.isEmpty) {
       return Center(
         child: Text(
-          isActiveTab ? 'لا توجد حجوزات نشطة حالياً' : 'سجل الأرشيف فارغ',
+          isActive ? 'لا توجد حجوزات نشطة حالياً' : 'سجل الأرشيف فارغ',
           style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
         ),
       );
     }
-
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: docs.length,
-      itemBuilder: (context, index) {
-        final doc = docs[index];
-        final data = doc.data() as Map<String, dynamic>;
-        final status = data['status'] ?? 'pending';
-        final dateStr = (data['date'] ?? '').toString();
-        final startTimeStr = (data['startTime'] ?? '').toString();
-        final rejectionReason = data['rejectionReason'];
-        final isUnread = data['seenByPlayer'] == false;
-
-        Color statusColor = Colors.amber;
-        String statusText = 'قيد المراجعة ⏳';
-        if (status == 'upcoming') {
-          statusColor = Colors.green;
-          statusText = 'مؤكد ومثبت ✔️';
-        } else if (status == 'rejected') {
-          statusColor = Colors.red;
-          statusText = 'مرفوض أو ملغي ❌';
-        } else if (status == 'completed') {
-          statusColor = Colors.blue;
-          statusText = 'مكتمل ولُعب ⚽';
-        }
-
-        final matchDateTime = _parseMatchDateTime(dateStr, startTimeStr);
-        final now = DateTime.now();
-        final difference = matchDateTime != null ? matchDateTime.difference(now) : null;
-        final bool isLessThan3Hours = difference != null && difference.inMinutes < 180;
-        final bool isPassed = difference != null && difference.isNegative;
-        final bool canCancel = status == 'pending' || (status == 'upcoming' && !isPassed);
-
-        return Card(
-          elevation: isUnread ? 4 : 2,
-          margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: isUnread ? Colors.redAccent.withOpacity(0.6) : Colors.transparent,
-              width: isUnread ? 1.5 : 0,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: statusColor.withOpacity(0.15),
-                      child: Icon(Icons.sports_soccer, color: statusColor),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                data['pitchName'] ?? 'ملعب رياضي',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                              if (isUnread) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(6)),
-                                  child: const Text('جديد', style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            ],
-                          ),
-                          Text('📅 $dateStr', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    Chip(
-                      label: Text(
-                        statusText,
-                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                      backgroundColor: statusColor,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7FAF7),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.access_time_rounded, size: 16, color: Color(0xFF1B5E20)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'الفترة: ${data['startTime']} إلى ${data['endTime']}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
-                      const Spacer(),
-                      if (data['price'] != null)
-                        Text(
-                          '${data['price']} د.ع',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
-                        ),
-                    ],
-                  ),
-                ),
-
-                if (status == 'rejected' && rejectionReason != null) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.report_problem_rounded, color: Colors.red, size: 16),
-                            SizedBox(width: 6),
-                            Text('سبب الرفض من صاحب الملعب:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.red)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$rejectionReason',
-                          style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                if (isActiveTab && canCancel) ...[
-                  const Divider(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          status == 'pending'
-                              ? 'طلب معلق (يمكنك سحبه بأي وقت)'
-                              : (isLessThan3Hours
-                                  ? '⚠️ لا يمكن الإلغاء قبل أقل من 3 ساعات'
-                                  : 'متاح الإلغاء قبل 3 ساعات من المباراة'),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: (status == 'upcoming' && isLessThan3Hours) ? Colors.red.shade700 : Colors.grey,
-                            fontWeight: (status == 'upcoming' && isLessThan3Hours) ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red.shade700,
-                          side: BorderSide(color: Colors.red.shade300),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        ),
-                        icon: const Icon(Icons.cancel_outlined, size: 16),
-                        label: Text(
-                          status == 'pending' ? 'سحب الطلب ❌' : 'إلغاء الحجز ❌',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                        onPressed: () {
-                          if (status == 'upcoming' && isLessThan3Hours) {
-                            _showTimeRestrictedDialog(context);
-                          } else {
-                            _confirmCancelBooking(context, doc.reference, status, data);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-
-                if (!isActiveTab) ...[
-                  const Divider(height: 14),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      style: TextButton.styleFrom(foregroundColor: Colors.grey.shade700),
-                      icon: const Icon(Icons.delete_sweep_rounded, size: 16),
-                      label: const Text('إزالة من سجلي', style: TextStyle(fontSize: 11)),
-                      onPressed: () => doc.reference.delete(),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showTimeRestrictedDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Row(
-            children: [
-              Icon(Icons.timer_off_rounded, color: Colors.red, size: 28),
-              SizedBox(width: 8),
-              Text('لا يمكن إلغاء الحجز!', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            'حسب سياسة حجوزات الملاعب، لا يمكن إلغاء الموعد المؤكد قبل أقل من 3 ساعات من انطلاق المباراة، وذلك لحفظ حق إدارة الملعب في حجز الساعة. يرجى التواصل مباشرة مع صاحب الملعب هاتفياً.',
-            style: TextStyle(fontSize: 13, height: 1.4),
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('حسناً، فهمت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _confirmCancelBooking(BuildContext context, DocumentReference docRef, String currentStatus, Map<String, dynamic> bData) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: Text(currentStatus == 'pending' ? 'سحب طلب الحجز؟' : 'إلغاء موعد الحجز؟'),
-          content: Text(
-            currentStatus == 'pending'
-                ? 'هل أنت متأكد من سحب هذا الطلب المعلق؟ سيتم حذفه فوراً.'
-                : 'هل أنت متأكد من إلغاء هذا الحجز المؤكد؟ سيتم إشعار صاحب الملعب وإخلاء الموعد.',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () async {
-                Navigator.pop(ctx); // إغلاق نافذة التأكيد فوراً
-
-                if (currentStatus == 'pending') {
-                  await docRef.delete();
-                } else {
-                  await docRef.update({
-                    'status': 'rejected',
-                    'cancelledByPlayer': true,
-                    'cancellationSeenByOwner': false,
-                    'seenByPlayer': true, // منع تنبيه اللاعب بنفس الإلغاء الذي قام به
-                    'cancelledAt': FieldValue.serverTimestamp(),
-                    'cancellingTeamName': bData['teamOne'] ?? 'فريق كابتن',
-                    'rejectionReason': 'تم الإلغاء برغبة الكابتن',
-                  });
-                }
-
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(currentStatus == 'pending' ? 'تم سحب الطلب بنجاح' : 'تم إلغاء الحجز وإبلاغ إدارة الملعب ✔️'),
-                      backgroundColor: Colors.red.shade700,
-                    ),
-                  );
-                }
-              },
-              child: const Text('نعم، تأكيد الإلغاء', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
+      itemBuilder: (context, idx) => PlayerBookingCard(doc: docs[idx], isActiveTab: isActive),
     );
   }
 }
