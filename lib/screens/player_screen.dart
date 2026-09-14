@@ -39,7 +39,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     _fetchUserData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      PlayerNotificationService.listen(context, widget.userPhone);
+      if (mounted) {
+        PlayerNotificationService.listen(context, widget.userPhone);
+      }
     });
   }
 
