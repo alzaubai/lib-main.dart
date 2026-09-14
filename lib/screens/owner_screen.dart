@@ -1,13 +1,15 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'owner/tabs/owner_schedule_tab.dart';
 import 'owner/tabs/owner_requests_tab.dart';
 import 'owner/tabs/owner_recurring_tab.dart';
 import 'owner/owner_analytics_screen.dart';
+import 'owner/owner_settings_screen.dart';
+import 'owner/sheets/add_manual_booking_sheet.dart';
+import 'owner/sheets/add_recurring_booking_sheet.dart';
 import 'tournaments/tournament_screen.dart';
-import 'auth_screen.dart';
+import 'tournaments/sheets/create_tournament_sheet.dart';
 
 class OwnerScreen extends StatefulWidget {
   final String userPhone;
@@ -20,16 +22,23 @@ class OwnerScreen extends StatefulWidget {
   });
 
   @override
-  State<OwnerScreen> createState() => _OwnerDashboardScreenState();
+  State<OwnerScreen> createState() => _OwnerScreenState();
 }
 
-class _OwnerDashboardScreenState extends State<OwnerScreen> {
-  int _currentIndex = 0;
+class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
     _listenToPlayerCancellations();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _listenToPlayerCancellations() {
@@ -83,13 +92,17 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('📅 التاريخ: $date', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text('التاريخ: $date', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    Text('⏰ الساعة: $time', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text('الساعة: $time', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -110,24 +123,110 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
     );
   }
 
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (route) => false);
-    }
+  void _showQuickActionsBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'إجراء سريع',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20)),
+                ),
+                title: const Text('تسجيل مباراة يدوية بالجدول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('حجز ساعة مباشرة لكابتن بدون تطبيق', style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => ModernAddBookingSheet(
+                      pitchName: widget.pitchName,
+                      durationMinutes: 60,
+                      defaultRate: 25000,
+                    ),
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.repeat_rounded, color: Colors.purple.shade800),
+                ),
+                title: const Text('تثبيت اشتراك أسبوعي دائم', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('حجز يوم وساعة ثابتة أسبوعياً لفريق', style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => AddRecurringBookingSheet(
+                      pitchName: widget.pitchName,
+                      defaultRate: 25000,
+                    ),
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.emoji_events_rounded, color: Colors.amber),
+                ),
+                title: const Text('إطلاق بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('بدء دورة كروية وفتح التسجيل للفرق', style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => CreateTournamentSheet(pitchName: widget.pitchName),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> tabs = <Widget>[
-      OwnerScheduleTab(pitchName: widget.pitchName),
-      OwnerRequestsTab(pitchName: widget.pitchName),
-      OwnerRecurringTab(pitchName: widget.pitchName),
-      TournamentScreen(userPhone: 'owner', isOwner: true, pitchName: widget.pitchName),
-    ];
-
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
@@ -147,8 +246,12 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.pitchName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis),
-                    const Text('لوحة الإدارة والتحكم', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    Text(
+                      widget.pitchName,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Text('لوحة التحكم والإدارة', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
                 ),
               ),
@@ -157,46 +260,73 @@ class _OwnerDashboardScreenState extends State<OwnerScreen> {
           actions: [
             IconButton(
               icon: const Icon(Icons.bar_chart_rounded, color: Color(0xFF1B5E20)),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OwnerAnalyticsScreen(pitchName: widget.pitchName))),
+              tooltip: 'تحليلات الملعب والذروة',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => OwnerAnalyticsScreen(pitchName: widget.pitchName)),
+              ),
             ),
             IconButton(
-              icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B)),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    title: const Text('تسجيل الخروج'),
-                    content: const Text('هل أنت متأكد من تسجيل الخروج من حساب الملعب؟'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _logout();
-                        },
-                        child: const Text('تأكيد الخروج', style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
+              icon: const Icon(Icons.settings_outlined, color: Color(0xFF334155)),
+              tooltip: 'الإعدادات',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => OwnerSettingsScreen(
+                    userPhone: widget.userPhone,
+                    pitchName: widget.pitchName,
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ],
+          bottom: TabBar(
+            controller: _tabController,
+            isScrollable: false,
+            labelColor: const Color(0xFF1B5E20),
+            unselectedLabelColor: const Color(0xFF64748B),
+            indicatorColor: const Color(0xFF1B5E20),
+            indicatorWeight: 3,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            tabs: [
+              const Tab(icon: Icon(Icons.calendar_month_outlined, size: 20), text: 'الجدول'),
+              Tab(
+                icon: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('bookings')
+                      .where('pitchName', isEqualTo: widget.pitchName)
+                      .where('status', isEqualTo: 'pending')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final count = snapshot.data?.docs.length ?? 0;
+                    return Badge(
+                      isLabelVisible: count > 0,
+                      label: Text('$count', style: const TextStyle(fontSize: 10)),
+                      child: const Icon(Icons.notifications_outlined, size: 20),
+                    );
+                  },
+                ),
+                text: 'الطلبات',
+              ),
+              const Tab(icon: Icon(Icons.repeat_rounded, size: 20), text: 'الاشتراكات'),
+              const Tab(icon: Icon(Icons.emoji_events_outlined, size: 20), text: 'البطولات'),
+            ],
+          ),
         ),
-        body: IndexedStack(index: _currentIndex, children: tabs),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
-          backgroundColor: Colors.white,
-          indicatorColor: const Color(0xFFE8F5E9),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)), label: 'جدول المباريات'),
-            NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications_rounded, color: Color(0xFF1B5E20)), label: 'الطلبات'),
-            NavigationDestination(icon: Icon(Icons.repeat_rounded), selectedIcon: Icon(Icons.repeat_on_rounded, color: Color(0xFF1B5E20)), label: 'الحجوزات الدائمة'),
-            NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20)), label: 'البطولات'),
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            OwnerScheduleTab(pitchName: widget.pitchName),
+            OwnerRequestsTab(pitchName: widget.pitchName),
+            OwnerRecurringTab(pitchName: widget.pitchName),
+            TournamentScreen(userPhone: 'owner', isOwner: true, pitchName: widget.pitchName),
           ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: const Color(0xFF1B5E20),
+          foregroundColor: Colors.white,
+          onPressed: _showQuickActionsBottomSheet,
+          child: const Icon(Icons.add_rounded, size: 28),
         ),
       ),
     );
