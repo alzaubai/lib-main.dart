@@ -29,6 +29,7 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   int _currentIndex = 0;
   String _displayName = 'الكابتن';
+  String _teamName = '';
   String _province = '';
   String _district = '';
   bool _isLoadingUserData = true;
@@ -43,24 +44,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _fetchUserData() async {
-    if (widget.userName != null && widget.userName!.isNotEmpty) {
-      setState(() {
-        _displayName = widget.userName!;
-        _province = widget.userProvince ?? '';
-        _district = widget.userDistrict ?? '';
-        _isLoadingUserData = false;
-      });
-      return;
-    }
-
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(widget.userPhone).get();
       if (doc.exists && mounted) {
         final data = doc.data();
         setState(() {
           _displayName = data?['name'] ?? 'الكابتن';
-          _province = data?['province'] ?? '';
-          _district = data?['district'] ?? '';
+          _teamName = data?['teamName'] ?? '';
+          _province = data?['governorate'] ?? data?['province'] ?? '';
+          _district = data?['area'] ?? data?['district'] ?? '';
           _isLoadingUserData = false;
         });
       } else if (mounted) {
@@ -80,6 +72,54 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  void _openPlayerSettingsDialog() {
+    final nameCtrl = TextEditingController(text: _displayName);
+    final teamCtrl = TextEditingController(text: _teamName);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('إعدادات حساب اللاعب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'الاسم الكامل', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: teamCtrl,
+                decoration: const InputDecoration(labelText: 'اسم الفريق الأساسي', border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () async {
+                await FirebaseFirestore.instance.collection('users').doc(widget.userPhone).update({
+                  'name': nameCtrl.text.trim(),
+                  'teamName': teamCtrl.text.trim(),
+                });
+                setState(() {
+                  _displayName = nameCtrl.text.trim();
+                  _teamName = teamCtrl.text.trim();
+                });
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('حفظ', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoadingUserData) {
@@ -90,7 +130,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     final List<Widget> tabs = <Widget>[
-      PlayerExploreTab(userPhone: widget.userPhone),
+      PlayerExploreTab(userPhone: widget.userPhone, showOnlyFavorites: false),
+      PlayerExploreTab(userPhone: widget.userPhone, showOnlyFavorites: true),
       PlayerBookingsTab(userPhone: widget.userPhone),
       TournamentScreen(userPhone: widget.userPhone, isOwner: false),
     ];
@@ -111,18 +152,58 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 22),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('كابتن $_displayName', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                  if (_province.isNotEmpty) Text('$_province - $_district', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'كابتن $_displayName',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.shield_rounded, size: 12, color: Colors.amber.shade900),
+                              const SizedBox(width: 2),
+                              Text(
+                                _teamName.isNotEmpty ? _teamName : 'فريق نشط',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_province.isNotEmpty)
+                      Text('$_province - $_district', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                  ],
+                ),
               ),
             ],
           ),
           actions: [
             IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Color(0xFF64748B)),
+              tooltip: 'الإعدادات',
+              onPressed: _openPlayerSettingsDialog,
+            ),
+            IconButton(
               icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B)),
+              tooltip: 'تسجيل الخروج',
               onPressed: () {
                 showDialog(
                   context: context,
@@ -154,9 +235,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFFE8F5E9),
           destinations: const [
-            NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore_rounded, color: Color(0xFF1B5E20)), label: 'الملاعب'),
-            NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)), label: 'حجوزاتي'),
-            NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20)), label: 'البطولات'),
+            NavigationDestination(
+              icon: Icon(Icons.explore_outlined),
+              selectedIcon: Icon(Icons.explore_rounded, color: Color(0xFF1B5E20)),
+              label: 'استكشاف',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.favorite_outline_rounded),
+              selectedIcon: Icon(Icons.favorite_rounded, color: Color(0xFF1B5E20)),
+              label: 'المفضلة',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.calendar_month_outlined),
+              selectedIcon: Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)),
+              label: 'حجوزاتي',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.emoji_events_outlined),
+              selectedIcon: Icon(Icons.emoji_events_rounded, color: Color(0xFF1B5E20)),
+              label: 'البطولات',
+            ),
           ],
         ),
       ),
