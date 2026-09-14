@@ -45,6 +45,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    PlayerNotificationService.stop();
+    super.dispose();
+  }
+
   Future<void> _fetchUserData() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(widget.userPhone).get();
@@ -66,11 +72,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _logout() async {
+    PlayerNotificationService.stop();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 
     if (mounted) {
-      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (route) => false);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (route) => false,
+      );
     }
   }
 
