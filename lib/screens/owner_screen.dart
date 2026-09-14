@@ -231,16 +231,19 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: const Color(0xFFF1F5F9), // خلفية ناعمة وواضحة تحت البطاقات
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0.5,
+          backgroundColor: const Color(0xFF1B5E20), // اللون الأخضر الرياضي المميز
+          elevation: 2,
           title: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.stadium_rounded, color: Color(0xFF1B5E20), size: 22),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.stadium_rounded, color: Colors.white, size: 22),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -252,12 +255,11 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                         Flexible(
                           child: Text(
                             widget.pitchName,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 6),
-                        // شارة التقييم الحي التفاعلية المربوطة بالمراجعات
                         StreamBuilder<DocumentSnapshot>(
                           stream: FirebaseFirestore.instance.collection('pitches').doc(widget.pitchName).snapshots(),
                           builder: (context, snapshot) {
@@ -282,18 +284,17 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.amber.shade50,
+                                  color: Colors.amber.shade400,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.amber.shade300),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.star_rounded, size: 13, color: Colors.amber.shade900),
+                                    const Icon(Icons.star_rounded, size: 13, color: Colors.black87),
                                     const SizedBox(width: 2),
                                     Text(
                                       reviewsCount > 0 ? '$rating ($reviewsCount)' : '$rating',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
                                     ),
                                   ],
                                 ),
@@ -303,7 +304,7 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                         ),
                       ],
                     ),
-                    const Text('لوحة التحكم والإدارة', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    const Text('لوحة التحكم والإدارة', style: TextStyle(fontSize: 11, color: Colors.white70)),
                   ],
                 ),
               ),
@@ -311,7 +312,7 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.bar_chart_rounded, color: Color(0xFF1B5E20)),
+              icon: const Icon(Icons.bar_chart_rounded, color: Colors.white),
               tooltip: 'تحليلات الملعب والذروة',
               onPressed: () => Navigator.push(
                 context,
@@ -319,7 +320,7 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Color(0xFF334155)),
+              icon: const Icon(Icons.settings_outlined, color: Colors.white),
               tooltip: 'الإعدادات',
               onPressed: () => Navigator.push(
                 context,
@@ -334,10 +335,11 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
           ],
           bottom: TabBar(
             controller: _tabController,
-            labelColor: const Color(0xFF1B5E20),
-            unselectedLabelColor: const Color(0xFF64748B),
-            indicatorColor: const Color(0xFF1B5E20),
-            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            indicatorColor: Colors.white,
+            indicatorWeight: 3.5,
+            indicatorSize: TabBarIndicatorSize.tab,
             labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
             tabs: [
               const Tab(icon: Icon(Icons.calendar_month_outlined, size: 20), text: 'الجدول'),
@@ -352,7 +354,8 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                     final count = snapshot.data?.docs.length ?? 0;
                     return Badge(
                       isLabelVisible: count > 0,
-                      label: Text('$count', style: const TextStyle(fontSize: 10)),
+                      backgroundColor: Colors.amber.shade700,
+                      label: Text('$count', style: const TextStyle(fontSize: 10, color: Colors.black)),
                       child: const Icon(Icons.notifications_outlined, size: 20),
                     );
                   },
