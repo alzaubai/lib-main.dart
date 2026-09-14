@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.0
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -23,7 +23,7 @@ dependencies:
   url_launcher: ^6.3.0
 
   # Location & Geolocation
-  geolocator: ^12.0.0
+  geolocator: 10.1.0
 
   # Media & Images
   image_picker: ^1.1.2
