@@ -17,12 +17,34 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
   void initState() {
     super.initState();
     _bookingTabCtrl = TabController(length: 2, vsync: this);
+    _bookingTabCtrl.addListener(() {
+      if (_bookingTabCtrl.indexIsChanging) return;
+      _markCurrentTabAsSeen(_bookingTabCtrl.index);
+    });
   }
 
   @override
   void dispose() {
     _bookingTabCtrl.dispose();
     super.dispose();
+  }
+
+  void _markCurrentTabAsSeen(int tabIndex) async {
+    final firestore = FirebaseFirestore.instance;
+    final statusFilter = tabIndex == 0 ? ['upcoming', 'pending'] : ['rejected', 'completed'];
+
+    try {
+      final snap = await firestore
+          .collection('bookings')
+          .where('phone', isEqualTo: widget.userPhone)
+          .where('status', whereIn: statusFilter)
+          .where('seenByPlayer', isEqualTo: false)
+          .get();
+
+      for (var doc in snap.docs) {
+        await doc.reference.update({'seenByPlayer': true});
+      }
+    } catch (_) {}
   }
 
   DateTime? _parseMatchDateTime(String dateStr, String timeStr) {
@@ -49,66 +71,85 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
-      child: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            child: TabBar(
-              controller: _bookingTabCtrl,
-              labelColor: const Color(0xFF1B5E20),
-              unselectedLabelColor: Colors.grey,
-              indicatorColor: const Color(0xFF1B5E20),
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              tabs: const [
-                Tab(text: 'الحجوزات النشطة ⚡', icon: Icon(Icons.flash_on_rounded, size: 18)),
-                Tab(text: 'أرشيف وسجل المواعيد 📁', icon: Icon(Icons.history_rounded, size: 18)),
-              ],
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('bookings')
-                  .where('phone', isEqualTo: widget.userPhone)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
-                }
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('bookings')
+            .where('phone', isEqualTo: widget.userPhone)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
+          }
 
-                final allDocs = snapshot.data?.docs ?? [];
-                if (allDocs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'لا توجد لديك حجوزات مسجلة',
-                      style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold),
+          final allDocs = snapshot.data?.docs ?? [];
+
+          // تصفية الحجوزات النشطة والأرشيف
+          final activeDocs = allDocs.where((d) {
+            final status = (d.data() as Map<String, dynamic>)['status'];
+            return status == 'pending' || status == 'upcoming';
+          }).toList();
+
+          final archiveDocs = allDocs.where((d) {
+            final status = (d.data() as Map<String, dynamic>)['status'];
+            return status == 'completed' || status == 'rejected';
+          }).toList();
+
+          // حساب الحجوزات غير المقروءة للتنبيه
+          final unreadActiveCount = activeDocs.where((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return data['status'] == 'upcoming' && data['seenByPlayer'] == false;
+          }).length;
+
+          final unreadArchiveCount = archiveDocs.where((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return data['status'] == 'rejected' && data['seenByPlayer'] == false;
+          }).length;
+
+          return Column(
+            children: [
+              Container(
+                color: Colors.white,
+                child: TabBar(
+                  controller: _bookingTabCtrl,
+                  labelColor: const Color(0xFF1B5E20),
+                  unselectedLabelColor: Colors.grey,
+                  indicatorColor: const Color(0xFF1B5E20),
+                  indicatorWeight: 3,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  tabs: [
+                    Tab(
+                      icon: Badge(
+                        isLabelVisible: unreadActiveCount > 0,
+                        backgroundColor: Colors.green.shade700,
+                        label: Text('$unreadActiveCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                        child: const Icon(Icons.flash_on_rounded, size: 18),
+                      ),
+                      text: 'الحجوزات النشطة ⚡',
                     ),
-                  );
-                }
-
-                // فلترة: النشطة (معلقة ومؤكدة) مقابل الأرشيف (مكتملة ومرفوضة)
-                final activeDocs = allDocs.where((d) {
-                  final status = (d.data() as Map<String, dynamic>)['status'];
-                  return status == 'pending' || status == 'upcoming';
-                }).toList();
-
-                final archiveDocs = allDocs.where((d) {
-                  final status = (d.data() as Map<String, dynamic>)['status'];
-                  return status == 'completed' || status == 'rejected';
-                }).toList();
-
-                return TabBarView(
+                    Tab(
+                      icon: Badge(
+                        isLabelVisible: unreadArchiveCount > 0,
+                        backgroundColor: Colors.redAccent,
+                        label: Text('$unreadArchiveCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                        child: const Icon(Icons.history_rounded, size: 18),
+                      ),
+                      text: 'أرشيف وسجل المواعيد 📁',
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
                   controller: _bookingTabCtrl,
                   children: [
                     _buildBookingsList(activeDocs, isActiveTab: true),
                     _buildBookingsList(archiveDocs, isActiveTab: false),
                   ],
-                );
-              },
-            ),
-          ),
-        ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -133,6 +174,7 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
         final dateStr = (data['date'] ?? '').toString();
         final startTimeStr = (data['startTime'] ?? '').toString();
         final rejectionReason = data['rejectionReason'];
+        final isUnread = data['seenByPlayer'] == false;
 
         Color statusColor = Colors.amber;
         String statusText = 'قيد المراجعة ⏳';
@@ -155,9 +197,15 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
         final bool canCancel = status == 'pending' || (status == 'upcoming' && !isPassed);
 
         return Card(
-          elevation: 2,
+          elevation: isUnread ? 4 : 2,
           margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: isUnread ? Colors.redAccent.withOpacity(0.6) : Colors.transparent,
+              width: isUnread ? 1.5 : 0,
+            ),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -174,9 +222,21 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            data['pitchName'] ?? 'ملعب رياضي',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          Row(
+                            children: [
+                              Text(
+                                data['pitchName'] ?? 'ملعب رياضي',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                              if (isUnread) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(6)),
+                                  child: const Text('جديد', style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ],
                           ),
                           Text('📅 $dateStr', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                         ],
@@ -216,25 +276,37 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                   ),
                 ),
 
-                // إظهار سبب الرفض في الأرشيف
+                // إظهار سبب الرفض داخل الأرشيف
                 if (status == 'rejected' && rejectionReason != null) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.red.shade200),
                     ),
-                    child: Text(
-                      'سبب الرفض من الملعب: $rejectionReason',
-                      style: TextStyle(fontSize: 11, color: Colors.red.shade900, fontWeight: FontWeight.bold),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.report_problem_rounded, color: Colors.red, size: 16),
+                            SizedBox(width: 6),
+                            Text('سبب الرفض من صاحب الملعب:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.red)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$rejectionReason',
+                          style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
                   ),
                 ],
 
-                // قسم إلغاء الحجز في التبويب النشط
                 if (isActiveTab && canCancel) ...[
                   const Divider(height: 18),
                   Row(
@@ -277,7 +349,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                   ),
                 ],
 
-                // زر حذف القيد من الأرشيف لتنظيف السجل
                 if (!isActiveTab) ...[
                   const Divider(height: 14),
                   Align(
@@ -353,6 +424,7 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> with SingleTicker
                     'status': 'rejected',
                     'cancelledByPlayer': true,
                     'cancellationSeenByOwner': false,
+                    'seenByPlayer': true,
                     'cancelledAt': FieldValue.serverTimestamp(),
                     'cancellingTeamName': bData['teamOne'] ?? 'فريق كابتن',
                     'rejectionReason': 'تم الإلغاء برغبة الكابتن',
