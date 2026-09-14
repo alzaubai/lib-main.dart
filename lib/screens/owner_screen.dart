@@ -123,7 +123,7 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
     );
   }
 
-  void _showQuickActionsBottomSheet() {
+  void _showQuickActions() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -161,7 +161,7 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                   decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20)),
                 ),
-                title: const Text('تسجيل مباراة يدوية بالجدول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                title: const Text('تثبيت حجز عادي يدوي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 subtitle: const Text('حجز ساعة مباشرة لكابتن بدون تطبيق', style: TextStyle(fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -184,7 +184,7 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                   decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(10)),
                   child: Icon(Icons.repeat_rounded, color: Colors.purple.shade800),
                 ),
-                title: const Text('تثبيت اشتراك أسبوعي دائم', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                title: const Text('تثبيت حجز دائم (أسبوعي)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 subtitle: const Text('حجز يوم وساعة ثابتة أسبوعياً لفريق', style: TextStyle(fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -206,7 +206,7 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                   decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.emoji_events_rounded, color: Colors.amber),
                 ),
-                title: const Text('إطلاق بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                title: const Text('إنشاء وإقامة بطولة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 subtitle: const Text('بدء دورة كروية وفتح التسجيل للفرق', style: TextStyle(fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -246,10 +246,36 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.pitchName,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            widget.pitchName,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star_rounded, size: 13, color: Colors.amber.shade900),
+                              const SizedBox(width: 2),
+                              Text(
+                                '4.8',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     const Text('لوحة التحكم والإدارة', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
@@ -282,7 +308,6 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
           ],
           bottom: TabBar(
             controller: _tabController,
-            isScrollable: false,
             labelColor: const Color(0xFF1B5E20),
             unselectedLabelColor: const Color(0xFF64748B),
             indicatorColor: const Color(0xFF1B5E20),
@@ -325,7 +350,8 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
         floatingActionButton: FloatingActionButton(
           backgroundColor: const Color(0xFF1B5E20),
           foregroundColor: Colors.white,
-          onPressed: _showQuickActionsBottomSheet,
+          onPressed: _showQuickActions,
+          tooltip: 'إجراء سريع',
           child: const Icon(Icons.add_rounded, size: 28),
         ),
       ),
