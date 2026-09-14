@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../constants.dart';
 import '../../../services/location_service.dart';
 import '../sheets/player_booking_sheet.dart';
+import '../../common/widgets/pitch_image_gallery.dart';
 
 class PlayerExploreTab extends StatefulWidget {
   final String userPhone;
@@ -62,7 +63,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
       }
     } catch (_) {}
 
-    // جلب موقع اللاعب عبر GPS
     _currentPosition = await LocationService.getCurrentLocation();
 
     if (mounted) setState(() => _isLoading = false);
@@ -244,7 +244,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                         }
                       }
 
-                      // الترتيب التلقائي: الملاعب ذات المسافة المحسوبة تظهر أولاً من الأقرب إلى الأبعد
                       pitchesWithDistance.sort((a, b) {
                         final double? d1 = a['calculatedDistance'];
                         final double? d2 = b['calculatedDistance'];
@@ -300,179 +299,182 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                           final lng = (d['longitude'] as num?)?.toDouble();
                           final double? distanceKm = d['calculatedDistance'];
                           final isFav = _favoritePitches.contains(pName);
+                          final images = List<String>.from(d['images'] ?? []);
 
                           return Card(
                             elevation: 2,
-                            margin: const EdgeInsets.only(bottom: 14),
+                            margin: const EdgeInsets.only(bottom: 16),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // معرض صور الملعب في رأس البطاقة
+                                PitchImageGallery(
+                                  images: images,
+                                  height: 150,
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE8F5E9),
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 24),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Flexible(
-                                                  child: Text(
-                                                    pName,
-                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                IconButton(
-                                                  constraints: const BoxConstraints(),
-                                                  padding: EdgeInsets.zero,
-                                                  icon: Icon(
-                                                    isFav ? Icons.star_rounded : Icons.star_border_rounded,
-                                                    color: isFav ? Colors.amber : Colors.grey,
-                                                    size: 22,
-                                                  ),
-                                                  tooltip: 'إضافة للمفضلة',
-                                                  onPressed: () => _toggleFavorite(pName),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Row(
-                                              children: [
-                                                Text('$gov - $area', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                                if (distanceKm != null) ...[
-                                                  const SizedBox(width: 8),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.blue.shade50,
-                                                      borderRadius: BorderRadius.circular(6),
-                                                    ),
-                                                    child: Text(
-                                                      'يبعد ${LocationService.formatDistance(distanceKm)}',
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: Colors.blue.shade800,
+                                                Row(
+                                                  children: [
+                                                    Flexible(
+                                                      child: Text(
+                                                        pName,
+                                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
+                                                    const SizedBox(width: 6),
+                                                    IconButton(
+                                                      constraints: const BoxConstraints(),
+                                                      padding: EdgeInsets.zero,
+                                                      icon: Icon(
+                                                        isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                                                        color: isFav ? Colors.amber : Colors.grey,
+                                                        size: 22,
+                                                      ),
+                                                      tooltip: 'إضافة للمفضلة',
+                                                      onPressed: () => _toggleFavorite(pName),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Row(
+                                                  children: [
+                                                    Text('$gov - $area', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                                    if (distanceKm != null) ...[
+                                                      const SizedBox(width: 8),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.blue.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          'يبعد ${LocationService.formatDistance(distanceKm)}',
+                                                          style: TextStyle(
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Colors.blue.shade800,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
                                               ],
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.shade50,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.green.shade300),
-                                        ),
-                                        child: Text(
-                                          '${currencyFormatter.format(price)} د.ع',
-                                          style: TextStyle(
-                                            color: Colors.green.shade900,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
                                           ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: [
-                                      _tagChip(pType, Icons.straighten_rounded, Colors.blue.shade50, Colors.blue.shade800),
-                                      _tagChip(surface, Icons.grass_rounded, Colors.teal.shade50, Colors.teal.shade800),
-                                      if (desc.toString().isNotEmpty)
-                                        _tagChip(desc, Icons.place_outlined, Colors.grey.shade100, Colors.grey.shade700),
-                                    ],
-                                  ),
-                                  const Divider(height: 20),
-                                  Row(
-                                    children: [
-                                      ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF1B5E20),
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        ),
-                                        icon: const Icon(Icons.event_available_rounded, size: 18),
-                                        label: const Text('حجز موعد', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                        onPressed: () {
-                                          showModalBottomSheet(
-                                            context: context,
-                                            isScrollControlled: true,
-                                            backgroundColor: Colors.transparent,
-                                            builder: (_) => PlayerBookingSheet(
-                                              pitchName: pName,
-                                              hourlyRate: price,
-                                              userPhone: widget.userPhone,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      const SizedBox(width: 8),
-                                      InkWell(
-                                        onTap: () => _launchWazeToPitch(pName, lat, lng),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.lightBlue.shade50,
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(color: Colors.lightBlue.shade300),
-                                          ),
-                                          child: const Row(
-                                            children: [
-                                              Icon(Icons.near_me_rounded, color: Colors.blueAccent, size: 16),
-                                              SizedBox(width: 4),
-                                              Text('Waze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      if (phone.isNotEmpty)
-                                        InkWell(
-                                          onTap: () => _openWhatsApp(phone),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFF25D366),
-                                              borderRadius: BorderRadius.circular(10),
+                                              color: Colors.green.shade50,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: Colors.green.shade300),
                                             ),
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.chat_rounded, color: Colors.white, size: 16),
-                                                SizedBox(width: 6),
-                                                Text('واتساب', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                                              ],
+                                            child: Text(
+                                              '${currencyFormatter.format(price)} د.ع',
+                                              style: TextStyle(
+                                                color: Colors.green.shade900,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          _tagChip(pType, Icons.straighten_rounded, Colors.blue.shade50, Colors.blue.shade800),
+                                          _tagChip(surface, Icons.grass_rounded, Colors.teal.shade50, Colors.teal.shade800),
+                                          if (desc.toString().isNotEmpty)
+                                            _tagChip(desc, Icons.place_outlined, Colors.grey.shade100, Colors.grey.shade700),
+                                        ],
+                                      ),
+                                      const Divider(height: 20),
+                                      Row(
+                                        children: [
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF1B5E20),
+                                              foregroundColor: Colors.white,
+                                              elevation: 0,
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            ),
+                                            icon: const Icon(Icons.event_available_rounded, size: 18),
+                                            label: const Text('حجز موعد', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                            onPressed: () {
+                                              showModalBottomSheet(
+                                                context: context,
+                                                isScrollControlled: true,
+                                                backgroundColor: Colors.transparent,
+                                                builder: (_) => PlayerBookingSheet(
+                                                  pitchName: pName,
+                                                  hourlyRate: price,
+                                                  userPhone: widget.userPhone,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                          const SizedBox(width: 8),
+                                          InkWell(
+                                            onTap: () => _launchWazeToPitch(pName, lat, lng),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.lightBlue.shade50,
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: Colors.lightBlue.shade300),
+                                              ),
+                                              child: const Row(
+                                                children: [
+                                                  Icon(Icons.near_me_rounded, color: Colors.blueAccent, size: 16),
+                                                  SizedBox(width: 4),
+                                                  Text('Waze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          if (phone.isNotEmpty)
+                                            InkWell(
+                                              onTap: () => _openWhatsApp(phone),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF25D366),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: const Row(
+                                                  children: [
+                                                    Icon(Icons.chat_rounded, color: Colors.white, size: 16),
+                                                    SizedBox(width: 6),
+                                                    Text('واتساب', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           );
                         },
