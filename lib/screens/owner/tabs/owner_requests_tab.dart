@@ -7,6 +7,57 @@ class OwnerRequestsTab extends StatelessWidget {
   final String pitchName;
   const OwnerRequestsTab({super.key, required this.pitchName});
 
+  // دالة قبول الطلب مع الرفض التلقائي الذكي للطلبات المتنافسة على نفس الساعة
+  Future<void> _approveBookingAndAutoRejectConflicts(
+    BuildContext context,
+    DocumentSnapshot approvedDoc,
+  ) async {
+    final approvedData = approvedDoc.data() as Map<String, dynamic>;
+    final date = approvedData['date'];
+    final startTime = approvedData['startTime'];
+    final firestore = FirebaseFirestore.instance;
+
+    // 1. تثبيت هذا الحجز ونقله للحجوزات المؤكدة
+    await approvedDoc.reference.update({
+      'status': 'upcoming',
+      'seenByPlayer': false, // لإشعار الكابتن الفائز بالموافقة
+    });
+
+    // 2. البحث عن أي طلبات أخرى معلقة مقدمة على نفس الملعب والتاريخ والساعة
+    final conflictSnap = await firestore
+        .collection('bookings')
+        .where('pitchName', isEqualTo: pitchName)
+        .where('date', isEqualTo: date)
+        .where('startTime', isEqualTo: startTime)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    int rejectedCount = 0;
+    for (var doc in conflictSnap.docs) {
+      if (doc.id != approvedDoc.id) {
+        await doc.reference.update({
+          'status': 'rejected',
+          'rejectionReason': 'نعتذر منك، تم تثبيت هذا الموعد لفريق آخر أسبق في التأكيد',
+          'seenByPlayer': false, // لإشعارهم بالرفض فوراً مع السبب
+        });
+        rejectedCount++;
+      }
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            rejectedCount > 0
+                ? 'تم تثبيت الحجز بالجدول، ورفض $rejectedCount طلبات منافسة لنفس الساعة تلقائياً ✔️'
+                : 'تم تثبيت الحجز بنجاح وإدراجه في جدول المباريات ✔️',
+          ),
+          backgroundColor: const Color(0xFF1B5E20),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -19,7 +70,7 @@ class OwnerRequestsTab extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
           }
 
           final docs = snapshot.data?.docs ?? [];
@@ -30,8 +81,10 @@ class OwnerRequestsTab extends StatelessWidget {
                 children: [
                   Icon(Icons.notifications_none_rounded, size: 60, color: Colors.grey.shade400),
                   const SizedBox(height: 10),
-                  const Text('لا توجد طلبات حجز معلقة حالياً',
-                      style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'لا توجد طلبات حجز معلقة حالياً',
+                    style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
             );
@@ -61,8 +114,10 @@ class OwnerRequestsTab extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('طلب حجز من: ${data['teamOne']}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1B5E20))),
+                          Text(
+                            'طلب حجز من: ${data['teamOne']}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1B5E20)),
+                          ),
                           Chip(
                             label: const Text('معلق ⏳', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                             backgroundColor: Colors.amber.shade100,
@@ -70,8 +125,10 @@ class OwnerRequestsTab extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Text('📅 التاريخ: ${data['date']} (${data['startTime']} - ${data['endTime']})',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text(
+                        '📅 التاريخ: ${data['date']} (${data['startTime']} - ${data['endTime']})',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
                       Text('💰 المبلغ: ${data['price']} د.ع', style: const TextStyle(fontSize: 12, color: Colors.teal)),
                       const Divider(height: 20),
                       Row(
@@ -98,7 +155,7 @@ class OwnerRequestsTab extends StatelessWidget {
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
                             icon: const Icon(Icons.check, size: 16, color: Colors.white),
                             label: const Text('تثبيت وقبول', style: TextStyle(color: Colors.white)),
-                            onPressed: () => doc.reference.update({'status': 'upcoming'}),
+                            onPressed: () => _approveBookingAndAutoRejectConflicts(context, doc),
                           ),
                         ],
                       ),
@@ -140,7 +197,7 @@ class OwnerRequestsTab extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('يرجى كتابة سبب رفض حجز فريق ($teamName) ليصل للاعب:', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text('يرجى كتابة سبب رفض حجز فريق ($teamName) ليظهر في إشعار اللاعب:', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   const SizedBox(height: 12),
                   TextField(
                     controller: reasonController,
@@ -182,6 +239,7 @@ class OwnerRequestsTab extends StatelessWidget {
                   await docRef.update({
                     'status': 'rejected',
                     'rejectionReason': reason,
+                    'seenByPlayer': false,
                   });
 
                   if (ctx.mounted) Navigator.pop(ctx);
