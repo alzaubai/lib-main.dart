@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class SlotSelectionGrid extends StatelessWidget {
+class SlotSelectionGrid extends StatefulWidget {
   final String pitchName;
   final String dateStr;
   final String dayNameArabic;
@@ -20,31 +20,119 @@ class SlotSelectionGrid extends StatelessWidget {
   });
 
   @override
+  State<SlotSelectionGrid> createState() => _SlotSelectionGridState();
+}
+
+class _SlotSelectionGridState extends State<SlotSelectionGrid> {
+  int _selectedPeriodIndex = 1; // الافتراضي: فترة المساء والذروة
+
+  final List<Map<String, dynamic>> _periods = [
+    {'title': 'فترة العصر', 'icon': Icons.wb_twilight_rounded},
+    {'title': 'فترة المساء والذروة', 'icon': Icons.nightlight_round},
+    {'title': 'الفترة الليلية', 'icon': Icons.bedtime_rounded},
+  ];
+
+  int _extractStartHour(String slot) {
+    try {
+      final startPart = slot.split('-')[0].trim();
+      final isPM = startPart.contains('م') || startPart.toLowerCase().contains('pm');
+      final rawDigits = startPart.replaceAll(RegExp(r'[^\d:]'), '').split(':')[0];
+      int hour = int.tryParse(rawDigits) ?? 0;
+      if (isPM && hour < 12) hour += 12;
+      if (!isPM && hour == 12) hour = 0;
+      return hour;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  List<String> _filterSlotsByPeriod(List<String> slots, int periodIndex) {
+    return slots.where((slot) {
+      final hour = _extractStartHour(slot);
+      if (periodIndex == 0) {
+        // العصر: من 15:00 (3م) إلى 18:00 (6م)
+        return hour >= 15 && hour < 19;
+      } else if (periodIndex == 1) {
+        // المساء والذروة: من 19:00 (7م) إلى 23:00 (11م)
+        return hour >= 19 && hour < 24;
+      } else {
+        // الليل المتأخر: من 00:00 (12 ليلاً) إلى 04:00 فجراً
+        return hour < 5 || hour >= 24;
+      }
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final periodSlots = _filterSlotsByPeriod(widget.allSlots, _selectedPeriodIndex);
+    final displayedSlots = periodSlots.isNotEmpty ? periodSlots : widget.allSlots;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _legendItem('متاحة تماماً', Colors.green.shade700, const Color(0xFFE8F5E9)),
-            _legendItem('عليها طلب سابق ⏳', Colors.orange.shade800, Colors.orange.shade50),
-            _legendItem('مثبتة ومقفلة 🔒', Colors.grey.shade600, Colors.grey.shade200),
-          ],
+        // شريط اختيار الفترة الزمنية
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F2),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: List.generate(_periods.length, (idx) {
+              final isSelected = _selectedPeriodIndex == idx;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedPeriodIndex = idx),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: isSelected
+                          ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _periods[idx]['icon'] as IconData,
+                          size: 15,
+                          color: isSelected ? const Color(0xFF1B5E20) : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _periods[idx]['title'] as String,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected ? const Color(0xFF1B5E20) : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
+
+        // قائمة الساعات
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('bookings')
-              .where('pitchName', isEqualTo: pitchName)
-              .where('date', isEqualTo: dateStr)
+              .where('pitchName', isEqualTo: widget.pitchName)
+              .where('date', isEqualTo: widget.dateStr)
               .snapshots(),
           builder: (context, bookingSnap) {
             return StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('recurring_rules')
-                  .where('pitchName', isEqualTo: pitchName)
-                  .where('dayOfWeek', isEqualTo: dayNameArabic)
+                  .where('pitchName', isEqualTo: widget.pitchName)
+                  .where('dayOfWeek', isEqualTo: widget.dayNameArabic)
                   .snapshots(),
               builder: (context, recurringSnap) {
                 final confirmedSlots = <String>{};
@@ -72,103 +160,140 @@ class SlotSelectionGrid extends StatelessWidget {
                   }
                 }
 
-                return GridView.builder(
+                if (displayedSlots.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'لا توجد مواعيد مخصصة لهذه الفترة',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    ),
+                  );
+                }
+
+                return ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 2.2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: allSlots.length,
+                  itemCount: displayedSlots.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, idx) {
-                    final slot = allSlots[idx];
+                    final slot = displayedSlots[idx];
                     final isConfirmed = confirmedSlots.contains(slot);
                     final pendingCount = pendingSlotsCount[slot] ?? 0;
                     final hasPending = !isConfirmed && pendingCount > 0;
-                    final isSelected = selectedSlot == slot;
+                    final isSelected = widget.selectedSlot == slot;
 
-                    Color bgColor;
+                    Color cardBg;
                     Color borderColor;
-                    Color textColor;
-                    Widget badge;
+                    Widget statusBadge;
 
                     if (isConfirmed) {
-                      bgColor = Colors.grey.shade200;
+                      cardBg = const Color(0xFFF7F8F9);
                       borderColor = Colors.grey.shade300;
-                      textColor = Colors.grey.shade500;
-                      badge = Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.lock_rounded, size: 11, color: Colors.grey.shade600),
-                          const SizedBox(width: 4),
-                          Text('محجوزة رسمياً', style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
-                        ],
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'محجوز رسمياً',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+                        ),
                       );
                     } else if (isSelected) {
-                      bgColor = const Color(0xFF1B5E20);
+                      cardBg = const Color(0xFF1B5E20);
                       borderColor = const Color(0xFF1B5E20);
-                      textColor = Colors.white;
-                      badge = const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle_rounded, size: 11, color: Colors.white),
-                          SizedBox(width: 4),
-                          Text('تم الاختيار', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
-                        ],
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'تم التحديد',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
                       );
                     } else if (hasPending) {
-                      bgColor = Colors.orange.shade50;
-                      borderColor = Colors.orange.shade300;
-                      textColor = Colors.orange.shade900;
-                      badge = Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.hourglass_top_rounded, size: 11, color: Colors.orange.shade800),
-                          const SizedBox(width: 4),
-                          Text(
-                            pendingCount == 1 ? 'طلب قيد الانتظار' : '$pendingCount طلبات بالانتظار',
-                            style: TextStyle(fontSize: 9, color: Colors.orange.shade900, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      cardBg = const Color(0xFFFFFBF2);
+                      borderColor = const Color(0xFFFFD599);
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFE8CC),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          pendingCount == 1 ? 'طلب قيد المراجعة' : '$pendingCount طلبات قيد المراجعة',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                        ),
                       );
                     } else {
-                      bgColor = Colors.green.shade50;
-                      borderColor = Colors.green.shade300;
-                      textColor = const Color(0xFF1B5E20);
-                      badge = const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_rounded, size: 11, color: Color(0xFF1B5E20)),
-                          SizedBox(width: 4),
-                          Text('متاحة بالكامل', style: TextStyle(fontSize: 9, color: Color(0xFF1B5E20), fontWeight: FontWeight.bold)),
-                        ],
+                      cardBg = Colors.white;
+                      borderColor = const Color(0xFFE2E8F0);
+                      statusBadge = Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'متاح للحجز',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                        ),
                       );
                     }
 
                     return InkWell(
                       onTap: isConfirmed
                           ? null
-                          : () => onSlotSelected(isSelected ? null : slot),
-                      borderRadius: BorderRadius.circular(12),
+                          : () => widget.onSlotSelected(isSelected ? null : slot),
+                      borderRadius: BorderRadius.circular(14),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: bgColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Row(
                           children: [
-                            Text(
-                              slot,
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textColor),
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white24
+                                    : (isConfirmed ? Colors.grey.shade200 : const Color(0xFFF1F5F2)),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isConfirmed
+                                    ? Icons.lock_outline_rounded
+                                    : (isSelected ? Icons.check_rounded : Icons.schedule_rounded),
+                                size: 16,
+                                color: isSelected
+                                    ? Colors.white
+                                    : (isConfirmed ? Colors.grey.shade500 : const Color(0xFF1B5E20)),
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            badge,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                slot,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (isConfirmed ? Colors.grey.shade500 : const Color(0xFF1E293B)),
+                                ),
+                              ),
+                            ),
+                            statusBadge,
                           ],
                         ),
                       ),
@@ -180,21 +305,6 @@ class SlotSelectionGrid extends StatelessWidget {
           },
         ),
       ],
-    );
-  }
-
-  Widget _legendItem(String label, Color dotColor, Color bg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: dotColor)),
-        ],
-      ),
     );
   }
 }
