@@ -13,6 +13,16 @@ class PlayerBookingCard extends StatelessWidget {
     required this.isActiveTab,
   });
 
+  Future<String> _getPitchPhone(String pitchName) async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('pitches').doc(pitchName).get();
+      if (snap.exists) {
+        return (snap.data()?['phone'] ?? snap.data()?['ownerPhone'] ?? '').toString();
+      }
+    } catch (_) {}
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = doc.data() as Map<String, dynamic>;
@@ -21,6 +31,7 @@ class PlayerBookingCard extends StatelessWidget {
     final startTimeStr = (data['startTime'] ?? '').toString();
     final rejectionReason = data['rejectionReason'];
     final isUnread = data['seenByPlayer'] == false;
+    final pitchName = data['pitchName'] ?? 'ملعب رياضي';
 
     Color statusColor = Colors.amber.shade800;
     String statusText = 'قيد المراجعة';
@@ -68,7 +79,7 @@ class PlayerBookingCard extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            data['pitchName'] ?? 'ملعب رياضي',
+                            pitchName,
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           if (isUnread) ...[
@@ -165,7 +176,7 @@ class PlayerBookingCard extends StatelessWidget {
                       status == 'pending'
                           ? 'طلب معلق (يمكنك سحبه بأي وقت)'
                           : (isLess3Hrs
-                              ? 'لا يمكن الإلغاء قبل أقل من 3 ساعات'
+                              ? 'لا يمكن الإلغاء (أقل من 3 ساعات على المباراة)'
                               : 'متاح الإلغاء قبل 3 ساعات من المباراة'),
                       style: TextStyle(
                         fontSize: 11,
@@ -186,9 +197,12 @@ class PlayerBookingCard extends StatelessWidget {
                       status == 'pending' ? 'سحب الطلب' : 'إلغاء الحجز',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       if (status == 'upcoming' && isLess3Hrs) {
-                        CancelBookingDialog.showTimeRestricted(context);
+                        final phone = await _getPitchPhone(pitchName);
+                        if (context.mounted) {
+                          CancelBookingDialog.showTimeRestricted(context, ownerPhone: phone);
+                        }
                       } else {
                         CancelBookingDialog.confirmCancellation(
                           context,
