@@ -476,52 +476,61 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                           ],
                         ),
 
-                        // الخريطة المصغرة التفاعلية المدمجة
+                        // الخريطة مع دبوس تفاعلي يتحرك حسب تحريك يدك
                         if (currentLat != null && currentLng != null) ...[
                           const SizedBox(height: 10),
                           Container(
-                            height: 200,
+                            height: 220,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(color: Colors.green.shade400, width: 1.5),
                             ),
                             clipBehavior: Clip.antiAlias,
-                            child: FlutterMap(
-                              mapController: mapController,
-                              options: MapOptions(
-                                initialCenter: LatLng(currentLat!, currentLng!),
-                                initialZoom: 16.5,
-                                interactionOptions: const InteractionOptions(
-                                  flags: InteractiveFlag.all,
-                                ),
-                              ),
+                            child: Stack(
+                              alignment: Alignment.center,
                               children: [
-                                TileLayer(
-                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName: 'com.malabi.app',
-                                ),
-                                MarkerLayer(
-                                  markers: [
-                                    Marker(
-                                      point: LatLng(currentLat!, currentLng!),
-                                      width: 44,
-                                      height: 44,
-                                      child: const Icon(
-                                        Icons.location_pin,
-                                        color: Colors.redAccent,
-                                        size: 42,
-                                      ),
+                                FlutterMap(
+                                  mapController: mapController,
+                                  options: MapOptions(
+                                    initialCenter: LatLng(currentLat!, currentLng!),
+                                    initialZoom: 16.5,
+                                    interactionOptions: const InteractionOptions(
+                                      flags: InteractiveFlag.all,
+                                    ),
+                                    onPositionChanged: (camera, hasGesture) {
+                                      if (hasGesture) {
+                                        setModalState(() {
+                                          currentLat = camera.center.latitude;
+                                          currentLng = camera.center.longitude;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  children: [
+                                    TileLayer(
+                                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                      userAgentPackageName: 'com.malabi.app',
                                     ),
                                   ],
+                                ),
+                                // دبوس ثابت في المركز يلتقط الإحداثيات عند سحب الخريطة
+                                const Positioned(
+                                  bottom: 110,
+                                  child: Icon(
+                                    Icons.location_pin,
+                                    color: Colors.redAccent,
+                                    size: 46,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Center(
+                          Center(
                             child: Text(
-                              '💡 يمكنك تحريك وتكبير الخريطة لمعاينة النقطة بدقة',
-                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                              '📍 اسحب الخريطة بيدك لتثبيت الدبوس بدقة فوق الملعب\nالإحداثيات: ${currentLat!.toStringAsFixed(5)}, ${currentLng!.toStringAsFixed(5)}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
@@ -572,7 +581,6 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> with Single
                                       isLocating = false;
                                     });
 
-                                    // تحريك الخريطة للنقطة الجديدة فوراً
                                     mapController.move(LatLng(pos.latitude, pos.longitude), 16.5);
                                   } catch (e) {
                                     setModalState(() => isLocating = false);
