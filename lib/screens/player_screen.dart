@@ -28,7 +28,6 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
     _tabController.addListener(() => setState(() {}));
     _loadUserData();
 
-    // تشغيل الاستماع اللحظي لإشعارات قبول أو رفض الحجز بعد اكتمال بناء الواجهة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       PlayerNotificationService.listenToBookingUpdates(context, widget.userPhone);
     });
@@ -128,14 +127,14 @@ class _PlayerScreenState extends State<PlayerScreen> with SingleTickerProviderSt
                       stream: _firestore
                           .collection('bookings')
                           .where('phone', isEqualTo: widget.userPhone)
-                          .where('status', isEqualTo: 'upcoming')
+                          .where('seenByPlayer', isEqualTo: false)
                           .snapshots(),
                       builder: (context, snap) {
-                        final count = snap.data?.docs.length ?? 0;
+                        final unreadCount = snap.data?.docs.length ?? 0;
                         return Badge(
-                          isLabelVisible: count > 0,
-                          label: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                          backgroundColor: Colors.greenAccent.shade700,
+                          isLabelVisible: unreadCount > 0,
+                          label: Text('$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          backgroundColor: Colors.redAccent,
                           child: const Icon(Icons.confirmation_number_outlined, size: 20),
                         );
                       },
