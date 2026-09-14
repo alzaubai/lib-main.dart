@@ -1,13 +1,12 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../constants.dart';
+import '../widgets/owner_request_card.dart';
 
 class OwnerRequestsTab extends StatelessWidget {
   final String pitchName;
   const OwnerRequestsTab({super.key, required this.pitchName});
 
-  // دالة قبول الطلب مع الرفض التلقائي الذكي للطلبات المتنافسة على نفس الساعة
   Future<void> _approveBookingAndAutoRejectConflicts(
     BuildContext context,
     DocumentSnapshot approvedDoc,
@@ -17,13 +16,11 @@ class OwnerRequestsTab extends StatelessWidget {
     final startTime = approvedData['startTime'];
     final firestore = FirebaseFirestore.instance;
 
-    // 1. تثبيت هذا الحجز ونقله للحجوزات المؤكدة
     await approvedDoc.reference.update({
       'status': 'upcoming',
-      'seenByPlayer': false, // لإشعار الكابتن الفائز بالموافقة
+      'seenByPlayer': false,
     });
 
-    // 2. البحث عن أي طلبات أخرى معلقة مقدمة على نفس الملعب والتاريخ والساعة
     final conflictSnap = await firestore
         .collection('bookings')
         .where('pitchName', isEqualTo: pitchName)
@@ -38,7 +35,7 @@ class OwnerRequestsTab extends StatelessWidget {
         await doc.reference.update({
           'status': 'rejected',
           'rejectionReason': 'نعتذر منك، تم تثبيت هذا الموعد لفريق آخر أسبق في التأكيد',
-          'seenByPlayer': false, // لإشعارهم بالرفض فوراً مع السبب
+          'seenByPlayer': false,
         });
         rejectedCount++;
       }
@@ -49,13 +46,120 @@ class OwnerRequestsTab extends StatelessWidget {
         SnackBar(
           content: Text(
             rejectedCount > 0
-                ? 'تم تثبيت الحجز بالجدول، ورفض $rejectedCount طلبات منافسة لنفس الساعة تلقائياً ✔️'
-                : 'تم تثبيت الحجز بنجاح وإدراجه في جدول المباريات ✔️',
+                ? 'تم تثبيت الحجز بالجدول، ورفض $rejectedCount طلبات منافسة لنفس الساعة تلقائياً'
+                : 'تم تثبيت الحجز وإدراجه في جدول المباريات بنجاح',
           ),
           backgroundColor: const Color(0xFF1B5E20),
         ),
       );
     }
+  }
+
+  void _openRejectDialog(BuildContext context, DocumentReference docRef, String teamName) {
+    final reasonController = TextEditingController();
+    final List<String> quickReasons = [
+      'الملعب يخضع للصيانة الدورية',
+      'الموعد محجوز مسبقاً باتصال مباشر',
+      'عطلة رسمية أو ظرف طارئ بالملعب',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            titlePadding: const EdgeInsets.all(18),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 22),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'رفض طلب الحجز',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'يرجى كتابة سبب رفض طلب فريق ($teamName) ليظهر في إشعار الكابتن:',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'اكتب سبب الرفض هنا...',
+                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('أسباب سريعة:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: quickReasons.map((r) => ActionChip(
+                      label: Text(r, style: const TextStyle(fontSize: 11)),
+                      backgroundColor: const Color(0xFFF8FAFC),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      onPressed: () {
+                        setDlgState(() => reasonController.text = r);
+                      },
+                    )).toList(),
+                  ),
+                ],
+              ),
+            ),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('تراجع', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFDC2626),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                onPressed: () async {
+                  final reason = reasonController.text.trim().isEmpty
+                      ? 'اعتذار من إدارة الملعب لعدم توفر الموعد'
+                      : reasonController.text.trim();
+
+                  await docRef.update({
+                    'status': 'rejected',
+                    'rejectionReason': reason,
+                    'seenByPlayer': false,
+                  });
+
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: const Text('تأكيد الرفض', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -79,11 +183,24 @@ class OwnerRequestsTab extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_none_rounded, size: 60, color: Colors.grey.shade400),
-                  const SizedBox(height: 10),
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(Icons.inbox_rounded, size: 34, color: Color(0xFF94A3B8)),
+                  ),
+                  const SizedBox(height: 12),
                   const Text(
                     'لا توجد طلبات حجز معلقة حالياً',
-                    style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Color(0xFF475569), fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'الطلبات الجديدة التي يرسلها الكباتن ستظهر هنا',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
                 ],
               ),
@@ -91,164 +208,20 @@ class OwnerRequestsTab extends StatelessWidget {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final doc = docs[index];
               final data = doc.data() as Map<String, dynamic>;
-              final phone = data['phone'] ?? '';
 
-              return Card(
-                color: Colors.amber.shade50,
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.amber.shade200),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'طلب حجز من: ${data['teamOne']}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1B5E20)),
-                          ),
-                          Chip(
-                            label: const Text('معلق ⏳', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                            backgroundColor: Colors.amber.shade100,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '📅 التاريخ: ${data['date']} (${data['startTime']} - ${data['endTime']})',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                      Text('💰 المبلغ: ${data['price']} د.ع', style: const TextStyle(fontSize: 12, color: Colors.teal)),
-                      const Divider(height: 20),
-                      Row(
-                        children: [
-                          if (phone.toString().isNotEmpty) ...[
-                            IconButton(
-                              icon: const Icon(Icons.phone, color: Colors.green),
-                              onPressed: () => launchCallDirect(phone),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
-                              onPressed: () => launchWhatsAppDirect(phone),
-                            ),
-                          ],
-                          const Spacer(),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                            icon: const Icon(Icons.close, size: 16),
-                            label: const Text('رفض'),
-                            onPressed: () => _openRejectDialog(context, doc.reference, data['teamOne'] ?? 'الكابتن'),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
-                            icon: const Icon(Icons.check, size: 16, color: Colors.white),
-                            label: const Text('تثبيت وقبول', style: TextStyle(color: Colors.white)),
-                            onPressed: () => _approveBookingAndAutoRejectConflicts(context, doc),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              return OwnerRequestCard(
+                doc: doc,
+                onApprove: () => _approveBookingAndAutoRejectConflicts(context, doc),
+                onReject: () => _openRejectDialog(context, doc.reference, data['teamOne'] ?? 'الكابتن'),
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  void _openRejectDialog(BuildContext context, DocumentReference docRef, String teamName) {
-    final reasonController = TextEditingController();
-    final List<String> quickReasons = [
-      'الملعب يخضع للصيانة الدورية',
-      'الموعد محجوز مسبقاً باتصال مباشر',
-      'عطلة رسمية أو ظرف طارئ بالملعب',
-    ];
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlgState) => Directionality(
-          textDirection: ui.TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
-              children: [
-                Icon(Icons.cancel_rounded, color: Colors.red.shade700, size: 26),
-                const SizedBox(width: 8),
-                const Text('رفض طلب الحجز', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('يرجى كتابة سبب رفض حجز فريق ($teamName) ليظهر في إشعار اللاعب:', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: reasonController,
-                    maxLines: 2,
-                    decoration: InputDecoration(
-                      hintText: 'اكتب سبب الرفض هنا...',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.all(12),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text('أسباب سريعة وجاهزة:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: quickReasons.map((r) => ActionChip(
-                      label: Text(r, style: const TextStyle(fontSize: 10)),
-                      backgroundColor: Colors.grey.shade100,
-                      onPressed: () {
-                        setDlgState(() {
-                          reasonController.text = r;
-                        });
-                      },
-                    )).toList(),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () async {
-                  final reason = reasonController.text.trim().isEmpty
-                      ? 'اعتذار من إدارة الملعب لعدم توفر الموعد'
-                      : reasonController.text.trim();
-
-                  await docRef.update({
-                    'status': 'rejected',
-                    'rejectionReason': reason,
-                    'seenByPlayer': false,
-                  });
-
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('تأكيد الرفض وإرسال السبب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
