@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/player_notification_service.dart';
 import 'player/tabs/player_explore_tab.dart';
 import 'player/tabs/player_bookings_tab.dart';
-import 'tournaments/tournament_screen.dart';
+import 'tournaments/tournament_screen.dart'; // هذا هو السطر الذي كان مفقوداً
 import 'auth_screen.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -89,7 +89,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
     }
 
-    // التحديد الصريح لنوع القائمة يمنع أخطاء البناء
     final List<Widget> tabs = <Widget>[
       PlayerExploreTab(userPhone: widget.userPhone),
       PlayerBookingsTab(userPhone: widget.userPhone),
