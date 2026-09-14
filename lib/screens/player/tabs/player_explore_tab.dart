@@ -3,12 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../constants.dart';
 import '../sheets/player_booking_sheet.dart';
 
 class PlayerExploreTab extends StatefulWidget {
   final String userPhone;
-  const PlayerExploreTab({super.key, required this.userPhone});
+  final bool showOnlyFavorites;
+
+  const PlayerExploreTab({
+    super.key,
+    required this.userPhone,
+    this.showOnlyFavorites = false,
+  });
 
   @override
   State<PlayerExploreTab> createState() => _PlayerExploreTabState();
@@ -22,15 +29,19 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
   String _selectedGov = 'الكل';
   String _selectedArea = 'الكل';
   String _selectedSurface = 'الكل';
-  bool _isLoadingUserLocation = true;
+  bool _isLoading = true;
+  List<String> _favoritePitches = [];
 
   @override
   void initState() {
     super.initState();
-    _loadUserDefaultLocation();
+    _loadFavoritesAndLocation();
   }
 
-  Future<void> _loadUserDefaultLocation() async {
+  Future<void> _loadFavoritesAndLocation() async {
+    final prefs = await SharedPreferences.getInstance();
+    _favoritePitches = prefs.getStringList('favorites_${widget.userPhone}') ?? [];
+
     try {
       final userDoc = await _firestore.collection('users').doc(widget.userPhone).get();
       if (userDoc.exists && mounted) {
@@ -38,23 +49,29 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
         final userGov = (data?['governorate'] ?? '').toString().trim();
         final userArea = (data?['area'] ?? '').toString().trim();
 
-        setState(() {
-          if (userGov.isNotEmpty && iraqGovernoratesList.contains(userGov)) {
-            _selectedGov = userGov;
-            final availableAreas = getAreasListForGov(userGov);
-            if (userArea.isNotEmpty && availableAreas.contains(userArea)) {
-              _selectedArea = userArea;
-            }
+        if (userGov.isNotEmpty && iraqGovernoratesList.contains(userGov)) {
+          _selectedGov = userGov;
+          final availableAreas = getAreasListForGov(userGov);
+          if (userArea.isNotEmpty && availableAreas.contains(userArea)) {
+            _selectedArea = userArea;
           }
-          _isLoadingUserLocation = false;
-        });
-        return;
+        }
       }
     } catch (_) {}
 
-    if (mounted) {
-      setState(() => _isLoadingUserLocation = false);
-    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _toggleFavorite(String pitchName) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      if (_favoritePitches.contains(pitchName)) {
+        _favoritePitches.remove(pitchName);
+      } else {
+        _favoritePitches.add(pitchName);
+      }
+    });
+    await prefs.setStringList('favorites_${widget.userPhone}', _favoritePitches);
   }
 
   void _openWhatsApp(String phone) async {
@@ -94,94 +111,84 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // شريط البحث والفلاتر العلوية
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
-            ),
-            child: Column(
-              children: [
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'ابحث باسم الملعب، المنطقة، أو المحافظة...',
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF1B5E20)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    filled: true,
-                    fillColor: const Color(0xFFF4F6F9),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          // شريط البحث والفلاتر العلوية (يختفي في شاشة المفضلة للتنظيم)
+          if (!widget.showOnlyFavorites) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+              ),
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'ابحث باسم الملعب، المنطقة، أو المحافظة...',
+                      prefixIcon: const Icon(Icons.search, color: Color(0xFF1B5E20)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      filled: true,
+                      fillColor: const Color(0xFFF4F6F9),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                    onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
                   ),
-                  onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
-                ),
-                const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      // فلتر المحافظة
-                      DropdownButton<String>(
-                        value: _selectedGov,
-                        underline: const SizedBox(),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                        items: iraqGovernoratesList
-                            .map((g) => DropdownMenuItem(value: g, child: Text('📍 $g')))
-                            .toList(),
-                        onChanged: (v) => setState(() {
-                          _selectedGov = v!;
-                          _selectedArea = 'الكل';
-                        }),
-                      ),
-                      const SizedBox(width: 8),
-                      // فلتر المنطقة
-                      DropdownButton<String>(
-                        value: getAreasListForGov(_selectedGov).contains(_selectedArea)
-                            ? _selectedArea
-                            : 'الكل',
-                        underline: const SizedBox(),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-                        items: getAreasListForGov(_selectedGov)
-                            .map((a) => DropdownMenuItem(value: a, child: Text('🏘️ $a')))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedArea = v!),
-                      ),
-                      const SizedBox(width: 8),
-                      // فلتر الأرضية
-                      DropdownButton<String>(
-                        value: _selectedSurface,
-                        underline: const SizedBox(),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-                        items: pitchSurfaceTypesList
-                            .map((s) => DropdownMenuItem(value: s, child: Text(s == 'الكل' ? 'الأرضية: الكل' : s)))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedSurface = v!),
-                      ),
-                      if (_selectedGov != 'الكل' || _selectedArea != 'الكل' || _selectedSurface != 'الكل') ...[
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          avatar: const Icon(Icons.refresh, size: 14, color: Colors.red),
-                          label: const Text('عرض الكل', style: TextStyle(fontSize: 11, color: Colors.red)),
-                          backgroundColor: Colors.red.shade50,
-                          side: BorderSide(color: Colors.red.shade200),
-                          onPressed: () {
-                            setState(() {
-                              _selectedGov = 'الكل';
-                              _selectedArea = 'الكل';
-                              _selectedSurface = 'الكل';
-                            });
-                          },
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        DropdownButton<String>(
+                          value: _selectedGov,
+                          underline: const SizedBox(),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                          items: iraqGovernoratesList.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                          onChanged: (v) => setState(() {
+                            _selectedGov = v!;
+                            _selectedArea = 'الكل';
+                          }),
                         ),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          value: getAreasListForGov(_selectedGov).contains(_selectedArea) ? _selectedArea : 'الكل',
+                          underline: const SizedBox(),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                          items: getAreasListForGov(_selectedGov).map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
+                          onChanged: (v) => setState(() => _selectedArea = v!),
+                        ),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          value: _selectedSurface,
+                          underline: const SizedBox(),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                          items: pitchSurfaceTypesList.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                          onChanged: (v) => setState(() => _selectedSurface = v!),
+                        ),
+                        if (_selectedGov != 'الكل' || _selectedArea != 'الكل' || _selectedSurface != 'الكل') ...[
+                          const SizedBox(width: 8),
+                          ActionChip(
+                            label: const Text('عرض الكل', style: TextStyle(fontSize: 11, color: Colors.red)),
+                            backgroundColor: Colors.red.shade50,
+                            side: BorderSide(color: Colors.red.shade200),
+                            onPressed: () {
+                              setState(() {
+                                _selectedGov = 'الكل';
+                                _selectedArea = 'الكل';
+                                _selectedSurface = 'الكل';
+                              });
+                            },
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
 
           // قائمة الملاعب
           Expanded(
-            child: _isLoadingUserLocation
+            child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)))
                 : StreamBuilder<QuerySnapshot>(
                     stream: _firestore.collection('pitches').snapshots(),
@@ -197,6 +204,10 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                         final gov = (d['governorate'] ?? '').toString();
                         final area = (d['area'] ?? '').toString();
                         final surface = (d['surfaceType'] ?? '').toString();
+
+                        if (widget.showOnlyFavorites && !_favoritePitches.contains(d['name'])) {
+                          return false;
+                        }
 
                         final matchesQuery = _searchQuery.isEmpty ||
                             name.contains(_searchQuery) ||
@@ -215,28 +226,24 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.stadium_outlined, size: 60, color: Colors.grey.shade400),
+                              Icon(
+                                widget.showOnlyFavorites ? Icons.favorite_border_rounded : Icons.stadium_outlined,
+                                size: 60,
+                                color: Colors.grey.shade400,
+                              ),
                               const SizedBox(height: 12),
                               Text(
-                                _selectedArea != 'الكل'
-                                    ? 'لا توجد ملاعب مسجلة حالياً في منطقة ($_selectedArea)'
-                                    : 'لا توجد ملاعب مطابقة للبحث أو الفلترة',
+                                widget.showOnlyFavorites
+                                    ? 'قائمة المفضلة فارغة حالياً'
+                                    : 'لا توجد ملاعب مطابقة للبحث',
                                 style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 14),
                               ),
-                              const SizedBox(height: 8),
-                              TextButton.icon(
-                                icon: const Icon(Icons.explore_rounded, color: Color(0xFF1B5E20)),
-                                label: const Text(
-                                  'استكشاف ملاعب كافة المناطق',
-                                  style: TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold),
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedGov = 'الكل';
-                                    _selectedArea = 'الكل';
-                                    _selectedSurface = 'الكل';
-                                  });
-                                },
+                              const SizedBox(height: 6),
+                              Text(
+                                widget.showOnlyFavorites
+                                    ? 'اضغط على رمز النجمة بالملعب لحفظه هنا'
+                                    : 'جرب تغيير خيارات الفلترة أو المحافظة',
+                                style: const TextStyle(color: Colors.grey, fontSize: 12),
                               ),
                             ],
                           ),
@@ -252,12 +259,13 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                           final phone = (d['phone'] ?? d['ownerPhone'] ?? '').toString().trim();
                           final price = (d['hourlyRate'] as num?)?.toDouble() ?? 25000.0;
                           final pType = d['pitchType'] ?? 'سباعي';
-                          final surface = d['surfaceType'] ?? 'ثيل 🌿';
+                          final surface = d['surfaceType'] ?? 'ثيل صناعي';
                           final gov = d['governorate'] ?? '';
                           final area = d['area'] ?? '';
                           final desc = d['description'] ?? '';
                           final lat = (d['latitude'] as num?)?.toDouble();
                           final lng = (d['longitude'] as num?)?.toDouble();
+                          final isFav = _favoritePitches.contains(pName);
 
                           return Card(
                             elevation: 2,
@@ -284,12 +292,29 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(pName,
-                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                                overflow: TextOverflow.ellipsis),
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(pName,
+                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                                      overflow: TextOverflow.ellipsis),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                IconButton(
+                                                  constraints: const BoxConstraints(),
+                                                  padding: EdgeInsets.zero,
+                                                  icon: Icon(
+                                                    isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                                                    color: isFav ? Colors.amber : Colors.grey,
+                                                    size: 22,
+                                                  ),
+                                                  tooltip: 'إضافة للمفضلة',
+                                                  onPressed: () => _toggleFavorite(pName),
+                                                ),
+                                              ],
+                                            ),
                                             const SizedBox(height: 2),
-                                            Text('📍 $gov - $area',
-                                                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                            Text('$gov - $area', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                           ],
                                         ),
                                       ),
@@ -318,7 +343,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                     ],
                                   ),
                                   const Divider(height: 20),
-
                                   Row(
                                     children: [
                                       ElevatedButton.icon(
@@ -330,7 +354,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         ),
                                         icon: const Icon(Icons.event_available_rounded, size: 18),
-                                        label: const Text('حجز موعد ⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        label: const Text('حجز موعد', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                         onPressed: () {
                                           showModalBottomSheet(
                                             context: context,
@@ -345,7 +369,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                         },
                                       ),
                                       const SizedBox(width: 8),
-
                                       InkWell(
                                         onTap: () => _launchWazeToPitch(pName, lat, lng),
                                         child: Container(
@@ -364,9 +387,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                           ),
                                         ),
                                       ),
-
                                       const Spacer(),
-
                                       if (phone.isNotEmpty)
                                         InkWell(
                                           onTap: () => _openWhatsApp(phone),
