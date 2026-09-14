@@ -84,9 +84,9 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
         ),
         padding: EdgeInsets.only(
           top: 14,
-          left: 18,
-          right: 18,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 18,
+          left: 20,
+          right: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -99,15 +99,25 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                   decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Row(
                 children: [
-                  const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 24),
-                  const SizedBox(width: 8),
-                  Text('طلب حجز في ${widget.pitchName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 24),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'طلب حجز: ${widget.pitchName}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               TextField(
                 controller: _teamOneCtrl,
                 decoration: const InputDecoration(labelText: 'اسم فريقك', border: OutlineInputBorder()),
@@ -119,37 +129,51 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ),
               const SizedBox(height: 14),
 
-              // اختيار التاريخ
-              Row(
-                children: [
-                  const Icon(Icons.calendar_month_rounded, size: 18, color: Color(0xFF1B5E20)),
-                  const SizedBox(width: 6),
-                  Text('يوم المباراة: $dayNameArabic ($dateStr)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const Spacer(),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.edit_calendar_rounded, size: 14),
-                    label: const Text('تغيير اليوم', style: TextStyle(fontSize: 11)),
-                    onPressed: () async {
-                      final p = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 30)),
-                      );
-                      if (p != null) {
-                        setState(() {
-                          _selectedDate = p;
-                          _selectedSlot = null;
-                        });
-                      }
-                    },
-                  ),
-                ],
+              // اختيار اليوم
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7FAF7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_month_rounded, size: 20, color: Color(0xFF1B5E20)),
+                    const SizedBox(width: 8),
+                    Text('$dayNameArabic ($dateStr)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Spacer(),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1B5E20),
+                        side: const BorderSide(color: Color(0xFF1B5E20)),
+                      ),
+                      icon: const Icon(Icons.edit_calendar_rounded, size: 14),
+                      label: const Text('تغيير التاريخ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        final p = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 30)),
+                        );
+                        if (p != null) {
+                          setState(() {
+                            _selectedDate = p;
+                            _selectedSlot = null;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 16),
+
+              const Text('اختر وقت المباراة (الساعات المتاحة باللون الأخضر):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 10),
 
-              // جلب الساعات المشغولة فعلياً (المثبتةupcoming، المكتملةcompleted، مباريات البطولة، والاشتراكات الدائمة)
-              // الساعات المعلقة pending تبقى متاحة للتنافس ولا تُقفل
+              // عرض الساعات بالشكل الكلاسيكي المنظم والواضح
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('bookings')
@@ -166,12 +190,10 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                     builder: (context, recurringSnap) {
                       final confirmedBookedSlots = <String>{};
 
-                      // فحص حجوزات الجدول المثبتة فقط
                       if (bookingSnap.hasData) {
                         for (var doc in bookingSnap.data!.docs) {
                           final d = doc.data() as Map<String, dynamic>;
                           final status = d['status'];
-                          // الساعة تقفل فقط إذا كانت مؤكدة أو مكتملة أو مباراة بطولة
                           if (status == 'upcoming' || status == 'completed' || status == 'tournament_match') {
                             final slot = '${d['startTime']} - ${d['endTime']}';
                             confirmedBookedSlots.add(slot);
@@ -179,7 +201,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         }
                       }
 
-                      // فحص الاشتراكات الدائمة
                       if (recurringSnap.hasData) {
                         for (var doc in recurringSnap.data!.docs) {
                           final d = doc.data() as Map<String, dynamic>;
@@ -188,48 +209,80 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         }
                       }
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('اختر الوقت المناسب (الساعات الخضراء متاحة):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _allSlots.map((slot) {
-                              final isBooked = confirmedBookedSlots.contains(slot);
-                              final isSelected = _selectedSlot == slot;
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 2.5,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemCount: _allSlots.length,
+                        itemBuilder: (context, idx) {
+                          final slot = _allSlots[idx];
+                          final isBooked = confirmedBookedSlots.contains(slot);
+                          final isSelected = _selectedSlot == slot;
 
-                              return ChoiceChip(
-                                label: Text(
-                                  slot,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: isBooked ? Colors.grey : (isSelected ? Colors.white : Colors.black87),
-                                  ),
+                          return InkWell(
+                            onTap: isBooked
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _selectedSlot = isSelected ? null : slot;
+                                    });
+                                  },
+                            borderRadius: BorderRadius.circular(12),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: isBooked
+                                    ? Colors.grey.shade200
+                                    : (isSelected ? const Color(0xFF1B5E20) : Colors.green.shade50),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isBooked
+                                      ? Colors.grey.shade300
+                                      : (isSelected ? const Color(0xFF1B5E20) : Colors.green.shade400),
+                                  width: isSelected ? 2 : 1,
                                 ),
-                                selected: isSelected,
-                                selectedColor: const Color(0xFF1B5E20),
-                                backgroundColor: isBooked ? Colors.grey.shade200 : const Color(0xFFE8F5E9),
-                                onSelected: isBooked
-                                    ? null
-                                    : (val) {
-                                        setState(() {
-                                          _selectedSlot = val ? slot : null;
-                                        });
-                                      },
-                              );
-                            }).toList(),
-                          ),
-                        ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    isBooked
+                                        ? Icons.lock_outline_rounded
+                                        : (isSelected ? Icons.check_circle_rounded : Icons.access_time_rounded),
+                                    size: 16,
+                                    color: isBooked
+                                        ? Colors.grey.shade500
+                                        : (isSelected ? Colors.white : const Color(0xFF1B5E20)),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    slot,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isBooked
+                                          ? Colors.grey.shade500
+                                          : (isSelected ? Colors.white : const Color(0xFF1B5E20)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   );
                 },
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
@@ -253,7 +306,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                             'endTime': parts[1].trim(),
                             'price': widget.hourlyRate,
                             'status': 'pending',
-                            'seenByPlayer': true, // لتجنب ظهور إشعار خاطئ لحظة إرسال الطلب
+                            'seenByPlayer': true,
                             'createdAt': FieldValue.serverTimestamp(),
                           });
 
