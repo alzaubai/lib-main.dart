@@ -7,13 +7,15 @@ class RemoveTeamDialog {
     BuildContext context, {
     required String tournamentId,
     required String tournamentName,
-    required Map<String, dynamic> teamData,
+    required String teamName,
+    required String captainPhone,
   }) {
     final reasonCtrl = TextEditingController();
     final List<String> defaultReasons = [
-      'عدم استكمال رسوم الاشتراك بالوقت المحدد',
-      'مخالفة الشروط واللوائح الفنية للبطولة',
+      'عدم تسديد رسوم الاشتراك في الموعد المحدد',
+      'مخالفة لوائح وشروط البطولة الرياضية',
       'انسحاب الفريق بناءً على طلب الكابتن',
+      'عدم حضور الفريق في الموعد الرسمي',
     ];
 
     showDialog(
@@ -35,10 +37,19 @@ class RemoveTeamDialog {
                   child: Icon(Icons.person_remove_rounded, color: Colors.red.shade800, size: 22),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'استبعاد فريق من البطولة',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'استبعاد فريق من البطولة',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      Text(
+                        'الفريق: $teamName',
+                        style: TextStyle(fontSize: 12, color: Colors.red.shade800, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -49,7 +60,7 @@ class RemoveTeamDialog {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'سيتم حذف الفريق وإرسال إشعار مباشر للكابتن بالسبب المسجل هنا:',
+                    'اكتب سبب الاستبعاد ليصل كإشعار رسمي مباشر لهاتف الكابتن:',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade700, height: 1.4),
                   ),
                   const SizedBox(height: 12),
@@ -58,7 +69,7 @@ class RemoveTeamDialog {
                     maxLines: 2,
                     style: const TextStyle(fontSize: 12),
                     decoration: InputDecoration(
-                      hintText: 'اكتب سبب الاستبعاد...',
+                      hintText: 'اكتب سبب الاستبعاد هنا...',
                       hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade400),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.all(12),
@@ -66,7 +77,7 @@ class RemoveTeamDialog {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'خيارات سريعة:',
+                    'أسباب سريعة وجاهزة:',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
                   ),
                   const SizedBox(height: 6),
@@ -107,20 +118,21 @@ class RemoveTeamDialog {
                   await TournamentService.removeTeamWithReason(
                     tournamentId: tournamentId,
                     tournamentName: tournamentName,
-                    teamData: teamData,
+                    teamName: teamName,
+                    captainPhone: captainPhone,
                     reason: finalReason,
                   );
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('تم استبعاد الفريق وإرسال الإشعار للكابتن'),
-                        backgroundColor: Colors.black87,
+                      SnackBar(
+                        content: Text('تم استبعاد فريق ($teamName) وإرسال إشعار للكابتن'),
+                        backgroundColor: const Color(0xFF1B5E20),
                       ),
                     );
                   }
                 },
-                child: const Text('تأكيد الاستبعاد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text('تأكيد الاستبعاد والإشعار', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
