@@ -7,23 +7,29 @@ class PitchImageService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final ImagePicker _picker = ImagePicker();
 
-  /// اختيار صورة مباشرة من جهاز المستخدم وضغطها لحفظها بالملعب
+  /// اختيار وضغط الصورة محلياً لضمان عدم تجاوز حد وثيقة Firestore
   static Future<bool> pickImageDirectly(String pitchName) async {
     try {
+      final docSnap = await _firestore.collection('pitches').doc(pitchName).get();
+      if (docSnap.exists) {
+        final currentImages = List<String>.from(docSnap.data()?['images'] ?? []);
+        if (currentImages.length >= 4) {
+          return false;
+        }
+      }
+
       final XFile? picked = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 600,
-        imageQuality: 65, // ضغط عالي للحفاظ على سرعة التطبيق
+        maxWidth: 600,
+        maxHeight: 400,
+        imageQuality: 45,
       );
 
       if (picked == null) return false;
 
-      // قراءة بايتات الصورة وتحويلها إلى Base64 String للحفظ المباشر
       final bytes = await File(picked.path).readAsBytes();
       final base64String = base64Encode(bytes);
 
-      // حفظها مباشرة داخل وثيقة الملعب
       await _firestore.collection('pitches').doc(pitchName).update({
         'images': FieldValue.arrayUnion([base64String]),
       });
