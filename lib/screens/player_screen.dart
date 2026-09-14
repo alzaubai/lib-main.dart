@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/player_notification_service.dart';
 import 'player/tabs/player_explore_tab.dart';
 import 'player/tabs/player_bookings_tab.dart';
-import 'tournaments/tournaments_tab.dart' if (dart.library.io) 'tournament_screen.dart';
+import 'tournaments/tournament_screen.dart';
 import 'auth_screen.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -105,8 +105,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       PlayerBookingsTab(
         userPhone: widget.userPhone,
       ),
-      const TournamentScreen(
-        userPhone: 'player',
+      TournamentScreen(
+        userPhone: widget.userPhone,
         isOwner: false,
       ),
     ];
