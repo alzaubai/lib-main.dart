@@ -3,27 +3,29 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class TournamentService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// استبعاد فريق من البطولة مع إرسال إشعار رسمي بالسبب
+  /// استبعاد فريق من البطولة مع إرسال إشعار رسمي وإتاحة المقعد
   static Future<void> removeTeamWithReason({
     required String tournamentId,
     required String tournamentName,
-    required Map<String, dynamic> teamData,
+    required String teamName,
+    required String captainPhone,
     required String reason,
   }) async {
-    final teamPhone = (teamData['phone'] ?? '').toString().trim();
-    final teamName = teamData['name'] ?? teamData['teamName'] ?? 'الفريق';
+    final Map<String, dynamic> updatePayload = {
+      'teams': FieldValue.arrayRemove([teamName]),
+    };
 
-    // 1. حذف الفريق من مصفوفة الفرق المسجلة في وثيقة البطولة
-    final tournamentRef = _firestore.collection('tournaments').doc(tournamentId);
-    await tournamentRef.update({
-      'teams': FieldValue.arrayRemove([teamData]),
-      'registeredTeamsCount': FieldValue.increment(-1),
-    });
+    if (captainPhone.isNotEmpty) {
+      updatePayload['registeredPlayers.$captainPhone'] = FieldValue.delete();
+    }
 
-    // 2. إرسال إشعار مباشر في سجل تنبيهات الكابتن إذا كان له رقم هاتف
-    if (teamPhone.isNotEmpty) {
+    // 1. تحديث وثيقة البطولة وحذف الفريق
+    await _firestore.collection('tournaments').doc(tournamentId).update(updatePayload);
+
+    // 2. إرسال إشعار مباشر في تنبيهات اللاعب
+    if (captainPhone.isNotEmpty) {
       await _firestore.collection('notifications').add({
-        'userPhone': teamPhone,
+        'userPhone': captainPhone,
         'type': 'tournament_removal',
         'title': 'استبعاد من البطولة',
         'tournamentName': tournamentName,
@@ -35,40 +37,40 @@ class TournamentService {
     }
   }
 
-  /// تثبيت القرعة وإرسال إشعارات مواعيد المباريات لجميع الكباتن المسجلين
-  static Future<void> confirmDrawAndNotifyTeams({
-    required String tournamentId,
+  /// إرسال إشعارات مواعيد المباريات لجميع الفرق بعد توليد القرعة
+  static Future<void> notifyTeamsWithMatches({
     required String tournamentName,
-    required List<Map<String, dynamic>> fixtures, // المباريات المجدولة
+    required List<Map<String, dynamic>> matches,
+    required Map<String, dynamic> registeredPlayers,
   }) async {
     final batch = _firestore.batch();
 
-    // 1. تحديث حالة البطولة إلى: القرعة مثبتة
-    final tournamentRef = _firestore.collection('tournaments').doc(tournamentId);
-    batch.update(tournamentRef, {
-      'status': 'draw_confirmed',
-      'fixtures': fixtures,
-      'drawConfirmedAt': FieldValue.serverTimestamp(),
+    final Map<String, String> teamToPhone = {};
+    registeredPlayers.forEach((phone, tName) {
+      if (!phone.startsWith('manual_')) {
+        teamToPhone[tName.toString()] = phone;
+      }
     });
 
-    // 2. تدوين إشعار لكل فريق بموعد مباراته وخصمه
-    for (var match in fixtures) {
-      final team1Phone = (match['team1Phone'] ?? '').toString().trim();
-      final team2Phone = (match['team2Phone'] ?? '').toString().trim();
-      final date = match['date'] ?? '';
-      final time = match['time'] ?? '';
-      final team1Name = match['team1Name'] ?? 'فريق';
-      final team2Name = match['team2Name'] ?? 'فريق';
+    for (var match in matches) {
+      final teamA = match['teamA']?.toString() ?? '';
+      final teamB = match['teamB']?.toString() ?? '';
+      final date = match['date']?.toString() ?? '';
+      final time = match['time']?.toString() ?? '';
 
-      // إشعار الكابتن الأول
-      if (team1Phone.isNotEmpty) {
-        final notifRef = _firestore.collection('notifications').doc();
-        batch.set(notifRef, {
-          'userPhone': team1Phone,
+      if (date.isEmpty || time.isEmpty) continue;
+
+      final phoneA = teamToPhone[teamA];
+      final phoneB = teamToPhone[teamB];
+
+      if (phoneA != null && phoneA.isNotEmpty) {
+        final refA = _firestore.collection('notifications').doc();
+        batch.set(refA, {
+          'userPhone': phoneA,
           'type': 'tournament_match_scheduled',
-          'title': 'تحديد موعد مباراتك في البطولة',
+          'title': 'تحديد موعد مباراتك الرسمية',
           'tournamentName': tournamentName,
-          'opponent': team2Name,
+          'opponent': teamB,
           'matchDate': date,
           'matchTime': time,
           'seen': false,
@@ -76,15 +78,14 @@ class TournamentService {
         });
       }
 
-      // إشعار الكابتن الثاني
-      if (team2Phone.isNotEmpty) {
-        final notifRef = _firestore.collection('notifications').doc();
-        batch.set(notifRef, {
-          'userPhone': team2Phone,
+      if (phoneB != null && phoneB.isNotEmpty) {
+        final refB = _firestore.collection('notifications').doc();
+        batch.set(refB, {
+          'userPhone': phoneB,
           'type': 'tournament_match_scheduled',
-          'title': 'تحديد موعد مباراتك في البطولة',
+          'title': 'تحديد موعد مباراتك الرسمية',
           'tournamentName': tournamentName,
-          'opponent': team1Name,
+          'opponent': teamA,
           'matchDate': date,
           'matchTime': time,
           'seen': false,
