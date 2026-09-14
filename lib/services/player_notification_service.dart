@@ -1,18 +1,19 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PlayerNotificationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static bool _isListening = false;
+  static StreamSubscription<QuerySnapshot>? _bookingsSub;
+  static StreamSubscription<QuerySnapshot>? _tournamentsSub;
 
-  /// الاستماع الموحد لجميع إشعارات اللاعب (حجوزات عادية + بطولات)
+  /// بدء الاستماع الموحد
   static void listen(BuildContext context, String userPhone) {
-    if (_isListening) return;
-    _isListening = true;
+    stop(); // إلغاء أي استماع سابق لتجنب التكرار
 
-    // 1. الاستماع لتحديثات الحجوزات العادية (قبول أو رفض من صاحب الملعب)
-    _firestore
+    // 1. استماع لتحديثات الحجوزات العادية
+    _bookingsSub = _firestore
         .collection('bookings')
         .where('phone', isEqualTo: userPhone)
         .where('seenByPlayer', isEqualTo: false)
@@ -29,8 +30,8 @@ class PlayerNotificationService {
       }
     });
 
-    // 2. الاستماع لإشعارات البطولات (استبعاد أو تحديد مواعيد مباريات)
-    _firestore
+    // 2. استماع لإشعارات البطولات
+    _tournamentsSub = _firestore
         .collection('notifications')
         .where('userPhone', isEqualTo: userPhone)
         .where('seen', isEqualTo: false)
@@ -44,7 +45,14 @@ class PlayerNotificationService {
     });
   }
 
-  /// نافذة إشعار الحجز العادي (قبول / رفض)
+  /// إيقاف الاستماع عند مغادرة الشاشة أو تسجيل الخروج
+  static void stop() {
+    _bookingsSub?.cancel();
+    _bookingsSub = null;
+    _tournamentsSub?.cancel();
+    _tournamentsSub = null;
+  }
+
   static void _showBookingStatusDialog(
     BuildContext context,
     DocumentReference docRef,
@@ -135,7 +143,6 @@ class PlayerNotificationService {
     );
   }
 
-  /// نافذة إشعار البطولة (استبعاد أو جدولة موعد)
   static void _showTournamentNotificationDialog(
     BuildContext context,
     DocumentReference docRef,
