@@ -8,9 +8,7 @@ class PlayerNotificationService {
   static final Map<String, String> _lastKnownStatuses = {};
   static bool _isInitialLoad = true;
 
-  /// بدء الاستماع لتحديثات حجوزات اللاعب
   static void listenToBookingUpdates(BuildContext context, String userPhone) {
-    // إلغاء أي استماع سابق لتجنب التكرار
     stopListening();
     _isInitialLoad = true;
     _lastKnownStatuses.clear();
@@ -21,7 +19,6 @@ class PlayerNotificationService {
         .snapshots()
         .listen((snapshot) {
       if (_isInitialLoad) {
-        // حفظ الحالات الحالية عند فتح التطبيق أول مرة دون إطلاق إشعارات قديمة
         for (var doc in snapshot.docs) {
           final data = doc.data();
           _lastKnownStatuses[doc.id] = (data['status'] ?? '').toString();
@@ -36,7 +33,6 @@ class PlayerNotificationService {
         final newStatus = (data['status'] ?? '').toString();
         final oldStatus = _lastKnownStatuses[doc.id];
 
-        // التحقق من حدوث تغيير حقيقي في حالة الحجز
         if (oldStatus != null && oldStatus != newStatus) {
           _lastKnownStatuses[doc.id] = newStatus;
 
@@ -55,6 +51,7 @@ class PlayerNotificationService {
               pitchName: data['pitchName'] ?? 'الملعب',
               date: data['date'] ?? '',
               time: '${data['startTime'] ?? ''} إلى ${data['endTime'] ?? ''}',
+              rejectionReason: data['rejectionReason'] ?? 'لم يتم تحديد سبب من قبل إدارة الملعب',
             );
           }
         } else {
@@ -64,20 +61,19 @@ class PlayerNotificationService {
     });
   }
 
-  /// إيقاف الاستماع عند تسجيل الخروج أو إغلاق الشاشة
   static void stopListening() {
     _bookingSubscription?.cancel();
     _bookingSubscription = null;
     _isInitialLoad = true;
   }
 
-  /// عرض بطاقة التنبيه المنبثقة للاعب
   static void _showNotificationDialog(
     BuildContext context, {
     required bool isApproved,
     required String pitchName,
     required String date,
     required String time,
+    String? rejectionReason,
   }) {
     showDialog(
       context: context,
@@ -115,9 +111,35 @@ class PlayerNotificationService {
               Text(
                 isApproved
                     ? 'مبروك! وافق صاحب الملعب على موعد مباراتك وتم تثبيتها بالجدول رسمياً.'
-                    : 'نعتذر منك، لم يتمكن صاحب الملعب من قبول طلب الحجز لهذا الموعد.',
+                    : 'نعتذر منك، لقد تم رفض طلب الحجز من قبل إدارة الملعب.',
                 style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
               ),
+              if (!isApproved && rejectionReason != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 16, color: Colors.red),
+                          SizedBox(width: 4),
+                          Text('سبب الرفض:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(rejectionReason, style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
