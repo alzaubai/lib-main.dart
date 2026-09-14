@@ -10,6 +10,7 @@ import 'owner/sheets/add_manual_booking_sheet.dart';
 import 'owner/sheets/add_recurring_booking_sheet.dart';
 import 'tournaments/tournament_screen.dart';
 import 'tournaments/sheets/create_tournament_sheet.dart';
+import 'common/dialogs/pitch_reviews_dialog.dart';
 
 class OwnerScreen extends StatefulWidget {
   final String userPhone;
@@ -256,24 +257,49 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade50,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.amber.shade300),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.star_rounded, size: 13, color: Colors.amber.shade900),
-                              const SizedBox(width: 2),
-                              Text(
-                                '4.8',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                        // شارة التقييم الحي التفاعلية المربوطة بالمراجعات
+                        StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseFirestore.instance.collection('pitches').doc(widget.pitchName).snapshots(),
+                          builder: (context, snapshot) {
+                            double rating = 5.0;
+                            int reviewsCount = 0;
+                            if (snapshot.hasData && snapshot.data!.exists) {
+                              final d = snapshot.data!.data() as Map<String, dynamic>?;
+                              rating = (d?['rating'] as num?)?.toDouble() ?? 5.0;
+                              reviewsCount = (d?['reviewsCount'] as num?)?.toInt() ?? 0;
+                            }
+
+                            return InkWell(
+                              onTap: () {
+                                PitchReviewsDialog.show(
+                                  context,
+                                  pitchName: widget.pitchName,
+                                  currentUserPhone: widget.userPhone,
+                                  canAddReview: false,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.amber.shade300),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.star_rounded, size: 13, color: Colors.amber.shade900),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      reviewsCount > 0 ? '$rating ($reviewsCount)' : '$rating',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),
