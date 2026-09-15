@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../constants.dart';
 import '../../../services/location_service.dart';
@@ -42,40 +41,94 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
     _loadInitialData();
   }
 
+  // إشعار HUD الشفاف في منتصف الشاشة
+  void _showCenterHudToast(String message, {bool isError = false}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (ctx) {
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        });
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.80),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isError ? Icons.error_outline_rounded : Icons.star_rounded,
+                    color: isError ? Colors.redAccent : Colors.amber,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // جلب المفضلة سحابياً من حساب المستخدم في Firestore
   Future<void> _loadInitialData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _favoritePitches = prefs.getStringList('favorites_${widget.userPhone}') ?? [];
-    });
+    try {
+      final doc = await _firestore.collection('users').doc(widget.userPhone).get();
+      if (doc.exists && mounted) {
+        final d = doc.data();
+        setState(() {
+          _favoritePitches = List<String>.from(d?['favorites'] ?? []);
+        });
+      }
+    } catch (_) {}
 
     _currentPosition = await LocationService.getCurrentLocation();
     if (mounted) setState(() => _isLoading = false);
   }
 
+  // مزامنة المفضلة سحابياً ومحلياً فوراً
   Future<void> _toggleFavorite(String pitchName) async {
-    final prefs = await SharedPreferences.getInstance();
+    final isFav = _favoritePitches.contains(pitchName);
     setState(() {
-      if (_favoritePitches.contains(pitchName)) {
+      if (isFav) {
         _favoritePitches.remove(pitchName);
       } else {
         _favoritePitches.add(pitchName);
       }
     });
-    await prefs.setStringList('favorites_${widget.userPhone}', _favoritePitches);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _favoritePitches.contains(pitchName)
-                ? 'تمت إضافة ($pitchName) إلى المفضلة ⭐'
-                : 'تمت إزالة ($pitchName) من المفضلة',
-          ),
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    try {
+      if (isFav) {
+        await _firestore.collection('users').doc(widget.userPhone).set({
+          'favorites': FieldValue.arrayRemove([pitchName]),
+        }, SetOptions(merge: true));
+        _showCenterHudToast('تمت الإزالة من المفضلة');
+      } else {
+        await _firestore.collection('users').doc(widget.userPhone).set({
+          'favorites': FieldValue.arrayUnion([pitchName]),
+        }, SetOptions(merge: true));
+        _showCenterHudToast('تمت الإضافة إلى المفضلة ⭐');
+      }
+    } catch (_) {}
   }
 
   void _openWhatsApp(String phone) async {
@@ -111,13 +164,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
 
   void _showPitchImagesViewer(BuildContext context, String pitchName, List<String> images) {
     if (images.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('لم يقم صاحب هذا الملعب بإضافة صور توضيحية بعد'),
-          backgroundColor: Colors.black87,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showCenterHudToast('لا توجد صور للملعب بعد', isError: true);
       return;
     }
 
@@ -152,7 +199,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 Text(
-                                  'صورة ${activeIndex + 1} من ${images.length} (يمكنك التكبير بإصبعين)',
+                                  'صورة ${activeIndex + 1} من ${images.length}',
                                   style: const TextStyle(color: Colors.white70, fontSize: 11),
                                 ),
                               ],
@@ -449,7 +496,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                                   icon: Icon(
                                                     isFav ? Icons.star_rounded : Icons.star_border_rounded,
                                                     color: isFav ? Colors.amber : Colors.grey,
-                                                    size: 24,
+                                                    size: 26,
                                                   ),
                                                   tooltip: 'إضافة للمفضلة',
                                                   onPressed: () => _toggleFavorite(pName),
