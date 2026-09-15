@@ -20,7 +20,6 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   int _currentIndex = 0;
 
-  // بيانات اللاعب
   String _userName = '';
   String _teamName = '';
   String _position = 'مهاجم ⚽';
@@ -33,6 +32,54 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _fetchUserData();
+  }
+
+  // إشعار HUD الشفاف والخفيف في منتصف الشاشة
+  void _showCenterHudToast(String message, {bool isError = false}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (ctx) {
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        });
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.80),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+                    color: isError ? Colors.redAccent : const Color(0xFF4CAF50),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _fetchUserData() async {
@@ -51,6 +98,52 @@ class _PlayerScreenState extends State<PlayerScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.logout_rounded, color: Colors.red, size: 22),
+              SizedBox(width: 8),
+              Text('تسجيل الخروج', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text('هل أنت متأكد من تسجيل الخروج من حساب اللاعب؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
+                if (mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    (route) => false,
+                  );
+                }
+              },
+              child: const Text('تأكيد الخروج', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _openPlayerSettingsSheet() {
@@ -101,7 +194,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // شريط العنوان
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -128,7 +220,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // كرت التقييم
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -173,7 +264,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          Text('$_matchesPlayed مباريات مكتملة', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                                          Text('$_matchesPlayed مباريات', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
                                         ],
                                       ),
                                     ],
@@ -184,7 +275,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // الحقول
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -309,51 +399,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       if (sheetCtx.mounted) Navigator.pop(sheetCtx);
 
                                       if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: const Row(
-                                              children: [
-                                                Icon(Icons.check_circle_rounded, color: Colors.white),
-                                                SizedBox(width: 8),
-                                                Text('تم تحديث بياناتك بنجاح ✔️'),
-                                              ],
-                                            ),
-                                            backgroundColor: const Color(0xFF1B5E20),
-                                            behavior: SnackBarBehavior.floating,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                          ),
-                                        );
+                                        _showCenterHudToast('تم الحفظ بنجاح ✔️');
                                       }
                                     },
                               child: isSaving
                                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                                   : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                             ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          ListTile(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: Colors.red.shade200),
-                            ),
-                            tileColor: Colors.red.shade50,
-                            leading: Icon(Icons.logout_rounded, color: Colors.red.shade700),
-                            title: Text(
-                              'تسجيل الخروج من الحساب',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900, fontSize: 13),
-                            ),
-                            onTap: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.clear();
-                              if (context.mounted) {
-                                Navigator.pushAndRemoveUntil(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const AuthScreen()),
-                                  (route) => false,
-                                );
-                              }
-                            },
                           ),
                         ],
                       ),
@@ -436,6 +488,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
               icon: const Icon(Icons.settings_outlined, color: Colors.white),
               tooltip: 'إعدادات الحساب',
               onPressed: _openPlayerSettingsSheet,
+            ),
+            // زر تسجيل الخروج الأنيق في الهيدر العلوي
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: InkWell(
+                onTap: _confirmLogout,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade700,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4, offset: const Offset(0, 2)),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.logout_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'خروج',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),
