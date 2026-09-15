@@ -24,28 +24,23 @@ class OwnerSettingsScreen extends StatefulWidget {
 }
 
 class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
-  // الحقول النصية
   late final TextEditingController _phoneController;
   late final TextEditingController _rateController;
   late final TextEditingController _descController;
   late final TextEditingController _addressDetailsController;
 
-  // القوائم المنسدلة
   String _selectedGov = 'بغداد';
   String _selectedArea = 'الكرخ';
   String _selectedPitchType = 'سباعي (7 ضد 7)';
   String _selectedSurface = 'ثيل 🌿';
 
-  // ساعات نشاط وعمل الملعب
   String _openTime = '04:00 م';
   String _closeTime = '03:00 ص';
 
-  // الموقع الجغرافي
   double? _latitude;
   double? _longitude;
   bool _isLocating = false;
 
-  // الصور والحالة
   bool _isSaving = false;
   bool _isPickingImage = false;
   String? _pitchDocId;
@@ -74,6 +69,54 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
     _descController.dispose();
     _addressDetailsController.dispose();
     super.dispose();
+  }
+
+  // إشعار HUD الشفاف والخفيف في وسط الشاشة
+  void _showCenterHudToast(String message, {bool isError = false}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (ctx) {
+        Future.delayed(const Duration(milliseconds: 1100), () {
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        });
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.80),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+                    color: isError ? Colors.redAccent : const Color(0xFF4CAF50),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadPitchData() async {
@@ -125,39 +168,9 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
         _latitude = pos.latitude;
         _longitude = pos.longitude;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Text('تم التقاط إحداثيات الملعب الجغرافية بدقة ✔️', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          backgroundColor: const Color(0xFF1B5E20),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.of(context).size.height - 120,
-          ),
-          duration: const Duration(seconds: 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      _showCenterHudToast('تم التقاط الموقع بنجاح ✔️');
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('تعذر جلب الموقع، يرجى تفعيل الـ GPS ومنح الصلاحية'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.of(context).size.height - 120,
-          ),
-        ),
-      );
+      _showCenterHudToast('تعذر جلب الموقع الجغرافي', isError: true);
     }
     if (mounted) setState(() => _isLocating = false);
   }
@@ -180,21 +193,7 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
     final success = await PitchImageService.pickImageDirectly(widget.pitchName);
     if (success) {
       await _loadPitchData();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('تمت إضافة الصورة بنجاح'),
-            backgroundColor: const Color(0xFF1B5E20),
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              bottom: MediaQuery.of(context).size.height - 120,
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      if (mounted) _showCenterHudToast('تمت إضافة الصورة');
     }
     if (mounted) setState(() => _isPickingImage = false);
   }
@@ -202,21 +201,7 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
   Future<void> _removeImage(String img) async {
     await PitchImageService.removeImage(widget.pitchName, img);
     await _loadPitchData();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('تم حذف الصورة'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.of(context).size.height - 120,
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    if (mounted) _showCenterHudToast('تم حذف الصورة');
   }
 
   Future<void> _saveSettings() async {
@@ -254,59 +239,64 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('تم حفظ وتحديث إعدادات الملعب بنجاح ✔️', style: TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            backgroundColor: const Color(0xFF1B5E20),
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              bottom: MediaQuery.of(context).size.height - 120,
-            ),
-            duration: const Duration(seconds: 2),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-        Navigator.pop(context);
+        _showCenterHudToast('تم الحفظ بنجاح ✔️');
+        Future.delayed(const Duration(milliseconds: 900), () {
+          if (mounted) Navigator.pop(context);
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('حدث خطأ أثناء الحفظ: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              bottom: MediaQuery.of(context).size.height - 120,
-            ),
-          ),
-        );
+        _showCenterHudToast('حدث خطأ أثناء الحفظ', isError: true);
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
-        (route) => false,
-      );
-    }
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.logout_rounded, color: Colors.red, size: 22),
+              SizedBox(width: 8),
+              Text('تسجيل الخروج', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text('هل أنت متأكد من تسجيل الخروج من لوحة إدارة الملعب؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
+                if (mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    (route) => false,
+                  );
+                }
+              },
+              child: const Text('تأكيد الخروج', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildInternalImagesGallery() {
@@ -424,6 +414,37 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
+          // زر تسجيل الخروج الأنيق في الجهة المقابلة بالجهة اليسرى
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              child: InkWell(
+                onTap: _confirmLogout,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade700,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4, offset: const Offset(0, 2)),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.logout_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'خروج',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -497,7 +518,7 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _latitude != null && _longitude != null
-                          ? 'الإحداثيات المثبتة حالياً: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}'
+                          ? 'الإحداثيات المثبتة: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}'
                           : 'لم يتم تثبيت إحداثيات الملعب بدقة بعد. اضغط على الزر وأنت في موقع الملعب.',
                       style: TextStyle(
                         fontSize: 11.5,
@@ -741,42 +762,7 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                       : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // تسجيل الخروج
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(color: Colors.red.shade200),
-                ),
-                tileColor: Colors.red.shade50,
-                leading: Icon(Icons.logout_rounded, color: Colors.red.shade700),
-                title: Text(
-                  'تسجيل الخروج من الحساب',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900, fontSize: 13),
-                ),
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: const Text('تسجيل الخروج'),
-                      content: const Text('هل أنت متأكد من تسجيل الخروج من لوحة إدارة الملعب؟'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _logout();
-                          },
-                          child: const Text('تأكيد الخروج', style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
