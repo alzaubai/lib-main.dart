@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class TimeParserUtil {
   /// تحويل رقم اليوم إلى اسم اليوم باللغة العربية
   static String getArabicDayName(DateTime date) {
@@ -50,10 +52,58 @@ class TimeParserUtil {
     return !diff.isNegative && diff.inMinutes < 180;
   }
 
-  /// فحص هل انقضى وقت المباراة بالكامل
+  /// فحص هل انقضى وقت المباراة بالكامل (للاستخدام القديم)
   static bool isMatchPassed(String dateStr, String timeStr) {
     final matchTime = parseMatchDateTime(dateStr, timeStr);
     if (matchTime == null) return false;
     return matchTime.difference(DateTime.now()).isNegative;
+  }
+
+  /// الفحص الذكي: هل انتهى وقت المباراة (يتعامل مع أوقات بعد منتصف الليل بدقة)
+  static bool isSlotTimePassed(DateTime date, String slotStr) {
+    try {
+      final now = DateTime.now();
+      final todayDateOnly = DateTime(now.year, now.month, now.day);
+      final checkDateOnly = DateTime(date.year, date.month, date.day);
+
+      if (checkDateOnly.isBefore(todayDateOnly)) return true;
+      if (checkDateOnly.isAfter(todayDateOnly)) return false;
+
+      final startPart = slotStr.split(' - ').first.trim();
+      final clean = startPart.replaceAll(RegExp(r'\s+'), ' ');
+      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
+      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
+
+      final digitsOnly = clean.replaceAll(RegExp(r'[^0-9:]'), '');
+      final timeParts = digitsOnly.split(':');
+      if (timeParts.isEmpty) return false;
+
+      int hour = int.parse(timeParts[0]);
+      int minute = timeParts.length > 1 ? int.parse(timeParts[1]) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+
+      DateTime slotDateTime;
+      if (isAM && hour < 6) {
+        slotDateTime = DateTime(now.year, now.month, now.day + 1, hour, minute);
+      } else {
+        slotDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+      }
+
+      return now.isAfter(slotDateTime);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// فحص باستخدام نص التاريخ بدل كائن DateTime
+  static bool isSlotTimePassedFromString(String dateString, String slotStr) {
+    try {
+      final chosenDate = DateFormat('yyyy-MM-dd').parse(dateString);
+      return isSlotTimePassed(chosenDate, slotStr);
+    } catch (_) {
+      return false;
+    }
   }
 }
