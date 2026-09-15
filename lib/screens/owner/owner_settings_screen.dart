@@ -95,12 +95,6 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
         appBar: AppBar(
           backgroundColor: const Color(0xFF1B5E20),
           title: const Text('إعدادات الملعب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.logout_rounded, color: Colors.white),
-              onPressed: () => LogoutDialog.show(context, userTypeMessage: 'هل أنت متأكد من تسجيل الخروج من إدارة الملعب؟'),
-            ),
-          ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -130,6 +124,8 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                 onCloseTimeChanged: (v) => setState(() => _closeTime = v),
               ),
               const SizedBox(height: 18),
+              
+              // زر حفظ التعديلات الأساسي
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
@@ -141,6 +137,30 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                   child: _isSaving
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // زر تسجيل الخروج الواضح والصريح باللون الأحمر في الأسفل
+              SizedBox(
+                height: 48,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade300, width: 1.5),
+                    backgroundColor: Colors.red.shade50,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.logout_rounded, size: 20),
+                  label: const Text(
+                    'تسجيل الخروج من الحساب',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  onPressed: () => LogoutDialog.show(
+                    context,
+                    userTypeMessage: 'هل أنت متأكد من تسجيل الخروج من إدارة الملعب؟',
+                  ),
                 ),
               ),
             ],
