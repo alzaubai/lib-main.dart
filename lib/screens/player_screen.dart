@@ -22,7 +22,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   String _userName = '';
   String _teamName = '';
-  String _position = 'مهاجم ⚽';
+  String _position = 'مهاجم';
   String _governorate = 'بغداد';
   String _area = 'الكرخ';
   double _teamRating = 5.0;
@@ -34,46 +34,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _fetchUserData();
   }
 
-  // إشعار HUD الشفاف والخفيف في منتصف الشاشة
-  void _showCenterHudToast(String message, {bool isError = false}) {
+  void _showCenterToast(String message) {
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
       builder: (ctx) {
-        Future.delayed(const Duration(milliseconds: 1000), () {
+        Future.delayed(const Duration(milliseconds: 900), () {
           if (ctx.mounted) Navigator.of(ctx).pop();
         });
         return Center(
           child: Material(
             color: Colors.transparent,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.80),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
-                ],
+                color: Colors.black.withOpacity(0.82),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
-                    color: isError ? Colors.redAccent : const Color(0xFF4CAF50),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -90,7 +71,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         setState(() {
           _userName = (d['name'] ?? 'كابتن').toString();
           _teamName = (d['teamName'] ?? '').toString();
-          _position = (d['position'] ?? 'مهاجم ⚽').toString();
+          _position = (d['position'] ?? 'مهاجم').toString();
           _governorate = (d['governorate'] ?? 'بغداد').toString();
           _area = (d['area'] ?? 'الكرخ').toString();
           _teamRating = (d['teamRating'] as num?)?.toDouble() ?? 5.0;
@@ -155,14 +136,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     bool isSaving = false;
 
     final positionsList = [
-      'حارس مرمى 🧤',
-      'مدافع 🛡️',
-      'خط وسط ⚙️',
-      'جناح ⚡',
-      'مهاجم ⚽',
+      'حارس مرمى',
+      'مدافع',
+      'خط وسط',
+      'جناح',
+      'مهاجم',
     ];
 
-    if (!positionsList.contains(selectedPos)) selectedPos = 'مهاجم ⚽';
+    if (!positionsList.contains(selectedPos)) selectedPos = 'مهاجم';
 
     showModalBottomSheet(
       context: context,
@@ -188,12 +169,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 children: [
                   const SizedBox(height: 12),
                   Container(
-                    width: 44,
+                    width: 40,
                     height: 4,
                     decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                   ),
                   const SizedBox(height: 12),
 
+                  // شريط العنوان
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -201,7 +183,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         const Icon(Icons.manage_accounts_rounded, color: Color(0xFF1B5E20), size: 24),
                         const SizedBox(width: 8),
                         const Text(
-                          'إعدادات الملف الشخصي والكابتن',
+                          'إعدادات الحساب',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                         ),
                         const Spacer(),
@@ -220,6 +202,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // كرت الفريق ومقابله زر تسجيل الخروج
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -230,9 +213,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             child: Row(
                               children: [
                                 CircleAvatar(
-                                  radius: 24,
+                                  radius: 22,
                                   backgroundColor: const Color(0xFFE8F5E9),
-                                  child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 26),
+                                  child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 24),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -241,9 +224,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     children: [
                                       Text(
                                         teamCtrl.text.isNotEmpty ? teamCtrl.text : 'فريقك الكروي',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 3),
                                       Row(
                                         children: [
                                           Container(
@@ -257,17 +240,44 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                 const Icon(Icons.star_rounded, size: 13, color: Colors.amber),
                                                 const SizedBox(width: 2),
                                                 Text(
-                                                  'تقييم الفريق: $_teamRating',
+                                                  'التقييم: $_teamRating',
                                                   style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
                                                 ),
                                               ],
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          Text('$_matchesPlayed مباريات', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                                          const SizedBox(width: 6),
+                                          Text('($_matchesPlayed مباراة)', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
                                         ],
                                       ),
                                     ],
+                                  ),
+                                ),
+                                // زر تسجيل الخروج في الجهة المقابلة لكرت الفريق
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.pop(sheetCtx);
+                                    _confirmLogout();
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.red.shade200),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.logout_rounded, color: Colors.red.shade700, size: 14),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'خروج',
+                                          style: TextStyle(color: Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -275,6 +285,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                           const SizedBox(height: 16),
 
+                          // الحقول
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -285,8 +296,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('البيانات الأساسية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
-                                const SizedBox(height: 14),
+                                const Text('البيانات الشخصية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
+                                const SizedBox(height: 12),
                                 TextField(
                                   controller: nameCtrl,
                                   decoration: InputDecoration(
@@ -295,7 +306,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 10),
                                 TextField(
                                   controller: teamCtrl,
                                   decoration: InputDecoration(
@@ -304,7 +315,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 10),
                                 DropdownButtonFormField<String>(
                                   value: selectedPos,
                                   decoration: InputDecoration(
@@ -315,7 +326,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   items: positionsList.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12)))).toList(),
                                   onChanged: (v) => setSheetState(() => selectedPos = v!),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 10),
                                 Row(
                                   children: [
                                     Expanded(
@@ -353,7 +364,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 10),
                                 TextFormField(
                                   initialValue: widget.userPhone,
                                   readOnly: true,
@@ -369,7 +380,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
 
                           SizedBox(
                             height: 48,
@@ -399,7 +410,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       if (sheetCtx.mounted) Navigator.pop(sheetCtx);
 
                                       if (mounted) {
-                                        _showCenterHudToast('تم الحفظ بنجاح ✔️');
+                                        _showCenterToast('تم حفظ التعديلات');
                                       }
                                     },
                               child: isSaving
@@ -488,35 +499,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
               icon: const Icon(Icons.settings_outlined, color: Colors.white),
               tooltip: 'إعدادات الحساب',
               onPressed: _openPlayerSettingsSheet,
-            ),
-            // زر تسجيل الخروج الأنيق في الهيدر العلوي
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              child: InkWell(
-                onTap: _confirmLogout,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade700,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4, offset: const Offset(0, 2)),
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.logout_rounded, color: Colors.white, size: 16),
-                      SizedBox(width: 4),
-                      Text(
-                        'خروج',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ),
           ],
         ),
