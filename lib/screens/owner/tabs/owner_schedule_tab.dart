@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../utils/time_parser_util.dart';
 import '../sheets/add_manual_booking_sheet.dart';
+import 'widgets/today_financial_card.dart'; // استدعاء الكرت المالي الجديد لليوم الحالي
 
 class OwnerScheduleTab extends StatefulWidget {
   final String pitchName;
@@ -148,7 +149,10 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // شريط الأيام الأفقي
+          // 1. الكرت المالي المستقل الخاص باليوم الحالي حصراً
+          TodayFinancialCard(pitchName: widget.pitchName),
+
+          // 2. شريط الأيام الأفقي الخاص بالجدول
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: const BoxDecoration(
@@ -236,7 +240,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
             ),
           ),
 
-          // قائمة الحجوزات
+          // 3. قائمة الحجوزات الخاصة باليوم المختار في الجدول
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -261,7 +265,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                     final recurringDocs = snapRecurring.data?.docs ?? [];
                     final List<Map<String, dynamic>> allSlots = [];
 
-                    // فلترة صارمة: الحجز المؤكد أو المكتمل فقط يظهر في الجدول
                     for (var doc in bookingsDocs) {
                       final d = doc.data() as Map<String, dynamic>;
                       if (d['isDeleted'] == true) continue;
@@ -377,7 +380,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // الصف الأول: عنوان المباراة وقائمة الخيارات
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -461,8 +463,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                   ],
                                 ),
                                 const Divider(height: 18),
-
-                                // الصف الثاني: أزرار الاتصال والمراسلة وإكمال الحجز
                                 Row(
                                   children: [
                                     if (phone.isNotEmpty) ...[
@@ -521,6 +521,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                         label: const Text('إكمال الحجز', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                         onPressed: () => _completeBooking(docId),
                                       ),
+  
                                   ],
                                 ),
                               ],
