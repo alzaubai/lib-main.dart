@@ -138,138 +138,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     }
   }
 
-  // نافذة أرشيف المباريات المكتملة لصاحب الملعب
-  void _openCompletedMatchesSheet(String dateStr, String dayNameArabic) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: Container(
-          height: MediaQuery.of(context).size.height * 0.70,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-          ),
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  const Icon(Icons.history_rounded, color: Color(0xFF1B5E20), size: 22),
-                  const SizedBox(width: 8),
-                  Text(
-                    'أرشيف المباريات المكتملة: $dayNameArabic ($dateStr)',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF0F172A)),
-                  ),
-                ],
-              ),
-              const Divider(height: 24),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('bookings')
-                      .where('pitchName', isEqualTo: widget.pitchName)
-                      .where('date', isEqualTo: dateStr)
-                      .where('status', isEqualTo: 'completed')
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
-                    }
-
-                    final docs = snapshot.data?.docs ?? [];
-                    final completedList = docs
-                        .map((d) => d.data() as Map<String, dynamic>)
-                        .where((d) => d['isDeleted'] != true)
-                        .toList();
-
-                    if (completedList.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.sports_soccer_outlined, size: 50, color: Colors.grey.shade300),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'لا توجد مباريات مكتملة ومؤرشفة لهذا اليوم حتى الآن',
-                              style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    final currency = NumberFormat('#,###');
-                    return ListView.builder(
-                      itemCount: completedList.length,
-                      itemBuilder: (context, index) {
-                        final item = completedList[index];
-                        final team = item['teamOne'] ?? 'فريق كروي';
-                        final time = '${item['startTime']} - ${item['endTime']}';
-                        final price = (item['price'] as num?)?.toDouble() ?? 25000.0;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(Icons.check_circle_rounded, color: Colors.blue.shade700, size: 20),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(team, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                                    const SizedBox(height: 2),
-                                    Text(time, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                '${currency.format(price)} د.ع',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1B5E20)),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Color _getStatusColor(String status) {
     switch (status) {
       case 'confirmed':
@@ -302,9 +170,12 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
+          // 1. الكرت المالي
           TodayFinancialCard(pitchName: widget.pitchName),
+
+          // 2. شريط الأيام المدمج والمنظم بدون تكرار أزرار
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: const BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -315,51 +186,31 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Row(
                     children: [
                       const Icon(Icons.event_note_rounded, color: Color(0xFF1B5E20), size: 18),
                       const SizedBox(width: 6),
                       Text(
-                        'جدول مباريات: $dayNameArabic ($dateStr)',
+                        'جدول: $dayNameArabic ($dateStr)',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                       ),
                       const Spacer(),
-                      // زر أرشيف المباريات المكتملة (أيقونة الساعة)
-                      Tooltip(
-                        message: 'سجل المباريات المكتملة',
-                        child: InkWell(
-                          onTap: () => _openCompletedMatchesSheet(dateStr, dayNameArabic),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.history_rounded, size: 16, color: Color(0xFF1B5E20)),
-                                SizedBox(width: 4),
-                                Text('الأرشيف', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
                       if (!DateUtils.isSameDay(_selectedDate, DateTime.now()))
-                        TextButton(
+                        TextButton.icon(
                           onPressed: () => setState(() => _selectedDate = DateTime.now()),
-                          style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
-                          child: const Text('اليوم', style: TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.today_rounded, size: 16, color: Color(0xFF1B5E20)),
+                          label: const Text('اليوم', style: TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold, fontSize: 12)),
                         ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
+                // شريط الأيام الأفقي
                 SizedBox(
                   height: 65,
                   child: ListView.builder(
@@ -414,6 +265,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
               ],
             ),
           ),
+
+          // 3. قائمة الحجوزات النشطة فقط
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -442,7 +295,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                       final d = doc.data() as Map<String, dynamic>;
                       if (d['isDeleted'] == true) continue;
                       final st = (d['status'] ?? '').toString();
-                      // استبعاد المكتمل تماماً من هذا الجدول المباشر
+                      // المكتمل يختفي تلقائياً ومباشرة من الجدول وينتقل للأرشيف في الـ AppBar
                       if (st != 'confirmed') continue;
 
                       final map = Map<String, dynamic>.from(d);
@@ -492,7 +345,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                             ),
                             const SizedBox(height: 4),
                             const Text(
-                              'المباريات المنتهية تجدها في الأرشيف أعلى الجدول',
+                              'المباريات المنتهية تجدها في أيقونة الأرشيف أعلى الشاشة 🕒',
                               style: TextStyle(fontSize: 11.5, color: Colors.grey),
                             ),
                             const SizedBox(height: 16),
@@ -536,7 +389,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                         final price = (slot['price'] as num?)?.toDouble() ?? 25000.0;
                         final isRecurring = slot['isRecurringRule'] == true || status == 'recurring';
 
-                        // فحص هل انتهى وقت المباراة ونسي إكمالها
+                        // فحص هل انتهى وقت المباراة ونسي المالك إكمالها
                         final isTimePassed = _isSlotTimePassed(dateStr, endTime);
 
                         final statusColor = isTimePassed && !isRecurring
@@ -626,7 +479,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                         style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10.5),
                                       ),
                                     ),
-                                    // خيار الإلغاء وتفريغ الوقت يظهر فقط للمباريات المستقبلية التي لم تنته بعد
+                                    // زر الإلغاء يظهر فقط إذا لم تنتهِ المباراة بعد
                                     if (!isRecurring && !isTimePassed) ...[
                                       const SizedBox(width: 4),
                                       PopupMenuButton<String>(
