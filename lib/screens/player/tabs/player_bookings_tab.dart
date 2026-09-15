@@ -13,7 +13,7 @@ class PlayerBookingsTab extends StatefulWidget {
 }
 
 class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
-  bool _showPastBookings = false;
+  bool _showPastBookings = true; // اجعل الأرشيف قابلاً للعرض والاطلاع بشكل دائم
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -25,6 +25,7 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
         return Colors.blue.shade700;
       case 'cancelled':
       case 'rejected':
+      case 'removed_from_tournament':
         return Colors.red.shade700;
       default:
         return const Color(0xFF64748B);
@@ -43,20 +44,143 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
         return 'ملغي';
       case 'rejected':
         return 'مرفوض';
+      case 'removed_from_tournament':
+        return 'تمت الإزالة من البطولة';
       default:
         return status;
     }
   }
 
-  bool _isPastBooking(String dateStr) {
+  // التحقق مما إذا مرّت 24 ساعة على الحدث أو انتهى موعد المباراة
+  bool _shouldBeArchived(Map<String, dynamic> data) {
     try {
+      final status = (data['status'] ?? '').toString();
+      // إذا تم أرشيفها يدوياً مسبقاً
+      if (data['isArchived'] == true) return true;
+
+      // حالات تنتهي فوراً أو بعد 24 ساعة
+      final dateStr = (data['date'] ?? '').toString();
+      if (dateStr.isEmpty) return false;
+
       final bookingDate = DateFormat('yyyy-MM-dd').parse(dateStr);
-      final today = DateTime.now();
-      final todayDateOnly = DateTime(today.year, today.month, today.day);
-      return bookingDate.isBefore(todayDateOnly);
-    } catch (_) {
-      return false;
-    }
+      final now = DateTime.now();
+      final todayDateOnly = DateTime(now.year, now.month, now.day);
+
+      // إذا مر يوم كامل على تاريخ المباراة
+      if (bookingDate.isBefore(todayDateOnly)) {
+        return true;
+      }
+
+      // إذا كانت مرفوضة أو أزيلت من البطولة ومضى عليها أكثر من 24 ساعة من تاريخ إنشائها
+      if (status == 'rejected' || status == 'removed_from_tournament' || status == 'completed' || status == 'cancelled') {
+        final createdAt = data['createdAt'];
+        if (createdAt is Timestamp) {
+          final difference = now.difference(createdAt.toDate());
+          if (difference.inHours >= 24) {
+            return true;
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // فتح نافذة تقييم الملعب العصرية للكابتن
+  void _showPitchEvaluationDialog(String bookingId, String pitchName) {
+    final List<String> quickTags = [
+      'أرضية الملعب ممتازة',
+      'تنظيم وادارة احترافية',
+      'التزام تام بالمواعيد',
+      'إنارة واضحة وقوية',
+      'مرافق نظيفة ومرتبة'
+    ];
+    String selectedTag = quickTags.first;
+    int rating = 5;
+    final noteCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'تقييم تجربة اللعب: $pitchName',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('اختر الانطباع العام:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedTag,
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  items: quickTags.map((tag) => DropdownMenuItem(value: tag, child: Text(tag, style: const TextStyle(fontSize: 12.5)))).toList(),
+                  onChanged: (val) {
+                    if (val != null) selectedTag = val;
+                  },
+                ),
+                const SizedBox(height: 14),
+                const Text('ملاحظات إضافية (اختياري):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: noteCtrl,
+                  maxLines: 2,
+                  style: constTextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: 'اكتب أي ملاحظة عن الملعب أو المباراة...',
+                    hintStyle: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                // ترحيل الحجز للأرشيف عند رفض/تخطي التقييم
+                await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'isArchived': true});
+              },
+              child: const Text('تخطي / رفض', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B5E20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                // حفظ التقييم وترحيل الحجز للأرشيف
+                await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({
+                  'isArchived': true,
+                  'pitchRating': rating,
+                  'pitchReviewTag': selectedTag,
+                  'pitchReviewNote': noteCtrl.text.trim(),
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('شكراً لك، تم حفظ تقييم الملعب بنجاح'), backgroundColor: Color(0xFF1B5E20)),
+                );
+              },
+              child: const Text('إرسال التقييم', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ترحيل الحجز يدوياً للأرشيف فور ضغط الكابتن
+  Future<void> _moveToArchive(String bookingId) async {
+    await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'isArchived': true});
   }
 
   @override
@@ -84,12 +208,11 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
             final data = doc.data() as Map<String, dynamic>;
             if (data['isDeleted'] == true) continue;
 
-            final dateStr = (data['date'] ?? '').toString();
-            final status = (data['status'] ?? 'pending').toString();
             final item = Map<String, dynamic>.from(data);
             item['id'] = doc.id;
 
-            if (_isPastBooking(dateStr) || status == 'completed' || status == 'cancelled' || status == 'rejected') {
+            // التحقق هل يجب أن يذهب للأرشيف أم يبقى في النشطة
+            if (_shouldBeArchived(item)) {
               pastBookings.add(item);
             } else {
               activeBookings.add(item);
@@ -124,47 +247,64 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
                 const Padding(
                   padding: EdgeInsets.only(bottom: 10, right: 4),
                   child: Text(
-                    'الحجوزات القادمة والنشطة',
+                    'الحجوزات القادمة والنشطة (والتنبيهات الحالية)',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
                   ),
                 ),
                 ...activeBookings.map((b) => _buildBookingCard(b, currencyFormatter, isPast: false)),
-                const SizedBox(height: 10),
+                const SizedBox(height: 16),
               ],
 
-              if (pastBookings.isNotEmpty) ...[
-                InkWell(
-                  onTap: () => setState(() => _showPastBookings = !_showPastBookings),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.archive_outlined, size: 18, color: Color(0xFF64748B)),
-                        const SizedBox(width: 8),
-                        Text(
-                          'أرشيف المباريات السابقة (${pastBookings.length})',
-                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          _showPastBookings ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ],
-                    ),
-                  ),
+              // قسم الأرشيف الدائم والمرتب
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
-                if (_showPastBookings) ...[
-                  const SizedBox(height: 10),
-                  ...pastBookings.map((b) => _buildBookingCard(b, currencyFormatter, isPast: true)),
-                ],
-              ],
+                child: Column(
+                  children: [
+                    InkWell(
+                      onTap: () => setState(() => _showPastBookings = !_showPastBookings),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.archive_outlined, size: 18, color: Color(0xFF64748B)),
+                            const SizedBox(width: 8),
+                            Text(
+                              'أرشيف المباريات والسجلات السابقة (${pastBookings.length})',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              _showPastBookings ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_showPastBookings) ...[
+                      const Divider(height: 1),
+                      if (pastBookings.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('لا توجد مباريات أرشيفية سابقة', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(10),
+                          itemCount: pastBookings.length,
+                          itemBuilder: (context, index) => _buildBookingCard(pastBookings[index], currencyFormatter, isPast: true),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           );
         },
@@ -173,6 +313,7 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
   }
 
   Widget _buildBookingCard(Map<String, dynamic> b, NumberFormat currencyFormatter, {required bool isPast}) {
+    final bookingId = b['id'] ?? '';
     final pitchName = b['pitchName'] ?? 'الملعب';
     final teamOne = b['teamOne'] ?? 'فريقك';
     final teamTwo = (b['teamTwo'] ?? '').toString().trim();
@@ -182,8 +323,8 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
     final status = b['status'] ?? 'pending';
     final price = (b['price'] as num?)?.toDouble() ?? 25000.0;
 
-    final statusColor = isPast && status == 'confirmed' ? Colors.blue.shade700 : _getStatusColor(status);
-    final statusText = isPast && status == 'confirmed' ? 'منتهية' : _getStatusArabicText(status);
+    final statusColor = _getStatusColor(status);
+    final statusText = _getStatusArabicText(status);
 
     return Card(
       elevation: isPast ? 0.5 : 1.5,
@@ -278,6 +419,40 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
                 ),
               ],
             ),
+
+            // أزرار التفاعل والإجراءات (مثل إظهار تقييم الملعب عند اكتمال المباراة، أو ترحيل للأرشيف)
+            if (!isPast) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (status == 'completed' && b['pitchRating'] == null)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1B5E20),
+                        side: const BorderSide(color: Color(0xFF1B5E20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.star_rate_rounded, size: 15),
+                      label: const Text('تقييم الملعب', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () => _showPitchEvaluationDialog(bookingId, pitchName),
+                    ),
+                  if (status == 'rejected' || status == 'removed_from_tournament' || status == 'completed') ...[
+                    const SizedBox(width: 8),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => _moveToArchive(bookingId),
+                      child: const Text('نقل للأرشيف', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ],
         ),
       ),
