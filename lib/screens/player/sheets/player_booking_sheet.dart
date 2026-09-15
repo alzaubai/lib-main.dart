@@ -149,7 +149,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     }
   }
 
-  // حساب وقت النهاية محلياً (إضافة ساعة واحدة) بدون الاعتماد على دوال خارجية مفقودة
   String _calculateEndTime(String start) {
     try {
       final parts = start.split(' ');
@@ -186,7 +185,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
       return;
     }
     if (_selectedStartTime == null) {
-      _showToast('يرجى اختيار وقت الحجز من الشريط');
+      _showToast('يرجى اختيار وقت الحجز من القائمة');
       return;
     }
 
@@ -248,46 +247,44 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Container(
+        height: MediaQuery.of(context).size.height * 0.88,
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: Color(0xFFF8FAFC),
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-              const SizedBox(height: 14),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+            ),
+            const SizedBox(height: 12),
 
-              Row(
+            // رأس النافذة
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 22),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 24),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'حجز موعد: ${widget.pitchName}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                          'حجز موعد في ${widget.pitchName}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           'سعر الساعة: ${currencyFormatter.format(widget.hourlyRate)} د.ع',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green.shade800),
@@ -295,190 +292,289 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                       ],
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ],
               ),
-              const SizedBox(height: 16),
+            ),
+            const Divider(height: 1),
 
-              const Text('اختر يوم المباراة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155))),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 60,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: 14,
-                  itemBuilder: (context, idx) {
-                    final day = DateTime.now().add(Duration(days: idx));
-                    final isSelected = DateUtils.isSameDay(_selectedDate, day);
-                    final dayName = TimeParserUtil.getArabicDayName(day);
-                    final dayNum = DateFormat('d').format(day);
-
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedDate = day);
-                        _loadSlotsForSelectedDate();
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 56,
-                        margin: const EdgeInsets.only(left: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFFE2E8F0),
-                            width: isSelected ? 1.5 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(dayName, style: TextStyle(fontSize: 10, color: isSelected ? Colors.white70 : Colors.grey)),
-                            const SizedBox(height: 2),
-                            Text(dayNum, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black87)),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 14,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
                 ),
-              ),
-              const SizedBox(height: 18),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('اختر وقت الحجز:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155))),
-                  if (_selectedStartTime != null)
-                    Text(
-                      'الموعد: $_selectedStartTime حتى ${_calculateEndTime(_selectedStartTime!)}',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              _isLoadingSlots
-                  ? const SizedBox(
-                      height: 50,
-                      child: Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20), strokeWidth: 2)),
-                    )
-                  : SizedBox(
-                      height: 52,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. اختيار اليوم
+                    const Text('اختر يوم المباراة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155))),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 60,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: _availableDayHours.length,
+                        itemCount: 14,
                         itemBuilder: (context, idx) {
-                          final hour = _availableDayHours[idx];
-                          final isBooked = _bookedSlots.contains(hour);
-                          final isSelected = _selectedStartTime == hour;
+                          final day = DateTime.now().add(Duration(days: idx));
+                          final isSelected = DateUtils.isSameDay(_selectedDate, day);
+                          final dayName = TimeParserUtil.getArabicDayName(day);
+                          final dayNum = DateFormat('d').format(day);
 
-                          Color bgColor = const Color(0xFFF1F5F9);
-                          Color textColor = const Color(0xFF334155);
-                          BorderSide borderSide = const BorderSide(color: Color(0xFFCBD5E1));
-
-                          if (isBooked) {
-                            bgColor = Colors.red.shade50;
-                            textColor = Colors.red.shade300;
-                            borderSide = BorderSide(color: Colors.red.shade100);
-                          } else if (isSelected) {
-                            bgColor = const Color(0xFF1B5E20);
-                            textColor = Colors.white;
-                            borderSide = const BorderSide(color: Color(0xFF1B5E20), width: 1.5);
-                          }
-
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: InkWell(
-                              onTap: isBooked ? null : () => setState(() => _selectedStartTime = hour),
-                              borderRadius: BorderRadius.circular(12),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: bgColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.fromBorderSide(borderSide),
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() => _selectedDate = day);
+                              _loadSlotsForSelectedDate();
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: 58,
+                              margin: const EdgeInsets.only(left: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFF1B5E20) : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFFE2E8F0),
+                                  width: isSelected ? 1.5 : 1,
                                 ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      hour,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: textColor,
-                                      ),
+                                boxShadow: [
+                                  if (isSelected)
+                                    BoxShadow(
+                                      color: const Color(0xFF1B5E20).withOpacity(0.25),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
                                     ),
-                                    Text(
-                                      isBooked ? 'محجوز' : (isSelected ? 'تم الاختيار' : 'متاح'),
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        color: isBooked ? Colors.red.shade400 : (isSelected ? Colors.white70 : Colors.green.shade700),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(dayName, style: TextStyle(fontSize: 10, color: isSelected ? Colors.white70 : Colors.grey)),
+                                  const SizedBox(height: 2),
+                                  Text(dayNum, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black87)),
+                                ],
                               ),
                             ),
                           );
                         },
                       ),
                     ),
-              const SizedBox(height: 18),
+                    const SizedBox(height: 18),
 
-              TextField(
-                controller: _teamOneCtrl,
-                decoration: InputDecoration(
-                  labelText: 'اسم فريقك (الطرف الأول)',
-                  prefixIcon: const Icon(Icons.shield_rounded, color: Color(0xFF1B5E20)),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _teamTwoCtrl,
-                decoration: InputDecoration(
-                  labelText: 'اسم الفريق المنافس (اختياري)',
-                  prefixIcon: const Icon(Icons.shield_outlined, color: Colors.grey),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'رقم هاتف الكابتن',
-                  prefixIcon: const Icon(Icons.phone_rounded, color: Color(0xFF1B5E20)),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 20),
+                    // 2. قائمة الأوقات الرأسية الأنيقة (مستطيل تحت مستطيل)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('اختر الوقت المناسب:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155))),
+                        if (_selectedStartTime != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'تم اختيار: $_selectedStartTime',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
 
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1B5E20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 1,
-                  ),
-                  onPressed: _isSubmitting ? null : _submitBooking,
-                  child: _isSubmitting
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text(
-                          'تأكيد وإرسال طلب الحجز',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    _isLoadingSlots
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 30),
+                            child: Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20))),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _availableDayHours.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, idx) {
+                              final hour = _availableDayHours[idx];
+                              final isBooked = _bookedSlots.contains(hour);
+                              final isSelected = _selectedStartTime == hour;
+                              final endHour = _calculateEndTime(hour);
+
+                              return InkWell(
+                                onTap: isBooked
+                                    ? null
+                                    : () {
+                                        setState(() => _selectedStartTime = hour);
+                                      },
+                                borderRadius: BorderRadius.circular(14),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isBooked
+                                        ? const Color(0xFFF1F5F9)
+                                        : (isSelected ? const Color(0xFFE8F5E9) : Colors.white),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isBooked
+                                          ? Colors.transparent
+                                          : (isSelected ? const Color(0xFF1B5E20) : const Color(0xFFE2E8F0)),
+                                      width: isSelected ? 1.8 : 1,
+                                    ),
+                                    boxShadow: [
+                                      if (!isBooked && !isSelected)
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.02),
+                                          blurRadius: 3,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // أيقونة الساعة
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: isBooked
+                                              ? Colors.grey.shade200
+                                              : (isSelected ? const Color(0xFF1B5E20) : const Color(0xFFF8FAFC)),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Icon(
+                                          isBooked ? Icons.lock_outline_rounded : Icons.schedule_rounded,
+                                          size: 20,
+                                          color: isBooked
+                                              ? Colors.grey
+                                              : (isSelected ? Colors.white : const Color(0xFF1B5E20)),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      // تفاصيل الوقت
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'من $hour إلى $endHour',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: isBooked ? Colors.grey : const Color(0xFF0F172A),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'حصة لمدة 60 دقيقة',
+                                              style: TextStyle(fontSize: 11, color: isBooked ? Colors.grey.shade400 : Colors.grey.shade600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      // وسم الحالة والأيقونة
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isBooked
+                                              ? Colors.red.shade50
+                                              : (isSelected ? const Color(0xFF1B5E20) : const Color(0xFFF1F5F9)),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          isBooked ? 'محجوز 🔒' : (isSelected ? 'محدد ✔️' : 'متاح للحجز'),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: isBooked
+                                                ? Colors.red.shade700
+                                                : (isSelected ? Colors.white : const Color(0xFF1B5E20)),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                    const SizedBox(height: 20),
+
+                    // 3. بيانات الفريق
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('بيانات الكابتن والفريق', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _teamOneCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'اسم فريقك (الطرف الأول)',
+                              prefixIcon: const Icon(Icons.shield_rounded, color: Color(0xFF1B5E20)),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _teamTwoCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'اسم الفريق المنافس (اختياري)',
+                              prefixIcon: const Icon(Icons.shield_outlined, color: Colors.grey),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _phoneCtrl,
+                            keyboardType: TextInputType.phone,
+                            decoration: InputDecoration(
+                              labelText: 'رقم هاتف التواصل',
+                              prefixIcon: const Icon(Icons.phone_rounded, color: Color(0xFF1B5E20)),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // زر التأكيد
+                    SizedBox(
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1B5E20),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 1,
                         ),
+                        onPressed: _isSubmitting ? null : _submitBooking,
+                        child: _isSubmitting
+                            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text(
+                                'تأكيد وإرسال طلب الحجز',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
