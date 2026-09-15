@@ -75,7 +75,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                   'status': 'cancelled',
                 });
                 if (mounted) {
-                  _showCenterToast('تم إلغاء الحجز بنجاح');
+                  _showCenterToast('تم إلغاء الحجز بنجاح وتفريغ الوقت');
                 }
               },
               child: const Text('تأكيد الإلغاء', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -104,12 +104,176 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     );
   }
 
+  // فحص ذكي لمعرفة هل انتهى وقت المباراة الحالية بالكامل
+  bool _isSlotTimePassed(String dateString, String endTimeStr) {
+    try {
+      final now = DateTime.now();
+      final chosenDate = DateFormat('yyyy-MM-dd').parse(dateString);
+      final todayDateOnly = DateTime(now.year, now.month, now.day);
+      if (chosenDate.isBefore(todayDateOnly)) return true;
+      if (chosenDate.isAfter(todayDateOnly)) return false;
+
+      final clean = endTimeStr.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
+      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
+      final digits = clean.replaceAll(RegExp(r'[^0-9:]'), '');
+      final parts = digits.split(':');
+      if (parts.isEmpty) return false;
+
+      int hour = int.parse(parts[0]);
+      int minute = parts.length > 1 ? int.parse(parts[1]) : 0;
+      if (isPM && hour < 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+
+      DateTime slotEnd;
+      if (isAM && hour < 6) {
+        slotEnd = DateTime(now.year, now.month, now.day + 1, hour, minute);
+      } else {
+        slotEnd = DateTime(now.year, now.month, now.day, hour, minute);
+      }
+
+      return now.isAfter(slotEnd);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // نافذة أرشيف المباريات المكتملة لصاحب الملعب
+  void _openCompletedMatchesSheet(String dateStr, String dayNameArabic) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.70,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  const Icon(Icons.history_rounded, color: Color(0xFF1B5E20), size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'أرشيف المباريات المكتملة: $dayNameArabic ($dateStr)',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('bookings')
+                      .where('pitchName', isEqualTo: widget.pitchName)
+                      .where('date', isEqualTo: dateStr)
+                      .where('status', isEqualTo: 'completed')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
+                    }
+
+                    final docs = snapshot.data?.docs ?? [];
+                    final completedList = docs
+                        .map((d) => d.data() as Map<String, dynamic>)
+                        .where((d) => d['isDeleted'] != true)
+                        .toList();
+
+                    if (completedList.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.sports_soccer_outlined, size: 50, color: Colors.grey.shade300),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'لا توجد مباريات مكتملة ومؤرشفة لهذا اليوم حتى الآن',
+                              style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    final currency = NumberFormat('#,###');
+                    return ListView.builder(
+                      itemCount: completedList.length,
+                      itemBuilder: (context, index) {
+                        final item = completedList[index];
+                        final team = item['teamOne'] ?? 'فريق كروي';
+                        final time = '${item['startTime']} - ${item['endTime']}';
+                        final price = (item['price'] as num?)?.toDouble() ?? 25000.0;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.check_circle_rounded, color: Colors.blue.shade700, size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(team, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                                    const SizedBox(height: 2),
+                                    Text(time, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '${currency.format(price)} د.ع',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1B5E20)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Color _getStatusColor(String status) {
     switch (status) {
       case 'confirmed':
         return const Color(0xFF1B5E20);
-      case 'completed':
-        return Colors.blue.shade700;
       case 'recurring':
         return Colors.purple.shade800;
       default:
@@ -121,8 +285,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     switch (status) {
       case 'confirmed':
         return 'حجز مؤكد';
-      case 'completed':
-        return 'مكتمل';
       case 'recurring':
         return 'اشتراك دائم';
       default:
@@ -163,6 +325,31 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                       ),
                       const Spacer(),
+                      // زر أرشيف المباريات المكتملة (أيقونة الساعة)
+                      Tooltip(
+                        message: 'سجل المباريات المكتملة',
+                        child: InkWell(
+                          onTap: () => _openCompletedMatchesSheet(dateStr, dayNameArabic),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.history_rounded, size: 16, color: Color(0xFF1B5E20)),
+                                SizedBox(width: 4),
+                                Text('الأرشيف', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
                       if (!DateUtils.isSameDay(_selectedDate, DateTime.now()))
                         TextButton(
                           onPressed: () => setState(() => _selectedDate = DateTime.now()),
@@ -255,7 +442,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                       final d = doc.data() as Map<String, dynamic>;
                       if (d['isDeleted'] == true) continue;
                       final st = (d['status'] ?? '').toString();
-                      if (st != 'confirmed' && st != 'completed') continue;
+                      // استبعاد المكتمل تماماً من هذا الجدول المباشر
+                      if (st != 'confirmed') continue;
 
                       final map = Map<String, dynamic>.from(d);
                       map['docId'] = doc.id;
@@ -299,12 +487,12 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                             Icon(Icons.event_available_rounded, size: 60, color: Colors.grey.shade400),
                             const SizedBox(height: 12),
                             Text(
-                              'لا توجد حجوزات مثبتة في $dayNameArabic',
+                              'لا توجد حجوزات نشطة في $dayNameArabic',
                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
                             ),
                             const SizedBox(height: 4),
                             const Text(
-                              'الطلبات الجديدة غير المقبولة تجدها في تبويب الطلبات الواردة',
+                              'المباريات المنتهية تجدها في الأرشيف أعلى الجدول',
                               style: TextStyle(fontSize: 11.5, color: Colors.grey),
                             ),
                             const SizedBox(height: 16),
@@ -348,8 +536,16 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                         final price = (slot['price'] as num?)?.toDouble() ?? 25000.0;
                         final isRecurring = slot['isRecurringRule'] == true || status == 'recurring';
 
-                        final statusColor = _getStatusColor(status);
-                        final statusText = _getStatusArabicText(status);
+                        // فحص هل انتهى وقت المباراة ونسي إكمالها
+                        final isTimePassed = _isSlotTimePassed(dateStr, endTime);
+
+                        final statusColor = isTimePassed && !isRecurring
+                            ? Colors.orange.shade800
+                            : _getStatusColor(status);
+
+                        final statusText = isTimePassed && !isRecurring
+                            ? 'انتهى الوقت - بانتظار الإكمال'
+                            : _getStatusArabicText(status);
 
                         return Card(
                           elevation: 1.5,
@@ -357,8 +553,10 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                             side: BorderSide(
-                              color: isRecurring ? Colors.purple.shade200 : const Color(0xFFE2E8F0),
-                              width: isRecurring ? 1.5 : 1,
+                              color: isTimePassed && !isRecurring
+                                  ? Colors.orange.shade300
+                                  : (isRecurring ? Colors.purple.shade200 : const Color(0xFFE2E8F0)),
+                              width: (isTimePassed || isRecurring) ? 1.5 : 1,
                             ),
                           ),
                           child: Padding(
@@ -372,12 +570,18 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: isRecurring ? Colors.purple.shade50 : const Color(0xFFE8F5E9),
+                                        color: isTimePassed && !isRecurring
+                                            ? Colors.orange.shade50
+                                            : (isRecurring ? Colors.purple.shade50 : const Color(0xFFE8F5E9)),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Icon(
-                                        isRecurring ? Icons.repeat_rounded : Icons.sports_soccer_rounded,
-                                        color: isRecurring ? Colors.purple.shade800 : const Color(0xFF1B5E20),
+                                        isRecurring
+                                            ? Icons.repeat_rounded
+                                            : (isTimePassed ? Icons.timer_off_rounded : Icons.sports_soccer_rounded),
+                                        color: isTimePassed && !isRecurring
+                                            ? Colors.orange.shade800
+                                            : (isRecurring ? Colors.purple.shade800 : const Color(0xFF1B5E20)),
                                         size: 20,
                                       ),
                                     ),
@@ -414,15 +618,16 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: statusColor.withOpacity(0.10),
+                                        color: statusColor.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
                                         statusText,
-                                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10.5),
                                       ),
                                     ),
-                                    if (!isRecurring) ...[
+                                    // خيار الإلغاء وتفريغ الوقت يظهر فقط للمباريات المستقبلية التي لم تنته بعد
+                                    if (!isRecurring && !isTimePassed) ...[
                                       const SizedBox(width: 4),
                                       PopupMenuButton<String>(
                                         icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
@@ -494,17 +699,21 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                       ),
                                     ],
                                     const Spacer(),
-                                    if (!isRecurring && status == 'confirmed')
-                                      OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: const Color(0xFF1B5E20),
-                                          side: const BorderSide(color: Color(0xFF1B5E20)),
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    if (!isRecurring)
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isTimePassed ? Colors.orange.shade800 : const Color(0xFF1B5E20),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          elevation: 0,
                                           visualDensity: VisualDensity.compact,
                                         ),
                                         icon: const Icon(Icons.check_rounded, size: 15),
-                                        label: const Text('إكمال الحجز', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                        label: Text(
+                                          isTimePassed ? 'إكمال وتقييم الآن' : 'إكمال الحجز',
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
                                         onPressed: () => _completeBooking(docId, teamOne),
                                       ),
                                   ],
