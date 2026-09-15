@@ -36,8 +36,54 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
   void initState() {
     super.initState();
     _slots = buildPitchSlots(widget.durationMinutes);
-    _selectedSlot = _slots.isNotEmpty ? _slots.first : '08:00 م - 09:00 م';
     _priceController = TextEditingController(text: '${widget.defaultRate.toInt()}');
+    _selectFirstAvailableSlot();
+  }
+
+  // فحص دقيق لمعرفة هل الموعد مضى مقارنة بالوقت الفعلي
+  bool _isSlotTimePassed(DateTime date, String slotStr) {
+    try {
+      final now = DateTime.now();
+      final todayDateOnly = DateTime(now.year, now.month, now.day);
+      final checkDateOnly = DateTime(date.year, date.month, date.day);
+
+      if (checkDateOnly.isBefore(todayDateOnly)) return true;
+      if (checkDateOnly.isAfter(todayDateOnly)) return false;
+
+      final startPart = slotStr.split(' - ').first.trim();
+      final clean = startPart.replaceAll(RegExp(r'\s+'), ' ');
+      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
+      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
+
+      final digitsOnly = clean.replaceAll(RegExp(r'[^0-9:]'), '');
+      final timeParts = digitsOnly.split(':');
+      if (timeParts.isEmpty) return false;
+
+      int hour = int.parse(timeParts[0]);
+      int minute = timeParts.length > 1 ? int.parse(timeParts[1]) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+
+      DateTime slotDateTime;
+      if (isAM && hour < 6) {
+        slotDateTime = DateTime(now.year, now.month, now.day + 1, hour, minute);
+      } else {
+        slotDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+      }
+
+      return now.isAfter(slotDateTime);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _selectFirstAvailableSlot() {
+    final available = _slots.firstWhere(
+      (s) => !_isSlotTimePassed(_selectedDate, s),
+      orElse: () => _slots.isNotEmpty ? _slots.first : '08:00 م - 09:00 م',
+    );
+    _selectedSlot = available;
   }
 
   String _getArabicDayName(DateTime date) {
@@ -165,10 +211,15 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: _selectedDate,
-                      firstDate: DateTime.now().subtract(const Duration(days: 15)),
+                      firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 60)),
                     );
-                    if (picked != null) setState(() => _selectedDate = picked);
+                    if (picked != null) {
+                      setState(() {
+                        _selectedDate = picked;
+                        _selectFirstAvailableSlot();
+                      });
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -200,16 +251,29 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (context, index) {
                       final slot = _slots[index];
+                      final isPassed = _isSlotTimePassed(_selectedDate, slot);
                       final isSelected = _selectedSlot == slot;
+
                       return ChoiceChip(
-                        label: Text(slot, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black87)),
-                        selected: isSelected,
+                        label: Text(
+                          isPassed ? '$slot (مضى)' : slot,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isPassed
+                                ? Colors.grey.shade400
+                                : (isSelected ? Colors.white : Colors.black87),
+                          ),
+                        ),
+                        selected: isSelected && !isPassed,
                         selectedColor: const Color(0xFF1B5E20),
-                        backgroundColor: Colors.grey.shade100,
+                        backgroundColor: isPassed ? Colors.grey.shade200 : Colors.grey.shade100,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        onSelected: (val) {
-                          if (val) setState(() => _selectedSlot = slot);
-                        },
+                        onSelected: isPassed
+                            ? null
+                            : (val) {
+                                if (val) setState(() => _selectedSlot = slot);
+                              },
                       );
                     },
                   ),
@@ -261,6 +325,16 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                         : () async {
                             if (!_formKey.currentState!.validate()) return;
 
+                            // صمام أمان إضافي: منع الحفظ نهائياً إذا كان الوقت قد مضى
+                            if (_isSlotTimePassed(_selectedDate, _selectedSlot)) {
+                              _showConflictDialog(
+                                context,
+                                conflictReason: 'الوقت المحدد قد مضى بالفعل!',
+                                details: 'لا يمكن تثبيت حجز لمباراة في وقت سابق لوقتنا الحالي.',
+                              );
+                              return;
+                            }
+
                             setState(() => _isSaving = true);
                             final firestore = FirebaseFirestore.instance;
                             final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -270,7 +344,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                             final eTime = times.length > 1 ? times[1].trim() : '';
 
                             try {
-                              // 1. فحص التعارض في الحجوزات العادية والمباريات القائمة (يشمل confirmed و upcoming)
+                              // 1. فحص التعارض في الحجوزات العادية والمباريات القائمة
                               final existingBookings = await firestore
                                   .collection('bookings')
                                   .where('pitchName', isEqualTo: widget.pitchName)
@@ -317,7 +391,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                                 }
                               }
 
-                              // 3. التثبيت في حال عدم وجود أي تعارض مع ضبط الحالة إلى confirmed لينزل فوراً في الجدول
+                              // 3. التثبيت في حال عدم وجود أي تعارض
                               await firestore.collection('bookings').add({
                                 'pitchName': widget.pitchName,
                                 'teamOne': _teamOneController.text.trim(),
