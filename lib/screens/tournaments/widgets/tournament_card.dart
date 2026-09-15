@@ -17,46 +17,31 @@ class TournamentCard extends StatelessWidget {
     this.onOpenBracket,
   });
 
-  // إشعار أنيق وشفاف في وسط الشاشة يختفي بعد 1.2 ثانية
-  void _showCenterHudToast(BuildContext context, String message, {bool isError = false}) {
+  void _showCenterToast(BuildContext context, String message, {bool isError = false}) {
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
       builder: (ctx) {
-        Future.delayed(const Duration(milliseconds: 1200), () {
+        Future.delayed(const Duration(milliseconds: 1000), () {
           if (ctx.mounted) Navigator.of(ctx).pop();
         });
         return Center(
           child: Material(
             color: Colors.transparent,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.82),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
-                ],
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
-                    color: isError ? Colors.redAccent : const Color(0xFF4CAF50),
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: isError ? Colors.redAccent : Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -65,13 +50,102 @@ class TournamentCard extends StatelessWidget {
     );
   }
 
-  // حذف البطولة وحذف كافة حجوزاتها ومبارياتها من جدول المالك دفعة واحدة
+  // نافذة إدخال عصرية لإضافة فريق يدوياً بواسطة المالك
+  void _showManualAddTeamDialog(BuildContext context, String tournamentId, List<String> currentTeams, int maxTeams) {
+    if (currentTeams.length >= maxTeams) {
+      _showCenterToast(context, 'تم اكتمال العدد الأقصى لفرق البطولة', isError: true);
+      return;
+    }
+
+    final teamNameCtrl = TextEditingController();
+    final captainPhoneCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.group_add_rounded, color: Color(0xFF1B5E20), size: 22),
+              SizedBox(width: 8),
+              Text(
+                'إضافة فريق للبطولة',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: teamNameCtrl,
+                decoration: InputDecoration(
+                  labelText: 'اسم الفريق',
+                  prefixIcon: const Icon(Icons.shield_rounded, color: Color(0xFF1B5E20)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: captainPhoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: 'رقم هاتف الكابتن (اختياري)',
+                  prefixIcon: const Icon(Icons.phone_rounded, color: Colors.grey),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B5E20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final tName = teamNameCtrl.text.trim();
+                final cPhone = captainPhoneCtrl.text.trim();
+
+                if (tName.isEmpty) return;
+                if (currentTeams.contains(tName)) {
+                  _showCenterToast(context, 'هذا الفريق مضاف مسبقاً', isError: true);
+                  return;
+                }
+
+                Navigator.pop(dialogCtx);
+                final uniqueKey = cPhone.isNotEmpty ? cPhone : 'manual_${DateTime.now().millisecondsSinceEpoch}';
+
+                await FirebaseFirestore.instance.collection('tournaments').doc(tournamentId).update({
+                  'teams': FieldValue.arrayUnion([tName]),
+                  'registeredPlayers.$uniqueKey': tName,
+                });
+
+                if (context.mounted) {
+                  _showCenterToast(context, 'تمت إضافة الفريق بنجاح');
+                }
+              },
+              child: const Text('إضافة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _performFullTournamentDeletion(BuildContext context, String tournamentTitle) async {
     final firestore = FirebaseFirestore.instance;
     final batch = firestore.batch();
 
     try {
-      // 1. البحث عن الحجوزات المرتبطة بمعرف البطولة
       final bookingsByTid = await firestore
           .collection('bookings')
           .where('tournamentId', isEqualTo: doc.id)
@@ -84,7 +158,6 @@ class TournamentCard extends StatelessWidget {
         });
       }
 
-      // 2. البحث عن الحجوزات التي سجلت باسم البطولة في teamOne أو teamTwo كحجز للبطولة
       final bookingsByName = await firestore
           .collection('bookings')
           .where('tournamentTitle', isEqualTo: tournamentTitle)
@@ -97,18 +170,15 @@ class TournamentCard extends StatelessWidget {
         });
       }
 
-      // 3. حذف وثيقة البطولة نفسها
       batch.delete(doc.reference);
-
-      // تنفيذ المعاملة الذرية دفعة واحدة
       await batch.commit();
 
       if (context.mounted) {
-        _showCenterHudToast(context, 'تم حذف البطولة وتفريغ جدولها بنجاح');
+        _showCenterToast(context, 'تم حذف البطولة وتفريغ جدولها');
       }
     } catch (e) {
       if (context.mounted) {
-        _showCenterHudToast(context, 'تعذر الحذف: $e', isError: true);
+        _showCenterToast(context, 'تعذر الحذف', isError: true);
       }
     }
   }
@@ -119,37 +189,21 @@ class TournamentCard extends StatelessWidget {
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
-              SizedBox(width: 8),
-              Text(
-                'حذف البطولة نهائياً',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
-              ),
-            ],
-          ),
-          content: Text(
-            'هل أنت متأكد من حذف بطولة ($tournamentTitle)؟ سيتم مسح كافة المباريات والحجوزات المرتبطة بها من جدول الملعب فوراً.',
-            style: const TextStyle(fontSize: 13, height: 1.4),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('حذف البطولة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
+          content: Text('هل أنت متأكد من حذف بطولة ($tournamentTitle) وتفريغ مبارياتها من الجدول؟'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade800,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
               onPressed: () async {
                 Navigator.pop(ctx);
                 await _performFullTournamentDeletion(context, tournamentTitle);
               },
-              child: const Text('تأكيد الحذف وتفريغ الجدول', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -172,7 +226,7 @@ class TournamentCard extends StatelessWidget {
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               const Icon(Icons.groups_rounded, color: Color(0xFF1B5E20), size: 22),
@@ -186,7 +240,7 @@ class TournamentCard extends StatelessWidget {
           content: teams.isEmpty
               ? const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(child: Text('لا توجد أي فرق مسجلة بعد', style: TextStyle(color: Colors.grey))),
+                  child: Center(child: Text('لا توجد فرق مسجلة بعد', style: TextStyle(color: Colors.grey))),
                 )
               : SizedBox(
                   width: double.maxFinite,
@@ -211,7 +265,7 @@ class TournamentCard extends StatelessWidget {
                         ),
                         trailing: IconButton(
                           icon: const Icon(Icons.person_remove_rounded, color: Colors.red),
-                          tooltip: 'استبعاد مع كتابة السبب',
+                          tooltip: 'استبعاد الفريق',
                           onPressed: () {
                             Navigator.pop(ctx);
                             RemoveTeamDialog.show(
@@ -278,7 +332,6 @@ class TournamentCard extends StatelessWidget {
                 controller: teamNameCtrl,
                 decoration: InputDecoration(
                   labelText: 'اسم فريقك',
-                  hintText: 'مثال: نجوم بغداد',
                   prefixIcon: const Icon(Icons.shield_rounded, color: Color(0xFF1B5E20)),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -301,7 +354,7 @@ class TournamentCard extends StatelessWidget {
                   });
 
                   if (context.mounted) {
-                    _showCenterHudToast(context, 'تم تسجيل فريقك بالبطولة بنجاح');
+                    _showCenterToast(context, 'تم تسجيل فريقك بنجاح');
                   }
                 },
                 child: const Text('تأكيد الاشتراك', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
@@ -320,7 +373,7 @@ class TournamentCard extends StatelessWidget {
     final pitchName = data['pitchName'] ?? '';
     final maxTeams = data['maxTeams'] ?? 8;
     final teams = List<String>.from(data['teams'] ?? []);
-    final prize = data['prize'] ?? 'كأس البطولة وجوائز قيمة';
+    final prize = data['prize'] ?? 'كأس وجوائز قيمة';
     final rules = data['rules'] ?? '';
     final status = data['status'] ?? 'registering';
     final registeredPlayers = Map<String, dynamic>.from(data['registeredPlayers'] ?? {});
@@ -330,11 +383,11 @@ class TournamentCard extends StatelessWidget {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Card(
-        elevation: 2,
-        margin: const EdgeInsets.only(bottom: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        elevation: 1.5,
+        margin: const EdgeInsets.only(bottom: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -342,27 +395,24 @@ class TournamentCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 28),
+                    child: const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 24),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'الملعب: $pitchName',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                        ),
+                        const SizedBox(height: 2),
+                        Text('الملعب: $pitchName', style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
                       ],
                     ),
                   ),
@@ -370,7 +420,7 @@ class TournamentCard extends StatelessWidget {
                   if (isOwner) ...[
                     const SizedBox(width: 4),
                     PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF64748B), size: 20),
+                      icon: const Icon(Icons.more_vert_rounded, color: Colors.grey, size: 20),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onSelected: (val) {
                         if (val == 'delete') {
@@ -384,7 +434,7 @@ class TournamentCard extends StatelessWidget {
                             children: [
                               Icon(Icons.delete_forever_rounded, color: Colors.red, size: 18),
                               SizedBox(width: 8),
-                              Text('حذف البطولة', style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold)),
+                              Text('حذف البطولة', style: TextStyle(color: Colors.red, fontSize: 12.5, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
@@ -393,72 +443,53 @@ class TournamentCard extends StatelessWidget {
                   ],
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'اكتمال الفرق: ${teams.length} من $maxTeams',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                      ),
-                      Text(
-                        isFull ? 'المقاعد مكتملة' : 'متبقي ${maxTeams - teams.length} مقاعد',
-                        style: TextStyle(fontSize: 11, color: isFull ? Colors.red : Colors.grey),
-                      ),
-                    ],
+                  Text(
+                    'الفرق: ${teams.length} من $maxTeams',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
                   ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: maxTeams > 0 ? (teams.length / maxTeams) : 0,
-                      backgroundColor: const Color(0xFFE2E8F0),
-                      color: isFull ? Colors.red : const Color(0xFF1B5E20),
-                      minHeight: 6,
-                    ),
+                  Text(
+                    isFull ? 'المقاعد مكتملة' : 'متبقي ${maxTeams - teams.length}',
+                    style: TextStyle(fontSize: 11, color: isFull ? Colors.red : Colors.grey),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: maxTeams > 0 ? (teams.length / maxTeams) : 0,
+                  backgroundColor: const Color(0xFFE2E8F0),
+                  color: isFull ? Colors.red : const Color(0xFF1B5E20),
+                  minHeight: 5,
+                ),
+              ),
+              const SizedBox(height: 10),
 
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.card_giftcard_rounded, size: 14, color: Colors.amber),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'الجائزة: $prize',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                          ),
-                        ),
-                      ],
-                    ),
+                    Text('الجائزة: $prize', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                     if (rules.toString().isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'الشروط: $rules',
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                      ),
+                      const SizedBox(height: 2),
+                      Text('الشروط: $rules', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                     ],
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
               Row(
                 children: [
@@ -468,24 +499,42 @@ class TournamentCard extends StatelessWidget {
                         backgroundColor: const Color(0xFF1B5E20),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      icon: const Icon(Icons.groups_rounded, size: 16),
-                      label: const Text('إدارة الفرق', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.groups_rounded, size: 15),
+                      label: const Text('إدارة الفرق', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                       onPressed: () => _openManageTeamsDialog(context, data),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
+
+                    // زر المربع الصغير لإضافة فريق يدوياً بواسطة المالك
+                    if (!isFull && status == 'registering')
+                      InkWell(
+                        onTap: () => _showManualAddTeamDialog(context, doc.id, teams, maxTeams),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF1B5E20)),
+                          ),
+                          child: const Icon(Icons.add_rounded, color: Color(0xFF1B5E20), size: 18),
+                        ),
+                      ),
+                    const SizedBox(width: 6),
+
                     if (onOpenBracket != null) ...[
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF1B5E20),
                           side: const BorderSide(color: Color(0xFF1B5E20)),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        icon: const Icon(Icons.account_tree_rounded, size: 16),
-                        label: const Text('المخطط والنتائج', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        icon: const Icon(Icons.account_tree_rounded, size: 15),
+                        label: const Text('القرعة والنتائج', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: onOpenBracket,
                       ),
                     ],
@@ -496,13 +545,13 @@ class TournamentCard extends StatelessWidget {
                           backgroundColor: isRegistered ? Colors.grey : const Color(0xFF1B5E20),
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        icon: Icon(isRegistered ? Icons.check_circle_rounded : Icons.app_registration_rounded, size: 16),
+                        icon: Icon(isRegistered ? Icons.check_circle_rounded : Icons.app_registration_rounded, size: 15),
                         label: Text(
-                          isRegistered ? 'أنت مسجل بالبطولة' : (isFull ? 'المقاعد ممتلئة' : 'تسجيل فريقي'),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          isRegistered ? 'فريقك مسجل' : (isFull ? 'المقاعد مكتملة' : 'تسجيل فريقي'),
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                         ),
                         onPressed: (isRegistered || isFull)
                             ? null
@@ -514,10 +563,10 @@ class TournamentCard extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF1B5E20),
                           side: const BorderSide(color: Color(0xFF1B5E20)),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        icon: const Icon(Icons.account_tree_rounded, size: 16),
+                        icon: const Icon(Icons.account_tree_rounded, size: 15),
                         label: const Text('جدول المباريات', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: onOpenBracket,
                       ),
@@ -538,25 +587,19 @@ class TournamentCard extends StatelessWidget {
     Color fg = const Color(0xFF1B5E20);
 
     if (status == 'active') {
-      label = 'البطولة جارية ⚽';
+      label = 'البطولة جارية';
       bg = Colors.blue.shade50;
       fg = Colors.blue.shade800;
     } else if (status == 'completed') {
-      label = 'انتهت البطولة 🏆';
+      label = 'انتهت البطولة';
       bg = Colors.amber.shade50;
       fg = Colors.amber.shade900;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      child: Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: fg)),
     );
   }
 }
