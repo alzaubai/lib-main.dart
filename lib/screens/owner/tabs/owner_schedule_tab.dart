@@ -2,11 +2,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import '../../../constants.dart';
-import '../../common/dialogs/match_evaluation_dialog.dart';
+import '../../../utils/time_parser_util.dart';
+import '../../../utils/booking_color_util.dart';
+import '../sheets/add_manual_booking_sheet.dart';
+import '../dialogs/booking_details_dialog.dart';
 
 class OwnerScheduleTab extends StatefulWidget {
   final String pitchName;
+
   const OwnerScheduleTab({super.key, required this.pitchName});
 
   @override
@@ -16,105 +19,104 @@ class OwnerScheduleTab extends StatefulWidget {
 class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
   DateTime _selectedDate = DateTime.now();
 
-  String _getArabicDayName(DateTime date) {
-    switch (date.weekday) {
-      case DateTime.friday:
-        return 'الجمعة';
-      case DateTime.thursday:
-        return 'الخميس';
-      case DateTime.saturday:
-        return 'السبت';
-      case DateTime.sunday:
-        return 'الأحد';
-      case DateTime.monday:
-        return 'الإثنين';
-      case DateTime.tuesday:
-        return 'الثلاثاء';
-      case DateTime.wednesday:
-        return 'الأربعاء';
-      default:
-        return '';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-    final dayNameArabic = _getArabicDayName(_selectedDate);
+    final dayNameArabic = TimeParserUtil.getArabicDayName(_selectedDate);
 
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // شريط اختيار وتنقل الأيام
+          // شريط اختيار الأيام الأفقي الأنيق (14 يوماً للأمام) بدون أيقونة علوية مشتتة
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: const BoxDecoration(
               color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+              ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: List.generate(14, (index) {
-                        final d = DateTime.now().add(Duration(days: index));
-                        final isSelected = DateFormat('yyyy-MM-dd').format(d) == dateStr;
-                        final dayName = index == 0 ? 'اليوم' : (index == 1 ? 'غداً' : _getArabicDayName(d));
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3),
-                          child: ChoiceChip(
-                            label: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  dayName,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                                Text(
-                                  DateFormat('MM/dd').format(d),
-                                  style: TextStyle(fontSize: 10, color: isSelected ? Colors.white70 : Colors.grey),
-                                ),
-                              ],
-                            ),
-                            selected: isSelected,
-                            selectedColor: const Color(0xFF1B5E20),
-                            backgroundColor: Colors.grey.shade100,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            onSelected: (val) {
-                              if (val) setState(() => _selectedDate = d);
-                            },
-                          ),
-                        );
-                      }),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.event_note_rounded, color: Color(0xFF1B5E20), size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        'جدول مباريات: $dayNameArabic ($dateStr)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                      ),
+                      const Spacer(),
+                      if (!DateUtils.isSameDay(_selectedDate, DateTime.now()))
+                        TextButton(
+                          onPressed: () => setState(() => _selectedDate = DateTime.now()),
+                          style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
+                          child: const Text('اليوم', style: TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                    ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF1B5E20)),
-                  tooltip: 'اختر يوماً من التقويم',
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-                      lastDate: DateTime.now().add(const Duration(days: 90)),
-                    );
-                    if (picked != null) setState(() => _selectedDate = picked);
-                  },
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 65,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: 14,
+                    itemBuilder: (context, index) {
+                      final day = DateTime.now().add(Duration(days: index));
+                      final isSelected = DateUtils.isSameDay(_selectedDate, day);
+                      final dName = TimeParserUtil.getArabicDayName(day);
+                      final dNum = DateFormat('d').format(day);
+
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedDate = day),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 58,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                dName,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isSelected ? Colors.white70 : const Color(0xFF64748B),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                dNum,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
           ),
 
-          // عرض الحجوزات المؤكدة فقط لهذا اليوم
+          // قائمة الحجوزات والمواعيد لليوم المحدد
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -122,65 +124,100 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                   .where('pitchName', isEqualTo: widget.pitchName)
                   .where('date', isEqualTo: dateStr)
                   .snapshots(),
-              builder: (context, bookingSnap) {
+              builder: (context, snapBookings) {
                 return StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('recurring_rules')
                       .where('pitchName', isEqualTo: widget.pitchName)
                       .where('dayOfWeek', isEqualTo: dayNameArabic)
                       .snapshots(),
-                  builder: (context, recurringSnap) {
-                    if (bookingSnap.connectionState == ConnectionState.waiting ||
-                        recurringSnap.connectionState == ConnectionState.waiting) {
+                  builder: (context, snapRecurring) {
+                    if (snapBookings.connectionState == ConnectionState.waiting &&
+                        snapRecurring.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
                     }
 
-                    // تصفية: استبعاد المعلق pending والمرفوض rejected والمحذوف
-                    final regularDocs = (bookingSnap.data?.docs ?? []).where((d) {
-                      final data = d.data() as Map<String, dynamic>;
-                      final status = data['status'];
-                      return data['isDeleted'] != true &&
-                          status != 'pending' &&
-                          status != 'rejected';
-                    }).map((d) {
-                      final data = d.data() as Map<String, dynamic>;
-                      data['docId'] = d.id;
-                      data['isRecurring'] = false;
-                      return data;
-                    }).toList();
+                    final bookingsDocs = snapBookings.data?.docs ?? [];
+                    final recurringDocs = snapRecurring.data?.docs ?? [];
 
-                    // الحجوزات الدائمة لنفس اليوم
-                    final recurringDocs = (recurringSnap.data?.docs ?? []).map((d) {
-                      final data = d.data() as Map<String, dynamic>;
-                      data['docId'] = d.id;
-                      data['isRecurring'] = true;
-                      data['status'] = 'recurring';
-                      return data;
-                    }).toList();
+                    // دمج الحجوزات مع الاشتراكات الدائمة
+                    final List<Map<String, dynamic>> allSlots = [];
 
-                    final allMatches = [...regularDocs, ...recurringDocs];
+                    for (var doc in bookingsDocs) {
+                      final d = doc.data() as Map<String, dynamic>;
+                      if (d['isDeleted'] == true) continue;
+                      if (d['status'] == 'rejected') continue;
+                      final map = Map<String, dynamic>.from(d);
+                      map['docId'] = doc.id;
+                      map['isRecurringRule'] = false;
+                      allSlots.add(map);
+                    }
 
-                    allMatches.sort((a, b) {
-                      final aTime = (a['startTime'] ?? '').toString();
-                      final bTime = (b['startTime'] ?? '').toString();
-                      return aTime.compareTo(bTime);
+                    for (var rDoc in recurringDocs) {
+                      final rd = rDoc.data() as Map<String, dynamic>;
+                      final startTime = rd['startTime'] ?? '';
+                      bool alreadyBooked = allSlots.any((s) => s['startTime'] == startTime);
+
+                      if (!alreadyBooked) {
+                        allSlots.add({
+                          'docId': rDoc.id,
+                          'pitchName': widget.pitchName,
+                          'teamOne': rd['teamName'] ?? 'فريق دائم',
+                          'teamTwo': '',
+                          'phone': rd['phone'] ?? '',
+                          'date': dateStr,
+                          'startTime': startTime,
+                          'endTime': rd['endTime'] ?? '',
+                          'price': rd['price'] ?? 25000,
+                          'status': 'recurring',
+                          'isRecurringRule': true,
+                        });
+                      }
+                    }
+
+                    allSlots.sort((a, b) {
+                      final tA = a['startTime'] ?? '';
+                      final tB = b['startTime'] ?? '';
+                      return tA.compareTo(tB);
                     });
 
-                    if (allMatches.isEmpty) {
+                    if (allSlots.isEmpty) {
                       return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.event_available_rounded, size: 64, color: Colors.grey.shade400),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 12),
                             Text(
-                              'لا توجد مباريات مثبتة في يوم $dayNameArabic ($dateStr)',
-                              style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 14),
+                              'لا توجد حجوزات في $dayNameArabic',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             const Text(
-                              'ساعات هذا اليوم شاغرة بالكامل أمام الحجز',
-                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                              'الملعب متاح بالكامل طوال هذا اليوم',
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1B5E20),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              icon: const Icon(Icons.add_rounded, color: Colors.white),
+                              label: const Text('إضافة حجز يدوي الآن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (_) => ModernAddBookingSheet(
+                                    pitchName: widget.pitchName,
+                                    durationMinutes: 60,
+                                    defaultRate: 25000,
+                                    initialDate: dateStr,
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -188,166 +225,87 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                     }
 
                     return ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: allMatches.length,
-                      itemBuilder: (context, index) {
-                        final item = allMatches[index];
-                        final bool isRecurring = item['isRecurring'] == true;
-                        final status = item['status'] ?? 'upcoming';
+                      padding: const EdgeInsets.all(14),
+                      itemCount: allSlots.length,
+                      itemBuilder: (context, idx) {
+                        final slot = allSlots[idx];
+                        final teamOne = slot['teamOne'] ?? 'فريق كروي';
+                        final startTime = slot['startTime'] ?? '';
+                        final endTime = slot['endTime'] ?? '';
+                        final status = slot['status'] ?? 'upcoming';
+                        final isRecurring = slot['isRecurringRule'] == true || status == 'recurring';
 
-                        Color cardColor = Colors.white;
-                        Color borderColor = Colors.grey.shade300;
-                        String statusLabel = 'مباراة مؤكدة';
-
-                        if (isRecurring) {
-                          cardColor = const Color(0xFFFAF7FC);
-                          borderColor = Colors.purple.shade200;
-                          statusLabel = 'اشتراك أسبوعي دائم';
-                        } else if (status == 'completed') {
-                          cardColor = Colors.grey.shade50;
-                          borderColor = Colors.blue.shade200;
-                          statusLabel = 'مكتملة ومقبوضة';
-                        } else if (status == 'tournament_match') {
-                          cardColor = Colors.amber.shade50;
-                          borderColor = Colors.amber.shade300;
-                          statusLabel = 'مباراة بطولة رسمية';
-                        }
-
-                        final teamName = item['teamOne'] ?? item['teamName'] ?? 'فريق كابتن';
-                        final rivalName = item['teamTwo'] ?? 'تحدي';
+                        final statusColor = BookingColorUtil.getStatusColor(status);
+                        final statusText = BookingColorUtil.getStatusArabicText(status);
 
                         return Card(
-                          color: cardColor,
-                          elevation: 2,
-                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 1.5,
+                          margin: const EdgeInsets.only(bottom: 10),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(color: borderColor, width: 1.2),
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: isRecurring ? Colors.purple.shade200 : const Color(0xFFE2E8F0),
+                              width: isRecurring ? 1.5 : 1,
+                            ),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isRecurring ? Colors.purple.shade50 : const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                isRecurring ? Icons.repeat_rounded : Icons.sports_soccer_rounded,
+                                color: isRecurring ? Colors.purple.shade800 : const Color(0xFF1B5E20),
+                                size: 22,
+                              ),
+                            ),
+                            title: Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      isRecurring
-                                          ? Icons.repeat_rounded
-                                          : (status == 'tournament_match' ? Icons.emoji_events : Icons.sports_soccer),
-                                      color: isRecurring
-                                          ? Colors.purple.shade800
-                                          : (status == 'tournament_match' ? Colors.amber.shade800 : const Color(0xFF1B5E20)),
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        '$teamName ضد $rivalName',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                          color: isRecurring ? Colors.purple.shade900 : const Color(0xFF1B5E20),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: isRecurring ? Colors.purple.shade50 : Colors.grey.shade100,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        statusLabel,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: isRecurring ? Colors.purple.shade800 : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                Text(
+                                  teamOne,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
                                 ),
-                                const SizedBox(height: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.grey.shade200),
+                                if (isRecurring) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(6)),
+                                    child: Text('اشتراك أسبوعي', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.purple.shade800)),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.access_time_rounded, size: 16, color: Colors.grey),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'الساعة: ${item['startTime']} - ${item['endTime']}',
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                      ),
-                                      const Spacer(),
-                                      Text(
-                                        '${item['price'] ?? 0} د.ع',
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    if ((item['phone'] ?? '').toString().isNotEmpty)
-                                      Text(
-                                        'كابتن: ${item['phone']}',
-                                        style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                      ),
-                                    const Spacer(),
-                                    if (!isRecurring && status == 'upcoming')
-                                      ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF1B5E20),
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        ),
-                                        icon: const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
-                                        label: const Text(
-                                          'إنهاء وقبض',
-                                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                        ),
-                                        onPressed: () async {
-                                          final docId = item['docId'];
-
-                                          await FirebaseFirestore.instance
-                                              .collection('bookings')
-                                              .doc(docId)
-                                              .update({'status': 'completed'});
-
-                                          if (context.mounted) {
-                                            MatchEvaluationDialog.show(
-                                              context,
-                                              bookingDocId: docId,
-                                              pitchName: widget.pitchName,
-                                              teamName: teamName,
-                                              isOwner: true,
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    if (!isRecurring && status == 'completed')
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                                        tooltip: 'إخفاء من الجدول',
-                                        onPressed: () {
-                                          FirebaseFirestore.instance
-                                              .collection('bookings')
-                                              .doc(item['docId'])
-                                              .update({'isDeleted': true});
-                                        },
-                                      ),
-                                  ],
-                                ),
+                                ],
                               ],
                             ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.schedule_rounded, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text('$startTime - $endTime', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                                ],
+                              ),
+                            ),
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                statusText,
+                                style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                              ),
+                            ),
+                            onTap: () {
+                              BookingDetailsDialog.show(
+                                context,
+                                bookingData: slot,
+                                pitchName: widget.pitchName,
+                              );
+                            },
                           ),
                         );
                       },
