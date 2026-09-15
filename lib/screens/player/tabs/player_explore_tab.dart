@@ -39,32 +39,16 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
   @override
   void initState() {
     super.initState();
-    _initDataAndLocation();
+    _loadInitialData();
   }
 
-  Future<void> _initDataAndLocation() async {
+  Future<void> _loadInitialData() async {
     final prefs = await SharedPreferences.getInstance();
-    _favoritePitches = prefs.getStringList('favorites_${widget.userPhone}') ?? [];
-
-    try {
-      final userDoc = await _firestore.collection('users').doc(widget.userPhone).get();
-      if (userDoc.exists && mounted) {
-        final data = userDoc.data();
-        final userGov = (data?['governorate'] ?? '').toString().trim();
-        final userArea = (data?['area'] ?? '').toString().trim();
-
-        if (userGov.isNotEmpty && iraqGovernoratesList.contains(userGov)) {
-          _selectedGov = userGov;
-          final availableAreas = getAreasListForGov(userGov);
-          if (userArea.isNotEmpty && availableAreas.contains(userArea)) {
-            _selectedArea = userArea;
-          }
-        }
-      }
-    } catch (_) {}
+    setState(() {
+      _favoritePitches = prefs.getStringList('favorites_${widget.userPhone}') ?? [];
+    });
 
     _currentPosition = await LocationService.getCurrentLocation();
-
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -78,6 +62,20 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
       }
     });
     await prefs.setStringList('favorites_${widget.userPhone}', _favoritePitches);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _favoritePitches.contains(pitchName)
+                ? 'تمت إضافة ($pitchName) إلى المفضلة ⭐'
+                : 'تمت إزالة ($pitchName) من المفضلة',
+          ),
+          duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _openWhatsApp(String phone) async {
@@ -117,6 +115,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
         const SnackBar(
           content: Text('لم يقم صاحب هذا الملعب بإضافة صور توضيحية بعد'),
           backgroundColor: Colors.black87,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
@@ -141,7 +140,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                   height: MediaQuery.of(context).size.height * 0.75,
                   child: Column(
                     children: [
-                      // شريط علوي بعنوان الملعب وزر الإغلاق
                       Row(
                         children: [
                           Expanded(
@@ -150,11 +148,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                               children: [
                                 Text(
                                   pitchName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 Text(
@@ -171,8 +165,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                         ],
                       ),
                       const SizedBox(height: 10),
-
-                      // عارض الصور بدقة كاملة مع Pinch-to-zoom
                       Expanded(
                         child: PageView.builder(
                           controller: pageCtrl,
@@ -185,10 +177,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                             if (!rawImage.startsWith('http')) {
                               try {
                                 final bytes = base64Decode(rawImage);
-                                imageWidget = Image.memory(
-                                  bytes,
-                                  fit: BoxFit.contain,
-                                );
+                                imageWidget = Image.memory(bytes, fit: BoxFit.contain);
                               } catch (_) {
                                 imageWidget = const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 60);
                               }
@@ -209,8 +198,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // مؤشرات الصفحات السفلية
                       if (images.length > 1)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -333,17 +320,18 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
 
                       for (var doc in docs) {
                         final d = doc.data() as Map<String, dynamic>;
-                        final name = (d['name'] ?? '').toString().toLowerCase();
+                        final pName = (d['name'] ?? doc.id).toString();
+                        final nameLower = pName.toLowerCase();
                         final gov = (d['governorate'] ?? '').toString();
                         final area = (d['area'] ?? '').toString();
                         final surface = (d['surfaceType'] ?? '').toString();
 
-                        if (widget.showOnlyFavorites && !_favoritePitches.contains(d['name'])) {
+                        if (widget.showOnlyFavorites && !_favoritePitches.contains(pName)) {
                           continue;
                         }
 
                         final matchesQuery = _searchQuery.isEmpty ||
-                            name.contains(_searchQuery) ||
+                            nameLower.contains(_searchQuery) ||
                             gov.toLowerCase().contains(_searchQuery) ||
                             area.toLowerCase().contains(_searchQuery);
 
@@ -366,6 +354,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                           }
 
                           final mapItem = Map<String, dynamic>.from(d);
+                          mapItem['name'] = pName;
                           mapItem['calculatedDistance'] = distKm;
                           pitchesWithDistance.add(mapItem);
                         }
@@ -392,16 +381,14 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                widget.showOnlyFavorites
-                                    ? 'قائمة المفضلة فارغة حالياً'
-                                    : 'لا توجد ملاعب مطابقة للبحث',
+                                widget.showOnlyFavorites ? 'قائمة المفضلة فارغة حالياً' : 'لا توجد ملاعب مطابقة للبحث',
                                 style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                               const SizedBox(height: 6),
                               Text(
                                 widget.showOnlyFavorites
-                                    ? 'اضغط على رمز النجمة لحفظ الملعب في هذه القائمة'
-                                    : 'جرب تغيير خيارات الفلترة أو المحافظة',
+                                    ? 'اضغط على رمز النجمة بجانب أي ملعب لحفظه هنا'
+                                    : 'جرب تصفير الفلترة أو كتابة اسم مختلف',
                                 style: const TextStyle(color: Colors.grey, fontSize: 12),
                               ),
                             ],
@@ -418,9 +405,9 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                           final phone = (d['phone'] ?? d['ownerPhone'] ?? '').toString().trim();
                           final price = (d['hourlyRate'] as num?)?.toDouble() ?? 25000.0;
                           final pType = d['pitchType'] ?? 'سباعي';
-                          final surface = d['surfaceType'] ?? 'ثيل صناعي';
-                          final gov = d['governorate'] ?? '';
-                          final area = d['area'] ?? '';
+                          final surface = d['surfaceType'] ?? 'ثيل';
+                          final gov = d['governorate'] ?? 'بغداد';
+                          final area = d['area'] ?? 'المركز';
                           final desc = d['description'] ?? '';
                           final openTime = d['openTime'] ?? '04:00 م';
                           final closeTime = d['closeTime'] ?? '03:00 ص';
@@ -462,7 +449,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                                   icon: Icon(
                                                     isFav ? Icons.star_rounded : Icons.star_border_rounded,
                                                     color: isFav ? Colors.amber : Colors.grey,
-                                                    size: 22,
+                                                    size: 24,
                                                   ),
                                                   tooltip: 'إضافة للمفضلة',
                                                   onPressed: () => _toggleFavorite(pName),
@@ -516,12 +503,10 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                   ),
                                   const SizedBox(height: 10),
 
-                                  // وسوم المواصفات وشارة الصور التفاعلية
                                   Wrap(
                                     spacing: 6,
                                     runSpacing: 6,
                                     children: [
-                                      // شارة استعراض الصور المنبثقة
                                       InkWell(
                                         onTap: () => _showPitchImagesViewer(context, pName, images),
                                         borderRadius: BorderRadius.circular(8),
@@ -558,7 +543,6 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                                   ),
                                   const Divider(height: 20),
 
-                                  // أزرار التفاعل والإجراءات
                                   Row(
                                     children: [
                                       ElevatedButton.icon(
