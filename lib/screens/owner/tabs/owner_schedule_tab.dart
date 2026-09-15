@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../../utils/time_parser_util.dart';
-import '../../../utils/booking_color_util.dart';
 import '../sheets/add_manual_booking_sheet.dart';
-import '../dialogs/booking_details_dialog.dart';
 
 class OwnerScheduleTab extends StatefulWidget {
   final String pitchName;
@@ -19,6 +17,106 @@ class OwnerScheduleTab extends StatefulWidget {
 class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
   DateTime _selectedDate = DateTime.now();
 
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'confirmed':
+        return const Color(0xFF1B5E20);
+      case 'pending':
+        return Colors.amber.shade800;
+      case 'cancelled':
+      case 'rejected':
+        return Colors.red.shade700;
+      case 'recurring':
+        return Colors.purple.shade800;
+      default:
+        return const Color(0xFF0F172A);
+    }
+  }
+
+  String _getStatusArabicText(String status) {
+    switch (status) {
+      case 'confirmed':
+        return 'مؤكد ✔️';
+      case 'pending':
+        return 'قيد الانتظار';
+      case 'cancelled':
+        return 'ملغي';
+      case 'rejected':
+        return 'مرفوض';
+      case 'recurring':
+        return 'اشتراك دائم';
+      default:
+        return 'محجوز';
+    }
+  }
+
+  void _showBookingDetails(BuildContext context, Map<String, dynamic> slot) {
+    final teamOne = slot['teamOne'] ?? 'فريق كابتن';
+    final teamTwo = slot['teamTwo'] ?? '';
+    final phone = slot['phone'] ?? 'غير متوفر';
+    final startTime = slot['startTime'] ?? '';
+    final endTime = slot['endTime'] ?? '';
+    final date = slot['date'] ?? '';
+    final status = slot['status'] ?? 'upcoming';
+    final price = slot['price'] ?? 25000;
+    final isRecurring = slot['isRecurringRule'] == true || status == 'recurring';
+    final docId = slot['docId']?.toString();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(
+                isRecurring ? Icons.repeat_rounded : Icons.sports_soccer_rounded,
+                color: isRecurring ? Colors.purple.shade800 : const Color(0xFF1B5E20),
+              ),
+              const SizedBox(width: 8),
+              const Text('تفاصيل الحجز', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('الفريق الأول: $teamOne', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              if (teamTwo.toString().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text('الفريق الثاني: $teamTwo', style: const TextStyle(fontSize: 13)),
+              ],
+              const SizedBox(height: 8),
+              Text('التاريخ: $date', style: const TextStyle(fontSize: 13)),
+              Text('الوقت: من $startTime إلى $endTime', style: const TextStyle(fontSize: 13)),
+              Text('رقم الهاتف: $phone', style: const TextStyle(fontSize: 13)),
+              Text('المبلغ: $price د.ع', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+            ],
+          ),
+          actions: [
+            if (docId != null && !isRecurring)
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await FirebaseFirestore.instance.collection('bookings').doc(docId).update({
+                    'isDeleted': true,
+                    'status': 'cancelled',
+                  });
+                },
+                child: const Text('إلغاء الحجز', style: TextStyle(color: Colors.red)),
+              ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20)),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إغلاق', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -28,7 +126,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // شريط اختيار الأيام الأفقي الأنيق (14 يوماً للأمام) بدون أيقونة علوية مشتتة
+          // شريط الأيام الأفقي بدون أيقونة علوية
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: const BoxDecoration(
@@ -116,7 +214,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
             ),
           ),
 
-          // قائمة الحجوزات والمواعيد لليوم المحدد
+          // قائمة الحجوزات
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -139,8 +237,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
 
                     final bookingsDocs = snapBookings.data?.docs ?? [];
                     final recurringDocs = snapRecurring.data?.docs ?? [];
-
-                    // دمج الحجوزات مع الاشتراكات الدائمة
                     final List<Map<String, dynamic>> allSlots = [];
 
                     for (var doc in bookingsDocs) {
@@ -214,7 +310,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                     pitchName: widget.pitchName,
                                     durationMinutes: 60,
                                     defaultRate: 25000,
-                                    initialDate: dateStr,
                                   ),
                                 );
                               },
@@ -235,8 +330,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                         final status = slot['status'] ?? 'upcoming';
                         final isRecurring = slot['isRecurringRule'] == true || status == 'recurring';
 
-                        final statusColor = BookingColorUtil.getStatusColor(status);
-                        final statusText = BookingColorUtil.getStatusArabicText(status);
+                        final statusColor = _getStatusColor(status);
+                        final statusText = _getStatusArabicText(status);
 
                         return Card(
                           elevation: 1.5,
@@ -299,13 +394,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                 style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
                               ),
                             ),
-                            onTap: () {
-                              BookingDetailsDialog.show(
-                                context,
-                                bookingData: slot,
-                                pitchName: widget.pitchName,
-                              );
-                            },
+                            onTap: () => _showBookingDetails(context, slot),
                           ),
                         );
                       },
