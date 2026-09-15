@@ -13,7 +13,7 @@ class PlayerBookingsTab extends StatefulWidget {
 }
 
 class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
-  bool _showPastBookings = true; // اجعل الأرشيف قابلاً للعرض والاطلاع بشكل دائم
+  bool _showPastBookings = true;
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -51,14 +51,11 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
     }
   }
 
-  // التحقق مما إذا مرّت 24 ساعة على الحدث أو انتهى موعد المباراة
   bool _shouldBeArchived(Map<String, dynamic> data) {
     try {
       final status = (data['status'] ?? '').toString();
-      // إذا تم أرشيفها يدوياً مسبقاً
       if (data['isArchived'] == true) return true;
 
-      // حالات تنتهي فوراً أو بعد 24 ساعة
       final dateStr = (data['date'] ?? '').toString();
       if (dateStr.isEmpty) return false;
 
@@ -66,12 +63,10 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
       final now = DateTime.now();
       final todayDateOnly = DateTime(now.year, now.month, now.day);
 
-      // إذا مر يوم كامل على تاريخ المباراة
       if (bookingDate.isBefore(todayDateOnly)) {
         return true;
       }
 
-      // إذا كانت مرفوضة أو أزيلت من البطولة ومضى عليها أكثر من 24 ساعة من تاريخ إنشائها
       if (status == 'rejected' || status == 'removed_from_tournament' || status == 'completed' || status == 'cancelled') {
         final createdAt = data['createdAt'];
         if (createdAt is Timestamp) {
@@ -85,11 +80,63 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
     return false;
   }
 
-  // فتح نافذة تقييم الملعب العصرية للكابتن
+  Future<void> _submitPitchEvaluation({
+    required String bookingId,
+    required String pitchName,
+    required int rating,
+    required String tag,
+    required String note,
+  }) async {
+    try {
+      // 1. تحديث وثيقة الحجز
+      await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({
+        'isArchived': true,
+        'pitchRating': rating,
+        'pitchReviewTag': tag,
+        'pitchReviewNote': note,
+      });
+
+      // 2. مزامنة التقييم مع وثيقة الملعب ليظهر لباقي اللاعبين
+      final pitchQuery = await FirebaseFirestore.instance
+          .collection('pitches')
+          .where('name', isEqualTo: pitchName)
+          .limit(1)
+          .get();
+
+      if (pitchQuery.docs.isNotEmpty) {
+        final pitchDoc = pitchQuery.docs.first;
+        final pitchData = pitchDoc.data();
+
+        final currentTotalRatings = (pitchData['totalRatings'] as num?)?.toInt() ?? 0;
+        final currentRatingSum = (pitchData['ratingSum'] as num?)?.toDouble() ?? 0.0;
+
+        final newTotal = currentTotalRatings + 1;
+        final newSum = currentRatingSum + rating;
+        final newAverage = double.parse((newSum / newTotal).toStringAsFixed(1));
+
+        await pitchDoc.reference.update({
+          'rating': newAverage,
+          'totalRatings': newTotal,
+          'ratingSum': newSum,
+          'reviews': FieldValue.arrayUnion([
+            {
+              'rating': rating,
+              'tag': tag,
+              'note': note,
+              'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+            }
+          ]),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating pitch review: $e');
+    }
+  }
+
   void _showPitchEvaluationDialog(String bookingId, String pitchName) {
     final List<String> quickTags = [
       'أرضية الملعب ممتازة',
-      'تنظيم وادارة احترافية',
+      'تنظيم وإدارة احترافية',
       'التزام تام بالمواعيد',
       'إنارة واضحة وقوية',
       'مرافق نظيفة ومرتبة'
@@ -101,84 +148,104 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            'تقييم تجربة اللعب: $pitchName',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('اختر الانطباع العام:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: selectedTag,
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  items: quickTags.map((tag) => DropdownMenuItem(value: tag, child: Text(tag, style: const TextStyle(fontSize: 12.5)))).toList(),
-                  onChanged: (val) {
-                    if (val != null) selectedTag = val;
-                  },
-                ),
-                const SizedBox(height: 14),
-                const Text('ملاحظات إضافية (اختياري):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: noteCtrl,
-                  maxLines: 2,
-                  style: constTextStyle(fontSize: 12),
-                  decoration: InputDecoration(
-                    hintText: 'اكتب أي ملاحظة عن الملعب أو المباراة...',
-                    hintStyle: const TextStyle(fontSize: 11.5, color: Colors.grey),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              'تقييم تجربة اللعب: $pitchName',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                // ترحيل الحجز للأرشيف عند رفض/تخطي التقييم
-                await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'isArchived': true});
-              },
-              child: const Text('تخطي / رفض', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B5E20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('التقييم العام بالنجوم:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      final starVal = index + 1;
+                      return IconButton(
+                        icon: Icon(
+                          starVal <= rating ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: starVal <= rating ? const Color(0xFFF59E0B) : Colors.grey,
+                          size: 30,
+                        ),
+                        onPressed: () => setDialogState(() => rating = starVal),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('اختر انطباعك الأساسي:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: selectedTag,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    items: quickTags.map((tag) => DropdownMenuItem(value: tag, child: Text(tag, style: const TextStyle(fontSize: 12.5)))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedTag = val);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('ملاحظات إضافية (اختياري):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteCtrl,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: 'اكتب ملاحظتك الموضوعية عن الملعب...',
+                      hintStyle: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
               ),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                // حفظ التقييم وترحيل الحجز للأرشيف
-                await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({
-                  'isArchived': true,
-                  'pitchRating': rating,
-                  'pitchReviewTag': selectedTag,
-                  'pitchReviewNote': noteCtrl.text.trim(),
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('شكراً لك، تم حفظ تقييم الملعب بنجاح'), backgroundColor: Color(0xFF1B5E20)),
-                );
-              },
-              child: const Text('إرسال التقييم', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'isArchived': true});
+                },
+                child: const Text('تخطي', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B5E20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _submitPitchEvaluation(
+                    bookingId: bookingId,
+                    pitchName: pitchName,
+                    rating: rating,
+                    tag: selectedTag,
+                    note: noteCtrl.text.trim(),
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('تم إرسال تقييمك للملعب بنجاح'), backgroundColor: Color(0xFF1B5E20)),
+                    );
+                  }
+                },
+                child: const Text('تأكيد التقييم', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ترحيل الحجز يدوياً للأرشيف فور ضغط الكابتن
   Future<void> _moveToArchive(String bookingId) async {
     await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'isArchived': true});
   }
@@ -211,7 +278,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
             final item = Map<String, dynamic>.from(data);
             item['id'] = doc.id;
 
-            // التحقق هل يجب أن يذهب للأرشيف أم يبقى في النشطة
             if (_shouldBeArchived(item)) {
               pastBookings.add(item);
             } else {
@@ -247,7 +313,7 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
                 const Padding(
                   padding: EdgeInsets.only(bottom: 10, right: 4),
                   child: Text(
-                    'الحجوزات القادمة والنشطة (والتنبيهات الحالية)',
+                    'الحجوزات القادمة والنشطة',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
                   ),
                 ),
@@ -255,7 +321,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
                 const SizedBox(height: 16),
               ],
 
-              // قسم الأرشيف الدائم والمرتب
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -291,7 +356,7 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
                       if (pastBookings.isEmpty)
                         const Padding(
                           padding: EdgeInsets.all(16),
-                          child: Text('لا توجد مباريات أرشيفية سابقة', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          child: Text('لا توجد مباريات سابقة في الأرشيف', style: TextStyle(fontSize: 12, color: Colors.grey)),
                         )
                       else
                         ListView.builder(
@@ -420,12 +485,12 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
               ],
             ),
 
-            // أزرار التفاعل والإجراءات (مثل إظهار تقييم الملعب عند اكتمال المباراة، أو ترحيل للأرشيف)
             if (!isPast) ...[
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  // حصرياً إذا كان مكتمل فقط ولم يقم بالتقييم بعد
                   if (status == 'completed' && b['pitchRating'] == null)
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
