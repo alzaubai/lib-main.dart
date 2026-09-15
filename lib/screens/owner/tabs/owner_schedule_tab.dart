@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../utils/time_parser_util.dart';
 import '../sheets/add_manual_booking_sheet.dart';
-import '../common/dialogs/match_evaluation_dialog.dart'; // نافذة التقييم الاحترافية
-import 'widgets/today_financial_card.dart';
+import '../../common/dialogs/match_evaluation_dialog.dart';
+import '../widgets/today_financial_card.dart';
 
 class OwnerScheduleTab extends StatefulWidget {
   final String pitchName;
@@ -39,24 +39,20 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     }
   }
 
-  Future<void> _completeBooking(String docId, String teamOne, String teamTwo) async {
-    final result = await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => MatchEvaluationDialog(
-        bookingId: docId,
-        teamOneName: teamOne,
-        teamTwoName: teamTwo.isNotEmpty ? teamTwo : 'طرف ثانٍ',
-      ),
-    );
+  Future<void> _completeBooking(String docId, String teamOne) async {
+    await FirebaseFirestore.instance.collection('bookings').doc(docId).update({
+      'status': 'completed',
+    });
 
-    if (result == true) {
-      await FirebaseFirestore.instance.collection('bookings').doc(docId).update({
-        'status': 'completed',
-      });
-      if (mounted) {
-        _showCenterToast('تم إكمال المباراة وتقييم الفريقين بنجاح');
-      }
+    if (mounted) {
+      _showCenterToast('تم إكمال المباراة بنجاح');
+      MatchEvaluationDialog.show(
+        context,
+        bookingDocId: docId,
+        pitchName: widget.pitchName,
+        teamName: teamOne,
+        isOwner: true,
+      );
     }
   }
 
@@ -532,7 +528,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                         ),
                                         icon: const Icon(Icons.check_rounded, size: 15),
                                         label: const Text('إكمال الحجز', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                        onPressed: () => _completeBooking(docId, teamOne, teamTwo),
+                                        onPressed: () => _completeBooking(docId, teamOne),
                                       ),
                                   ],
                                 ),
