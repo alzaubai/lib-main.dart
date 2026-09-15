@@ -5,7 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../utils/time_parser_util.dart';
 import '../sheets/add_manual_booking_sheet.dart';
-import 'widgets/today_financial_card.dart'; // استدعاء الكرت المالي الجديد لليوم الحالي
+import '../common/dialogs/match_evaluation_dialog.dart'; // نافذة التقييم الاحترافية
+import 'widgets/today_financial_card.dart';
 
 class OwnerScheduleTab extends StatefulWidget {
   final String pitchName;
@@ -38,12 +39,24 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     }
   }
 
-  Future<void> _completeBooking(String docId) async {
-    await FirebaseFirestore.instance.collection('bookings').doc(docId).update({
-      'status': 'completed',
-    });
-    if (mounted) {
-      _showCenterToast('تم تحديد الحجز كمكتمل');
+  Future<void> _completeBooking(String docId, String teamOne, String teamTwo) async {
+    final result = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => MatchEvaluationDialog(
+        bookingId: docId,
+        teamOneName: teamOne,
+        teamTwoName: teamTwo.isNotEmpty ? teamTwo : 'طرف ثانٍ',
+      ),
+    );
+
+    if (result == true) {
+      await FirebaseFirestore.instance.collection('bookings').doc(docId).update({
+        'status': 'completed',
+      });
+      if (mounted) {
+        _showCenterToast('تم إكمال المباراة وتقييم الفريقين بنجاح');
+      }
     }
   }
 
@@ -149,10 +162,10 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // 1. الكرت المالي المستقل الخاص باليوم الحالي حصراً
+          // 1. الكرت المالي لليوم الحالي
           TodayFinancialCard(pitchName: widget.pitchName),
 
-          // 2. شريط الأيام الأفقي الخاص بالجدول
+          // 2. شريط الأيام الأفقي
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: const BoxDecoration(
@@ -240,7 +253,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
             ),
           ),
 
-          // 3. قائمة الحجوزات الخاصة باليوم المختار في الجدول
+          // 3. قائمة الحجوزات
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -519,9 +532,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                         ),
                                         icon: const Icon(Icons.check_rounded, size: 15),
                                         label: const Text('إكمال الحجز', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                        onPressed: () => _completeBooking(docId),
+                                        onPressed: () => _completeBooking(docId, teamOne, teamTwo),
                                       ),
-  
                                   ],
                                 ),
                               ],
