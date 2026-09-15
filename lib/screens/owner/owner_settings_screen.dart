@@ -94,7 +94,49 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
         backgroundColor: const Color(0xFFF1F5F9),
         appBar: AppBar(
           backgroundColor: const Color(0xFF1B5E20),
-          title: const Text('إعدادات الملعب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+          elevation: 0,
+          title: const Text(
+            'إعدادات الملعب',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Material(
+                color: Colors.red.shade50.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => LogoutDialog.show(
+                    context,
+                    userTypeMessage: 'هل أنت متأكد من تسجيل الخروج من إدارة الملعب؟',
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade300.withOpacity(0.6), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.logout_rounded, color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text(
+                          'خروج',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -132,35 +174,12 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B5E20),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
                   ),
                   onPressed: _isSaving ? null : _save,
                   child: _isSaving
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // زر تسجيل الخروج الواضح والصريح باللون الأحمر في الأسفل
-              SizedBox(
-                height: 48,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red.shade700,
-                    side: BorderSide(color: Colors.red.shade300, width: 1.5),
-                    backgroundColor: Colors.red.shade50,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.logout_rounded, size: 20),
-                  label: const Text(
-                    'تسجيل الخروج من الحساب',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  onPressed: () => LogoutDialog.show(
-                    context,
-                    userTypeMessage: 'هل أنت متأكد من تسجيل الخروج من إدارة الملعب؟',
-                  ),
+                      : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                 ),
               ),
             ],
