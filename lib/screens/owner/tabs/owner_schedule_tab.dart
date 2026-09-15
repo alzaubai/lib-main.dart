@@ -104,40 +104,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     );
   }
 
-  // فحص ذكي لمعرفة هل انتهى وقت المباراة الحالية بالكامل
-  bool _isSlotTimePassed(String dateString, String endTimeStr) {
-    try {
-      final now = DateTime.now();
-      final chosenDate = DateFormat('yyyy-MM-dd').parse(dateString);
-      final todayDateOnly = DateTime(now.year, now.month, now.day);
-      if (chosenDate.isBefore(todayDateOnly)) return true;
-      if (chosenDate.isAfter(todayDateOnly)) return false;
-
-      final clean = endTimeStr.replaceAll(RegExp(r'\s+'), ' ').trim();
-      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
-      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
-      final digits = clean.replaceAll(RegExp(r'[^0-9:]'), '');
-      final parts = digits.split(':');
-      if (parts.isEmpty) return false;
-
-      int hour = int.parse(parts[0]);
-      int minute = parts.length > 1 ? int.parse(parts[1]) : 0;
-      if (isPM && hour < 12) hour += 12;
-      if (isAM && hour == 12) hour = 0;
-
-      DateTime slotEnd;
-      if (isAM && hour < 6) {
-        slotEnd = DateTime(now.year, now.month, now.day + 1, hour, minute);
-      } else {
-        slotEnd = DateTime(now.year, now.month, now.day, hour, minute);
-      }
-
-      return now.isAfter(slotEnd);
-    } catch (_) {
-      return false;
-    }
-  }
-
   Color _getStatusColor(String status) {
     switch (status) {
       case 'confirmed':
@@ -170,10 +136,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // 1. الكرت المالي
           TodayFinancialCard(pitchName: widget.pitchName),
-
-          // 2. شريط الأيام المدمج والمنظم بدون تكرار أزرار
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: const BoxDecoration(
@@ -210,7 +173,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // شريط الأيام الأفقي
                 SizedBox(
                   height: 65,
                   child: ListView.builder(
@@ -265,8 +227,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
               ],
             ),
           ),
-
-          // 3. قائمة الحجوزات النشطة فقط
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -295,7 +255,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                       final d = doc.data() as Map<String, dynamic>;
                       if (d['isDeleted'] == true) continue;
                       final st = (d['status'] ?? '').toString();
-                      // المكتمل يختفي تلقائياً ومباشرة من الجدول وينتقل للأرشيف في الـ AppBar
                       if (st != 'confirmed') continue;
 
                       final map = Map<String, dynamic>.from(d);
@@ -389,8 +348,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                         final price = (slot['price'] as num?)?.toDouble() ?? 25000.0;
                         final isRecurring = slot['isRecurringRule'] == true || status == 'recurring';
 
-                        // فحص هل انتهى وقت المباراة ونسي المالك إكمالها
-                        final isTimePassed = _isSlotTimePassed(dateStr, endTime);
+                        final isTimePassed = TimeParserUtil.isSlotTimePassedFromString(dateStr, '$startTime - $endTime');
 
                         final statusColor = isTimePassed && !isRecurring
                             ? Colors.orange.shade800
@@ -479,7 +437,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                         style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10.5),
                                       ),
                                     ),
-                                    // زر الإلغاء يظهر فقط إذا لم تنتهِ المباراة بعد
                                     if (!isRecurring && !isTimePassed) ...[
                                       const SizedBox(width: 4),
                                       PopupMenuButton<String>(
