@@ -17,6 +17,72 @@ class TournamentCard extends StatelessWidget {
     this.onOpenBracket,
   });
 
+  void _confirmDeleteTournament(BuildContext context, String tournamentTitle) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+              SizedBox(width: 8),
+              Text(
+                'حذف البطولة نهائياً',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+            ],
+          ),
+          content: Text(
+            'هل أنت متأكد من رغبتك في حذف بطولة ($tournamentTitle) بالكامل؟ سيتم مسح بيانات الفرق وجداول المباريات المرتبطة بها نهائياً.',
+            style: const TextStyle(fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade800,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await FirebaseFirestore.instance.collection('tournaments').doc(doc.id).delete();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('تم حذف بطولة ($tournamentTitle) نهائياً'),
+                        backgroundColor: Colors.black87,
+                        behavior: SnackBarBehavior.floating,
+                        margin: const EdgeInsets.only(top: 20, left: 16, right: 16),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('تعذر حذف البطولة: $e'),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openManageTeamsDialog(BuildContext context, Map<String, dynamic> data) {
     final teams = List<String>.from(data['teams'] ?? []);
     final registeredPlayers = Map<String, dynamic>.from(data['registeredPlayers'] ?? {});
@@ -162,7 +228,11 @@ class TournamentCard extends StatelessWidget {
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('تم تسجيل فريق $tName بالبطولة بنجاح!'), backgroundColor: const Color(0xFF1B5E20)),
+                      SnackBar(
+                        content: Text('تم تسجيل فريق $tName بالبطولة بنجاح!'),
+                        backgroundColor: const Color(0xFF1B5E20),
+                        behavior: SnackBarBehavior.floating,
+                      ),
                     );
                   }
                 },
@@ -229,6 +299,30 @@ class TournamentCard extends StatelessWidget {
                     ),
                   ),
                   _buildStatusChip(status),
+                  if (isOwner) ...[
+                    const SizedBox(width: 4),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF64748B), size: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      onSelected: (val) {
+                        if (val == 'delete') {
+                          _confirmDeleteTournament(context, title);
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_forever_rounded, color: Colors.red, size: 18),
+                              SizedBox(width: 8),
+                              Text('حذف البطولة', style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),
