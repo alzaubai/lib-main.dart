@@ -1,448 +1,104 @@
-import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../auth_screen.dart';
-import '../../../constants.dart';
-import '../../../services/location_service.dart';
-import '../../../services/pitch_image_service.dart';
+import '../common/dialogs/logout_dialog.dart';
+import 'widgets/pitch_location_card.dart';
+import 'widgets/pitch_media_card.dart';
+import 'widgets/pitch_info_form.dart';
 
 class OwnerSettingsScreen extends StatefulWidget {
   final String userPhone;
   final String pitchName;
 
-  const OwnerSettingsScreen({
-    super.key,
-    required this.userPhone,
-    required this.pitchName,
-  });
+  const OwnerSettingsScreen({super.key, required this.userPhone, required this.pitchName});
 
   @override
   State<OwnerSettingsScreen> createState() => _OwnerSettingsScreenState();
 }
 
 class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
-  late final TextEditingController _phoneController;
-  late final TextEditingController _rateController;
-  late final TextEditingController _descController;
-  late final TextEditingController _addressDetailsController;
+  final _phoneCtrl = TextEditingController();
+  final _rateCtrl = TextEditingController(text: '25000');
+  final _descCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
 
-  String _selectedGov = 'بغداد';
-  String _selectedArea = 'الكرخ';
-  String _selectedPitchType = 'سباعي (7 ضد 7)';
-  String _selectedSurface = 'ثيل 🌿';
-
+  String _gov = 'بغداد';
+  String _area = 'الكرخ';
+  String _type = 'سباعي (7 ضد 7)';
+  String _surface = 'ثيل 🌿';
   String _openTime = '04:00 م';
   String _closeTime = '03:00 ص';
-
-  double? _latitude;
-  double? _longitude;
-  bool _isLocating = false;
-
+  double? _lat, _lng;
+  List<String> _images = [];
   bool _isSaving = false;
-  bool _isPickingImage = false;
-  String? _pitchDocId;
-  List<String> _pitchImages = [];
-
-  final List<String> _timeHoursList = [
-    '12:00 م', '01:00 م', '02:00 م', '03:00 م', '04:00 م', '05:00 م',
-    '06:00 م', '07:00 م', '08:00 م', '09:00 م', '10:00 م', '11:00 م',
-    '12:00 ص', '01:00 ص', '02:00 ص', '03:00 ص', '04:00 ص', '05:00 ص',
-  ];
 
   @override
   void initState() {
     super.initState();
-    _phoneController = TextEditingController(text: widget.userPhone);
-    _rateController = TextEditingController(text: '25000');
-    _descController = TextEditingController();
-    _addressDetailsController = TextEditingController();
-    _loadPitchData();
+    _phoneCtrl.text = widget.userPhone;
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    _phoneController.dispose();
-    _rateController.dispose();
-    _descController.dispose();
-    _addressDetailsController.dispose();
-    super.dispose();
-  }
-
-  // إشعار HUD الشفاف والخفيف في وسط الشاشة
-  void _showCenterHudToast(String message, {bool isError = false}) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.transparent,
-      builder: (ctx) {
-        Future.delayed(const Duration(milliseconds: 1100), () {
-          if (ctx.mounted) Navigator.of(ctx).pop();
-        });
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.80),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
-                    color: isError ? Colors.redAccent : const Color(0xFF4CAF50),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _loadPitchData() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('pitches')
-          .where('name', isEqualTo: widget.pitchName)
-          .limit(1)
-          .get();
-
-      if (snap.docs.isNotEmpty && mounted) {
-        final doc = snap.docs.first;
-        final data = doc.data();
-        setState(() {
-          _pitchDocId = doc.id;
-          _phoneController.text = (data['phone'] ?? data['ownerPhone'] ?? widget.userPhone).toString();
-          _rateController.text = (data['hourlyRate'] ?? 25000).toInt().toString();
-          _descController.text = (data['description'] ?? '').toString();
-          _addressDetailsController.text = (data['addressDetails'] ?? '').toString();
-
-          final gov = (data['governorate'] ?? '').toString();
-          if (iraqGovernoratesList.contains(gov)) _selectedGov = gov;
-
-          final area = (data['area'] ?? '').toString();
-          final availableAreas = getAreasListForGov(_selectedGov);
-          if (availableAreas.contains(area)) _selectedArea = area;
-
-          final pType = (data['pitchType'] ?? '').toString();
-          if (pitchTypesList.contains(pType)) _selectedPitchType = pType;
-
-          final surface = (data['surfaceType'] ?? '').toString();
-          if (pitchSurfaceTypesList.contains(surface)) _selectedSurface = surface;
-
-          _openTime = data['openTime'] ?? '04:00 م';
-          _closeTime = data['closeTime'] ?? '03:00 ص';
-          _latitude = (data['latitude'] as num?)?.toDouble();
-          _longitude = (data['longitude'] as num?)?.toDouble();
-          _pitchImages = List<String>.from(data['images'] ?? []);
-        });
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _getCurrentLocation() async {
-    setState(() => _isLocating = true);
-    final pos = await LocationService.getCurrentLocation();
-    if (pos != null && mounted) {
+  Future<void> _loadData() async {
+    final doc = await FirebaseFirestore.instance.collection('pitches').doc(widget.pitchName).get();
+    if (doc.exists && mounted) {
+      final d = doc.data()!;
       setState(() {
-        _latitude = pos.latitude;
-        _longitude = pos.longitude;
+        _phoneCtrl.text = (d['phone'] ?? widget.userPhone).toString();
+        _rateCtrl.text = (d['hourlyRate'] ?? 25000).toInt().toString();
+        _descCtrl.text = (d['description'] ?? '').toString();
+        _addressCtrl.text = (d['addressDetails'] ?? '').toString();
+        _gov = d['governorate'] ?? 'بغداد';
+        _area = d['area'] ?? 'الكرخ';
+        _type = d['pitchType'] ?? 'سباعي (7 ضد 7)';
+        _surface = d['surfaceType'] ?? 'ثيل 🌿';
+        _openTime = d['openTime'] ?? '04:00 م';
+        _closeTime = d['closeTime'] ?? '03:00 ص';
+        _lat = (d['latitude'] as num?)?.toDouble();
+        _lng = (d['longitude'] as num?)?.toDouble();
+        _images = List<String>.from(d['images'] ?? []);
       });
-      _showCenterHudToast('تم التقاط الموقع بنجاح ✔️');
-    } else if (mounted) {
-      _showCenterHudToast('تعذر جلب الموقع الجغرافي', isError: true);
     }
-    if (mounted) setState(() => _isLocating = false);
   }
 
-  void _testWazeLocation() async {
-    if (_latitude == null || _longitude == null) return;
-    final uri = Uri.parse('waze://?ll=$_latitude,$_longitude&navigate=yes');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        final webUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$_latitude,$_longitude');
-        await launchUrl(webUri, mode: LaunchMode.externalApplication);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _pickImage() async {
-    setState(() => _isPickingImage = true);
-    final success = await PitchImageService.pickImageDirectly(widget.pitchName);
-    if (success) {
-      await _loadPitchData();
-      if (mounted) _showCenterHudToast('تمت إضافة الصورة');
-    }
-    if (mounted) setState(() => _isPickingImage = false);
-  }
-
-  Future<void> _removeImage(String img) async {
-    await PitchImageService.removeImage(widget.pitchName, img);
-    await _loadPitchData();
-    if (mounted) _showCenterHudToast('تم حذف الصورة');
-  }
-
-  Future<void> _saveSettings() async {
+  Future<void> _save() async {
     setState(() => _isSaving = true);
-    final newPhone = _phoneController.text.trim();
-    final newRate = double.tryParse(_rateController.text.trim()) ?? 25000.0;
-    final newDesc = _descController.text.trim();
-    final newAddress = _addressDetailsController.text.trim();
+    await FirebaseFirestore.instance.collection('pitches').doc(widget.pitchName).set({
+      'name': widget.pitchName,
+      'phone': _phoneCtrl.text.trim(),
+      'hourlyRate': double.tryParse(_rateCtrl.text.trim()) ?? 25000.0,
+      'governorate': _gov,
+      'area': _area,
+      'pitchType': _type,
+      'surfaceType': _surface,
+      'addressDetails': _addressCtrl.text.trim(),
+      'description': _descCtrl.text.trim(),
+      'openTime': _openTime,
+      'closeTime': _closeTime,
+      if (_lat != null) 'latitude': _lat,
+      if (_lng != null) 'longitude': _lng,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-    try {
-      final payload = {
-        'phone': newPhone,
-        'ownerPhone': newPhone,
-        'hourlyRate': newRate,
-        'governorate': _selectedGov,
-        'area': _selectedArea,
-        'pitchType': _selectedPitchType,
-        'surfaceType': _selectedSurface,
-        'addressDetails': newAddress,
-        'description': newDesc,
-        'openTime': _openTime,
-        'closeTime': _closeTime,
-        if (_latitude != null) 'latitude': _latitude,
-        if (_longitude != null) 'longitude': _longitude,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (_pitchDocId != null) {
-        await FirebaseFirestore.instance.collection('pitches').doc(_pitchDocId).update(payload);
-      } else {
-        await FirebaseFirestore.instance.collection('pitches').doc(widget.pitchName).set({
-          'name': widget.pitchName,
-          ...payload,
-        }, SetOptions(merge: true));
-      }
-
-      if (mounted) {
-        _showCenterHudToast('تم الحفظ بنجاح ✔️');
-        Future.delayed(const Duration(milliseconds: 900), () {
-          if (mounted) Navigator.pop(context);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        _showCenterHudToast('حدث خطأ أثناء الحفظ', isError: true);
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+    if (mounted) {
+      setState(() => _isSaving = false);
+      Navigator.pop(context);
     }
-  }
-
-  void _confirmLogout() {
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.logout_rounded, color: Colors.red, size: 22),
-              SizedBox(width: 8),
-              Text('تسجيل الخروج', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text('هل أنت متأكد من تسجيل الخروج من لوحة إدارة الملعب؟'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade700,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.clear();
-                if (mounted) {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AuthScreen()),
-                    (route) => false,
-                  );
-                }
-              },
-              child: const Text('تأكيد الخروج', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInternalImagesGallery() {
-    if (_pitchImages.isEmpty) {
-      return Container(
-        height: 120,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_photo_alternate_outlined, size: 38, color: Colors.grey),
-            SizedBox(height: 6),
-            Text(
-              'لم تتم إضافة أي صور للملعب بعد',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return SizedBox(
-      height: 130,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _pitchImages.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final rawImage = _pitchImages[index];
-          Widget imgWidget;
-
-          if (!rawImage.startsWith('http')) {
-            try {
-              final bytes = base64Decode(rawImage);
-              imgWidget = Image.memory(bytes, fit: BoxFit.cover, width: 140, height: 130);
-            } catch (_) {
-              imgWidget = Container(
-                width: 140,
-                height: 130,
-                color: Colors.grey.shade200,
-                child: const Icon(Icons.broken_image, color: Colors.grey),
-              );
-            }
-          } else {
-            imgWidget = Image.network(
-              rawImage,
-              fit: BoxFit.cover,
-              width: 140,
-              height: 130,
-              errorBuilder: (_, __, ___) => Container(
-                width: 140,
-                height: 130,
-                color: Colors.grey.shade200,
-                child: const Icon(Icons.broken_image, color: Colors.grey),
-              ),
-            );
-          }
-
-          return Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: imgWidget,
-              ),
-              Positioned(
-                top: 4,
-                left: 4,
-                child: InkWell(
-                  onTap: () => _removeImage(rawImage),
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.white),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final availableAreas = getAreasListForGov(_selectedGov).where((a) => a != 'الكل').toList();
-    if (!availableAreas.contains(_selectedArea)) {
-      _selectedArea = availableAreas.isNotEmpty ? availableAreas.first : 'المركز';
-    }
-
-    final validGovs = iraqGovernoratesList.where((g) => g != 'الكل').toList();
-    final validSurfaces = pitchSurfaceTypesList.where((s) => s != 'الكل').toList();
-    final validPitchTypes = pitchTypesList.where((t) => t != 'الكل').toList();
-
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF1F5F9),
         appBar: AppBar(
           backgroundColor: const Color(0xFF1B5E20),
-          elevation: 1,
-          title: const Text(
-            'إعدادات الملعب والحساب',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-          ),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          // زر تسجيل الخروج الأنيق في الجهة المقابلة بالجهة اليسرى
+          title: const Text('إعدادات الملعب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
           actions: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              child: InkWell(
-                onTap: _confirmLogout,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade700,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4, offset: const Offset(0, 2)),
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.logout_rounded, color: Colors.white, size: 16),
-                      SizedBox(width: 4),
-                      Text(
-                        'خروج',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: Colors.white),
+              onPressed: () => LogoutDialog.show(context, userTypeMessage: 'هل أنت متأكد من تسجيل الخروج من إدارة الملعب؟'),
             ),
           ],
         ),
@@ -451,304 +107,29 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. صور ومرافق الملعب
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.photo_library_rounded, color: Color(0xFF1B5E20), size: 20),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'صور الملعب والمرافق',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                        ),
-                        const Spacer(),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1B5E20),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: _isPickingImage
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.add_a_photo_rounded, size: 16),
-                          label: const Text('إضافة صورة', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                          onPressed: _isPickingImage ? null : _pickImage,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildInternalImagesGallery(),
-                  ],
-                ),
-              ),
+              PitchMediaCard(pitchName: widget.pitchName, initialImages: _images, onImagesChanged: _loadData),
               const SizedBox(height: 14),
-
-              // 2. الموقع الجغرافي والـ GPS المباشر
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.location_on_rounded, color: Color(0xFF1B5E20), size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'الموقع الجغرافي الدقيق (Waze و Maps)',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _latitude != null && _longitude != null
-                          ? 'الإحداثيات المثبتة: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}'
-                          : 'لم يتم تثبيت إحداثيات الملعب بدقة بعد. اضغط على الزر وأنت في موقع الملعب.',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: _latitude != null ? const Color(0xFF1B5E20) : const Color(0xFF64748B),
-                        fontWeight: _latitude != null ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1B5E20),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                            ),
-                            icon: _isLocating
-                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                : const Icon(Icons.my_location_rounded, size: 18),
-                            label: const Text('تثبيت موقع الملعب من الـ GPS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                            onPressed: _isLocating ? null : _getCurrentLocation,
-                          ),
-                        ),
-                        if (_latitude != null && _longitude != null) ...[
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.blueAccent,
-                              side: const BorderSide(color: Colors.blueAccent),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                            ),
-                            icon: const Icon(Icons.near_me_rounded, size: 16),
-                            label: const Text('تجربة Waze', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                            onPressed: _testWazeLocation,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              PitchLocationCard(initialLat: _lat, initialLng: _lng, onLocationCaptured: (la, ln) { _lat = la; _lng = ln; }),
               const SizedBox(height: 14),
-
-              // 3. ساعات نشاط وعمل الملعب
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.schedule_rounded, color: Color(0xFF1B5E20), size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'ساعات النشاط اليومي للملعب',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _openTime,
-                            decoration: InputDecoration(
-                              labelText: 'بداية النشاط',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            items: _timeHoursList.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
-                            onChanged: (v) => setState(() => _openTime = v!),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _closeTime,
-                            decoration: InputDecoration(
-                              labelText: 'نهاية النشاط',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            items: _timeHoursList.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
-                            onChanged: (v) => setState(() => _closeTime = v!),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              PitchInfoForm(
+                rateCtrl: _rateCtrl,
+                phoneCtrl: _phoneCtrl,
+                addressCtrl: _addressCtrl,
+                descCtrl: _descCtrl,
+                selectedGov: _gov,
+                selectedArea: _area,
+                selectedType: _type,
+                selectedSurface: _surface,
+                openTime: _openTime,
+                closeTime: _closeTime,
+                onGovChanged: (v) => setState(() => _gov = v),
+                onAreaChanged: (v) => setState(() => _area = v),
+                onTypeChanged: (v) => setState(() => _type = v),
+                onSurfaceChanged: (v) => setState(() => _surface = v),
+                onOpenTimeChanged: (v) => setState(() => _openTime = v),
+                onCloseTimeChanged: (v) => setState(() => _closeTime = v),
               ),
-              const SizedBox(height: 14),
-
-              // 4. البيانات والمواصفات الكاملة
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'بيانات ومواصفات الملعب',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedGov,
-                            decoration: InputDecoration(
-                              labelText: 'المحافظة',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            items: validGovs.map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 12)))).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedGov = val;
-                                  final areas = getAreasListForGov(val).where((a) => a != 'الكل').toList();
-                                  _selectedArea = areas.isNotEmpty ? areas.first : 'المركز';
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedArea,
-                            decoration: InputDecoration(
-                              labelText: 'المنطقة',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            items: availableAreas.map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 12)))).toList(),
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedArea = val);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedPitchType,
-                            decoration: InputDecoration(
-                              labelText: 'حجم الملعب',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            items: validPitchTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 11)))).toList(),
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedPitchType = val);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedSurface,
-                            decoration: InputDecoration(
-                              labelText: 'نوع الأرضية',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            items: validSurfaces.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 11)))).toList(),
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedSurface = val);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _rateController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'سعر الساعة الافتراضي (د.ع)',
-                        prefixIcon: const Icon(Icons.payments_rounded, color: Colors.teal),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'رقم هاتف التواصل للفرق',
-                        prefixIcon: const Icon(Icons.phone_rounded, color: Color(0xFF1B5E20)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _addressDetailsController,
-                      decoration: InputDecoration(
-                        labelText: 'أقرب نقطة دالة للملعب',
-                        prefixIcon: const Icon(Icons.place_outlined, color: Colors.grey),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _descController,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        labelText: 'وصف إضافي أو خدمات (موقف، إضاءة، ماء)',
-                        prefixIcon: const Icon(Icons.description_rounded, color: Colors.grey),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // زر الحفظ
+              const SizedBox(height: 18),
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
@@ -756,13 +137,12 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
                     backgroundColor: const Color(0xFF1B5E20),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _isSaving ? null : _saveSettings,
+                  onPressed: _isSaving ? null : _save,
                   child: _isSaving
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 16),
             ],
           ),
         ),
