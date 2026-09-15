@@ -126,16 +126,36 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
         _longitude = pos.longitude;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم التقاط إحداثيات الملعب الجغرافية بدقة ✔️'),
-          backgroundColor: Color(0xFF1B5E20),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Text('تم التقاط إحداثيات الملعب الجغرافية بدقة ✔️', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          backgroundColor: const Color(0xFF1B5E20),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).size.height - 120,
+          ),
+          duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تعذر جلب الموقع، يرجى تفعيل الـ GPS ومنح الصلاحية'),
+        SnackBar(
+          content: const Text('تعذر جلب الموقع، يرجى تفعيل الـ GPS ومنح الصلاحية'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).size.height - 120,
+          ),
         ),
       );
     }
@@ -162,9 +182,16 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
       await _loadPitchData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تمت إضافة الصورة بنجاح'),
-            backgroundColor: Color(0xFF1B5E20),
+          SnackBar(
+            content: const Text('تمت إضافة الصورة بنجاح'),
+            backgroundColor: const Color(0xFF1B5E20),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(context).size.height - 120,
+            ),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -177,9 +204,16 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
     await _loadPitchData();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم حذف الصورة'),
+        SnackBar(
+          content: const Text('تم حذف الصورة'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).size.height - 120,
+          ),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -221,9 +255,23 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم حفظ وتحديث إعدادات الملعب بنجاح ✔️'),
-            backgroundColor: Color(0xFF1B5E20),
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('تم حفظ وتحديث إعدادات الملعب بنجاح ✔️', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            backgroundColor: const Color(0xFF1B5E20),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(context).size.height - 120,
+            ),
+            duration: const Duration(seconds: 2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
         Navigator.pop(context);
@@ -231,7 +279,16 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء الحفظ: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('حدث خطأ أثناء الحفظ: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(context).size.height - 120,
+            ),
+          ),
         );
       }
     } finally {
@@ -252,7 +309,6 @@ class _OwnerSettingsScreenState extends State<OwnerSettingsScreen> {
     }
   }
 
-  // ويدجت مدمج لعرض وحذف صور الملعب بدون اعتمادات خارجية
   Widget _buildInternalImagesGallery() {
     if (_pitchImages.isEmpty) {
       return Container(
