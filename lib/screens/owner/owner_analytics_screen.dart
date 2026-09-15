@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../../../services/analytics_service.dart';
 
 class OwnerAnalyticsScreen extends StatefulWidget {
   final String pitchName;
@@ -62,105 +63,11 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
               );
             }
 
-            // تطبيق فلترة التاريخ
-            final now = DateTime.now();
-            final filteredDocs = allDocs.where((doc) {
-              if (_selectedFilterDays == 0) return true;
-              final d = doc.data() as Map<String, dynamic>;
-              final dateStr = (d['date'] ?? '').toString();
-              final bookingDate = DateTime.tryParse(dateStr);
-              if (bookingDate == null) return true;
-              return now.difference(bookingDate).inDays <= _selectedFilterDays;
-            }).toList();
-
-            // معالجة الأرقام والإحصائيات
-            double actualRevenue = 0.0;
-            double upcomingRevenue = 0.0;
-            int totalHoursPlayed = 0;
-            int completedCount = 0;
-            int cancelledCount = 0;
-
-            final Map<String, int> slotFrequency = {};
-            final Map<String, int> dayFrequency = {};
-            final Map<String, Map<String, dynamic>> teamStats = {};
-
-            for (var doc in filteredDocs) {
-              final d = doc.data() as Map<String, dynamic>;
-              final price = (d['price'] as num?)?.toDouble() ?? 0.0;
-              final status = d['status'] ?? 'pending';
-              final slot = (d['startTime'] ?? '').toString().trim();
-              final team1 = (d['teamOne'] ?? '').toString().trim();
-              final isTrusted = d['teamTrustedRated'] == true;
-
-              // حساب الإيرادات وساعات التشغيل
-              if (status == 'completed') {
-                actualRevenue += price;
-                totalHoursPlayed += 1;
-                completedCount++;
-              } else if (status == 'upcoming' || status == 'tournament_match') {
-                upcomingRevenue += price;
-              } else if (status == 'rejected') {
-                cancelledCount++;
-              }
-
-              // حساب ساعات الذروة
-              if (slot.isNotEmpty && (status == 'completed' || status == 'upcoming')) {
-                slotFrequency[slot] = (slotFrequency[slot] ?? 0) + 1;
-              }
-
-              // حساب أيام الذروة
-              final dateStr = (d['date'] ?? '').toString();
-              final bookingDate = DateTime.tryParse(dateStr);
-              if (bookingDate != null && (status == 'completed' || status == 'upcoming')) {
-                final dayName = _getArabicDayName(bookingDate);
-                dayFrequency[dayName] = (dayFrequency[dayName] ?? 0) + 1;
-              }
-
-              // إحصائيات الفرق
-              if (team1.isNotEmpty && !team1.startsWith('مباراة بطولة')) {
-                if (!teamStats.containsKey(team1)) {
-                  teamStats[team1] = {'count': 0, 'paid': 0.0, 'trusted': isTrusted};
-                }
-                teamStats[team1]!['count'] = (teamStats[team1]!['count'] as int) + 1;
-                if (status == 'completed') {
-                  teamStats[team1]!['paid'] = (teamStats[team1]!['paid'] as double) + price;
-                }
-                if (isTrusted) {
-                  teamStats[team1]!['trusted'] = true;
-                }
-              }
-            }
-
-            // استخراج ساعة الذروة الأولى
-            String peakSlot = 'غير محدد';
-            int peakSlotCount = 0;
-            slotFrequency.forEach((k, v) {
-              if (v > peakSlotCount) {
-                peakSlotCount = v;
-                peakSlot = k;
-              }
-            });
-
-            // استخراج يوم الذروة
-            String peakDay = 'غير محدد';
-            int peakDayCount = 0;
-            dayFrequency.forEach((k, v) {
-              if (v > peakDayCount) {
-                peakDayCount = v;
-                peakDay = k;
-              }
-            });
-
-            // حساب نسبة الإشغال التقديرية (بافتراض 7 ساعات تشغيل يومياً)
-            final int daysCount = _selectedFilterDays == 0 ? 30 : _selectedFilterDays;
-            final int maxCapacityHours = daysCount * 7;
-            final double occupancyRate = maxCapacityHours > 0
-                ? ((totalHoursPlayed / maxCapacityHours) * 100).clamp(0, 100).toDouble()
-                : 0.0;
-
-            // ترتيب الفرق تنازلياً حسب عدد مرات الحجز
-            final sortedTeams = teamStats.entries.toList()
-              ..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
+            // استخراج الحسابات عبر الخدمة المستقلة
+            final data = AnalyticsService.calculateAnalytics(
+              allDocs: allDocs,
+              filterDays: _selectedFilterDays,
+            );
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -169,11 +76,18 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
                 children: [
                   _buildTimeFilterChips(),
                   const SizedBox(height: 16),
-                  _buildFinancialCards(actualRevenue, upcomingRevenue, totalHoursPlayed, occupancyRate),
+                  _buildFinancialCards(data.actualRevenue, data.upcomingRevenue, data.totalHoursPlayed, data.occupancyRate),
                   const SizedBox(height: 18),
-                  _buildPeakAnalyticsCard(peakSlot, peakSlotCount, peakDay, peakDayCount, completedCount, cancelledCount),
+                  _buildPeakAnalyticsCard(
+                    data.peakSlot,
+                    data.peakSlotCount,
+                    data.peakDay,
+                    data.peakDayCount,
+                    data.completedCount,
+                    data.cancelledCount,
+                  ),
                   const SizedBox(height: 18),
-                  _buildTopTeamsCard(sortedTeams),
+                  _buildTopTeamsCard(data.topTeams),
                 ],
               ),
             );
@@ -183,7 +97,6 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
     );
   }
 
-  // شرائح فلترة المدة الزمنية
   Widget _buildTimeFilterChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -219,7 +132,6 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
     );
   }
 
-  // كروت الأرقام المالية ومعدل الإشغال
   Widget _buildFinancialCards(double actual, double upcoming, int hours, double occupancy) {
     return Column(
       children: [
@@ -315,7 +227,6 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
     );
   }
 
-  // بطاقة ساعات وأيام الذروة
   Widget _buildPeakAnalyticsCard(
       String peakSlot, int slotCount, String peakDay, int dayCount, int completed, int cancelled) {
     return Card(
@@ -381,7 +292,6 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
     );
   }
 
-  // بطاقة الفرق الأكثر نشاطاً ودفعاً
   Widget _buildTopTeamsCard(List<MapEntry<String, Map<String, dynamic>>> teams) {
     return Card(
       elevation: 2,
@@ -461,26 +371,5 @@ class _OwnerAnalyticsScreenState extends State<OwnerAnalyticsScreen> {
         ),
       ),
     );
-  }
-
-  String _getArabicDayName(DateTime date) {
-    switch (date.weekday) {
-      case DateTime.friday:
-        return 'الجمعة';
-      case DateTime.thursday:
-        return 'الخميس';
-      case DateTime.saturday:
-        return 'السبت';
-      case DateTime.sunday:
-        return 'الأحد';
-      case DateTime.monday:
-        return 'الإثنين';
-      case DateTime.tuesday:
-        return 'الثلاثاء';
-      case DateTime.wednesday:
-        return 'الأربعاء';
-      default:
-        return '';
-    }
   }
 }
