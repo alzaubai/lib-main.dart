@@ -3,6 +3,66 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class TournamentService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// حذف البطولة وتفريغ كافة مبارياتها من الجدول
+  static Future<bool> deleteTournament(String tournamentId, String tournamentTitle) async {
+    final batch = _firestore.batch();
+    try {
+      final bookingsByTid = await _firestore
+          .collection('bookings')
+          .where('tournamentId', isEqualTo: tournamentId)
+          .get();
+
+      for (var bDoc in bookingsByTid.docs) {
+        batch.update(bDoc.reference, {
+          'isDeleted': true,
+          'status': 'cancelled',
+        });
+      }
+
+      final bookingsByName = await _firestore
+          .collection('bookings')
+          .where('tournamentTitle', isEqualTo: tournamentTitle)
+          .get();
+
+      for (var bDoc in bookingsByName.docs) {
+        batch.update(bDoc.reference, {
+          'isDeleted': true,
+          'status': 'cancelled',
+        });
+      }
+
+      batch.delete(_firestore.collection('tournaments').doc(tournamentId));
+      await batch.commit();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// إضافة فريق يدوياً بواسطة المالك
+  static Future<void> addTeamManually({
+    required String tournamentId,
+    required String teamName,
+    required String phoneKey,
+  }) async {
+    await _firestore.collection('tournaments').doc(tournamentId).update({
+      'teams': FieldValue.arrayUnion([teamName]),
+      'registeredPlayers.$phoneKey': teamName,
+    });
+  }
+
+  /// تسجيل فريق بواسطة اللاعب
+  static Future<void> registerPlayerTeam({
+    required String tournamentId,
+    required String userPhone,
+    required String teamName,
+  }) async {
+    await _firestore.collection('tournaments').doc(tournamentId).update({
+      'teams': FieldValue.arrayUnion([teamName]),
+      'registeredPlayers.$userPhone': teamName,
+    });
+  }
+
   /// استبعاد فريق من البطولة مع إرسال إشعار رسمي وإتاحة المقعد
   static Future<void> removeTeamWithReason({
     required String tournamentId,
