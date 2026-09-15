@@ -39,21 +39,14 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     }
   }
 
-  Future<void> _completeBooking(String docId, String teamOne) async {
-    await FirebaseFirestore.instance.collection('bookings').doc(docId).update({
-      'status': 'completed',
-    });
-
-    if (mounted) {
-      _showCenterToast('تم إكمال المباراة بنجاح');
-      MatchEvaluationDialog.show(
-        context,
-        bookingDocId: docId,
-        pitchName: widget.pitchName,
-        teamName: teamOne,
-        isOwner: true,
-      );
-    }
+  void _completeBooking(String docId, String teamOne) {
+    MatchEvaluationDialog.show(
+      context,
+      bookingDocId: docId,
+      pitchName: widget.pitchName,
+      teamName: teamOne,
+      isOwner: true,
+    );
   }
 
   Future<void> _cancelBooking(String docId, String teamName) async {
@@ -94,31 +87,20 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
   }
 
   void _showCenterToast(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.transparent,
-      builder: (ctx) {
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          if (ctx.mounted) Navigator.of(ctx).pop();
-        });
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.82),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                message,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        );
-      },
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+        backgroundColor: const Color(0xFF0F172A),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+      ),
     );
   }
 
@@ -158,10 +140,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
-          // 1. الكرت المالي لليوم الحالي
           TodayFinancialCard(pitchName: widget.pitchName),
-
-          // 2. شريط الأيام الأفقي
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: const BoxDecoration(
@@ -248,8 +227,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
               ],
             ),
           ),
-
-          // 3. قائمة الحجوزات
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
