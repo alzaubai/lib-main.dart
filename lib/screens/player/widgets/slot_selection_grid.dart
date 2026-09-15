@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../utils/time_parser_util.dart';
+import 'package:intl/intl.dart';
 
 class SlotSelectionGrid extends StatelessWidget {
   final String pitchName;
@@ -19,6 +19,54 @@ class SlotSelectionGrid extends StatelessWidget {
     required this.selectedSlot,
     required this.onSlotSelected,
   });
+
+  // فحص حقيقي ودقيق لمعرفة هل الوقت مضى لليوم الحالي
+  bool _checkIfTimePassed(String dateString, String timeSlot) {
+    try {
+      final now = DateTime.now();
+      final todayFormatted = DateFormat('yyyy-MM-dd').format(now);
+
+      // إذا كان التاريخ المختار في الماضي أصلاً
+      final chosenDate = DateFormat('yyyy-MM-dd').parse(dateString);
+      final todayDateOnly = DateTime(now.year, now.month, now.day);
+      if (chosenDate.isBefore(todayDateOnly)) {
+        return true;
+      }
+
+      // إذا كان في يوم قادم فهو متاح قطعاً
+      if (chosenDate.isAfter(todayDateOnly)) {
+        return false;
+      }
+
+      // إذا كان اليوم هو تاريخ اليوم، نفحص ساعة البداية
+      final startPart = timeSlot.split(' - ').first.trim();
+      final clean = startPart.replaceAll(RegExp(r'\s+'), ' ');
+      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
+      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
+
+      final digitsOnly = clean.replaceAll(RegExp(r'[^0-9:]'), '');
+      final timeParts = digitsOnly.split(':');
+      if (timeParts.isEmpty) return false;
+
+      int hour = int.parse(timeParts[0]);
+      int minute = timeParts.length > 1 ? int.parse(timeParts[1]) : 0;
+
+      if (isPM && hour < 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+
+      // أوقات ما بعد منتصف الليل (12 ص، 1 ص، 2 ص) التابعة لسهرة اليوم
+      DateTime slotDateTime;
+      if (isAM && hour < 6) {
+        slotDateTime = DateTime(now.year, now.month, now.day + 1, hour, minute);
+      } else {
+        slotDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+      }
+
+      return now.isAfter(slotDateTime);
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,9 +135,7 @@ class SlotSelectionGrid extends StatelessWidget {
                   itemCount: allSlots.length,
                   itemBuilder: (context, index) {
                     final slot = allSlots[index];
-                    final parts = slot.split(' - ');
-                    final startTime = parts[0].trim();
-                    final isPassed = TimeParserUtil.isMatchPassed(dateStr, startTime);
+                    final isPassed = _checkIfTimePassed(dateStr, slot);
                     final isBooked = bookedSlots.contains(slot);
                     final isLockedByOther = lockedSlots.contains(slot) && selectedSlot != slot;
                     final isSelected = selectedSlot == slot;
