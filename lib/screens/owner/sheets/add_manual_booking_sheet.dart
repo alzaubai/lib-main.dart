@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../../constants.dart';
+import '../../../utils/time_parser_util.dart';
 
 class ModernAddBookingSheet extends StatefulWidget {
   final String pitchName;
@@ -40,71 +41,16 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
     _selectFirstAvailableSlot();
   }
 
-  // فحص دقيق لمعرفة هل الموعد مضى مقارنة بالوقت الفعلي
-  bool _isSlotTimePassed(DateTime date, String slotStr) {
-    try {
-      final now = DateTime.now();
-      final todayDateOnly = DateTime(now.year, now.month, now.day);
-      final checkDateOnly = DateTime(date.year, date.month, date.day);
-
-      if (checkDateOnly.isBefore(todayDateOnly)) return true;
-      if (checkDateOnly.isAfter(todayDateOnly)) return false;
-
-      final startPart = slotStr.split(' - ').first.trim();
-      final clean = startPart.replaceAll(RegExp(r'\s+'), ' ');
-      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
-      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
-
-      final digitsOnly = clean.replaceAll(RegExp(r'[^0-9:]'), '');
-      final timeParts = digitsOnly.split(':');
-      if (timeParts.isEmpty) return false;
-
-      int hour = int.parse(timeParts[0]);
-      int minute = timeParts.length > 1 ? int.parse(timeParts[1]) : 0;
-
-      if (isPM && hour < 12) hour += 12;
-      if (isAM && hour == 12) hour = 0;
-
-      DateTime slotDateTime;
-      if (isAM && hour < 6) {
-        slotDateTime = DateTime(now.year, now.month, now.day + 1, hour, minute);
-      } else {
-        slotDateTime = DateTime(now.year, now.month, now.day, hour, minute);
-      }
-
-      return now.isAfter(slotDateTime);
-    } catch (_) {
-      return false;
-    }
-  }
-
   void _selectFirstAvailableSlot() {
     final available = _slots.firstWhere(
-      (s) => !_isSlotTimePassed(_selectedDate, s),
+      (s) => !TimeParserUtil.isSlotTimePassed(_selectedDate, s),
       orElse: () => _slots.isNotEmpty ? _slots.first : '08:00 م - 09:00 م',
     );
     _selectedSlot = available;
   }
 
   String _getArabicDayName(DateTime date) {
-    switch (date.weekday) {
-      case DateTime.friday:
-        return 'الجمعة';
-      case DateTime.thursday:
-        return 'الخميس';
-      case DateTime.saturday:
-        return 'السبت';
-      case DateTime.sunday:
-        return 'الأحد';
-      case DateTime.monday:
-        return 'الإثنين';
-      case DateTime.tuesday:
-        return 'الثلاثاء';
-      case DateTime.wednesday:
-        return 'الأربعاء';
-      default:
-        return '';
-    }
+    return TimeParserUtil.getArabicDayName(date);
   }
 
   @override
@@ -251,7 +197,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (context, index) {
                       final slot = _slots[index];
-                      final isPassed = _isSlotTimePassed(_selectedDate, slot);
+                      final isPassed = TimeParserUtil.isSlotTimePassed(_selectedDate, slot);
                       final isSelected = _selectedSlot == slot;
 
                       return ChoiceChip(
@@ -325,8 +271,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                         : () async {
                             if (!_formKey.currentState!.validate()) return;
 
-                            // صمام أمان إضافي: منع الحفظ نهائياً إذا كان الوقت قد مضى
-                            if (_isSlotTimePassed(_selectedDate, _selectedSlot)) {
+                            if (TimeParserUtil.isSlotTimePassed(_selectedDate, _selectedSlot)) {
                               _showConflictDialog(
                                 context,
                                 conflictReason: 'الوقت المحدد قد مضى بالفعل!',
@@ -344,7 +289,6 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                             final eTime = times.length > 1 ? times[1].trim() : '';
 
                             try {
-                              // 1. فحص التعارض في الحجوزات العادية والمباريات القائمة
                               final existingBookings = await firestore
                                   .collection('bookings')
                                   .where('pitchName', isEqualTo: widget.pitchName)
@@ -367,7 +311,6 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                                 }
                               }
 
-                              // 2. فحص التعارض مع الاشتراكات الأسبوعية الدائمة
                               final recurringCheck = await firestore
                                   .collection('recurring_rules')
                                   .where('pitchName', isEqualTo: widget.pitchName)
@@ -391,7 +334,6 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                                 }
                               }
 
-                              // 3. التثبيت في حال عدم وجود أي تعارض
                               await firestore.collection('bookings').add({
                                 'pitchName': widget.pitchName,
                                 'teamOne': _teamOneController.text.trim(),
