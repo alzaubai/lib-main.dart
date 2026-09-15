@@ -17,13 +17,109 @@ class TournamentCard extends StatelessWidget {
     this.onOpenBracket,
   });
 
+  // إشعار أنيق وشفاف في وسط الشاشة يختفي بعد 1.2 ثانية
+  void _showCenterHudToast(BuildContext context, String message, {bool isError = false}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (ctx) {
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        });
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.82),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+                    color: isError ? Colors.redAccent : const Color(0xFF4CAF50),
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // حذف البطولة وحذف كافة حجوزاتها ومبارياتها من جدول المالك دفعة واحدة
+  Future<void> _performFullTournamentDeletion(BuildContext context, String tournamentTitle) async {
+    final firestore = FirebaseFirestore.instance;
+    final batch = firestore.batch();
+
+    try {
+      // 1. البحث عن الحجوزات المرتبطة بمعرف البطولة
+      final bookingsByTid = await firestore
+          .collection('bookings')
+          .where('tournamentId', isEqualTo: doc.id)
+          .get();
+
+      for (var bDoc in bookingsByTid.docs) {
+        batch.update(bDoc.reference, {
+          'isDeleted': true,
+          'status': 'cancelled',
+        });
+      }
+
+      // 2. البحث عن الحجوزات التي سجلت باسم البطولة في teamOne أو teamTwo كحجز للبطولة
+      final bookingsByName = await firestore
+          .collection('bookings')
+          .where('tournamentTitle', isEqualTo: tournamentTitle)
+          .get();
+
+      for (var bDoc in bookingsByName.docs) {
+        batch.update(bDoc.reference, {
+          'isDeleted': true,
+          'status': 'cancelled',
+        });
+      }
+
+      // 3. حذف وثيقة البطولة نفسها
+      batch.delete(doc.reference);
+
+      // تنفيذ المعاملة الذرية دفعة واحدة
+      await batch.commit();
+
+      if (context.mounted) {
+        _showCenterHudToast(context, 'تم حذف البطولة وتفريغ جدولها بنجاح');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showCenterHudToast(context, 'تعذر الحذف: $e', isError: true);
+      }
+    }
+  }
+
   void _confirmDeleteTournament(BuildContext context, String tournamentTitle) {
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           title: const Row(
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
@@ -35,7 +131,7 @@ class TournamentCard extends StatelessWidget {
             ],
           ),
           content: Text(
-            'هل أنت متأكد من رغبتك في حذف بطولة ($tournamentTitle) بالكامل؟ سيتم مسح بيانات الفرق وجداول المباريات المرتبطة بها نهائياً.',
+            'هل أنت متأكد من حذف بطولة ($tournamentTitle)؟ سيتم مسح كافة المباريات والحجوزات المرتبطة بها من جدول الملعب فوراً.',
             style: const TextStyle(fontSize: 13, height: 1.4),
           ),
           actions: [
@@ -51,31 +147,9 @@ class TournamentCard extends StatelessWidget {
               ),
               onPressed: () async {
                 Navigator.pop(ctx);
-                try {
-                  await FirebaseFirestore.instance.collection('tournaments').doc(doc.id).delete();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('تم حذف بطولة ($tournamentTitle) نهائياً'),
-                        backgroundColor: Colors.black87,
-                        behavior: SnackBarBehavior.floating,
-                        margin: const EdgeInsets.only(top: 20, left: 16, right: 16),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('تعذر حذف البطولة: $e'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                }
+                await _performFullTournamentDeletion(context, tournamentTitle);
               },
-              child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('تأكيد الحذف وتفريغ الجدول', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -227,13 +301,7 @@ class TournamentCard extends StatelessWidget {
                   });
 
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('تم تسجيل فريق $tName بالبطولة بنجاح!'),
-                        backgroundColor: const Color(0xFF1B5E20),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                    _showCenterHudToast(context, 'تم تسجيل فريقك بالبطولة بنجاح');
                   }
                 },
                 child: const Text('تأكيد الاشتراك', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
