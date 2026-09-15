@@ -48,11 +48,11 @@ class TodayFinancialCard extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Colors.black05,
+                color: Colors.black.withOpacity(0.05),
                 blurRadius: 6,
-                offset: Offset(0, 2),
+                offset: const Offset(0, 2),
               ),
             ],
           ),
