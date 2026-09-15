@@ -15,6 +15,25 @@ class PlayerBookingsTab extends StatefulWidget {
 class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
   bool _showPastBookings = true;
 
+  // توليد جميع الأشكال المحتملة للرقم لضمان عدم ضياع أي حجز
+  List<String> _getPhoneVariants(String phone) {
+    final clean = phone.replaceAll(RegExp(r'\s+|-'), '');
+    final variants = <String>{clean};
+
+    if (clean.startsWith('07')) {
+      variants.add('964${clean.substring(1)}');
+      variants.add('+964${clean.substring(1)}');
+    } else if (clean.startsWith('964')) {
+      variants.add('0${clean.substring(3)}');
+      variants.add('+$clean');
+    } else if (clean.startsWith('+964')) {
+      variants.add('0${clean.substring(4)}');
+      variants.add(clean.substring(1));
+    }
+
+    return variants.toList();
+  }
+
   Color _getStatusColor(String status) {
     switch (status) {
       case 'confirmed':
@@ -57,20 +76,19 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
       if (data['isArchived'] == true) return true;
 
       final dateStr = (data['date'] ?? '').toString();
-      if (dateStr.isEmpty) return false;
-
-      final bookingDate = DateFormat('yyyy-MM-dd').parse(dateStr);
-      final now = DateTime.now();
-      final todayDateOnly = DateTime(now.year, now.month, now.day);
-
-      if (bookingDate.isBefore(todayDateOnly)) {
-        return true;
+      if (dateStr.isNotEmpty) {
+        final bookingDate = DateFormat('yyyy-MM-dd').parse(dateStr);
+        final now = DateTime.now();
+        final todayDateOnly = DateTime(now.year, now.month, now.day);
+        if (bookingDate.isBefore(todayDateOnly)) {
+          return true;
+        }
       }
 
       if (status == 'rejected' || status == 'removed_from_tournament' || status == 'completed' || status == 'cancelled') {
         final createdAt = data['createdAt'];
         if (createdAt is Timestamp) {
-          final difference = now.difference(createdAt.toDate());
+          final difference = DateTime.now().difference(createdAt.toDate());
           if (difference.inHours >= 24) {
             return true;
           }
@@ -88,7 +106,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
     required String note,
   }) async {
     try {
-      // 1. تحديث وثيقة الحجز
       await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({
         'isArchived': true,
         'pitchRating': rating,
@@ -96,7 +113,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
         'pitchReviewNote': note,
       });
 
-      // 2. مزامنة التقييم مع وثيقة الملعب ليظهر لباقي اللاعبين
       final pitchQuery = await FirebaseFirestore.instance
           .collection('pitches')
           .where('name', isEqualTo: pitchName)
@@ -135,11 +151,11 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
 
   void _showPitchEvaluationDialog(String bookingId, String pitchName) {
     final List<String> quickTags = [
-      'أرضية الملعب ممتازة',
-      'تنظيم وإدارة احترافية',
-      'التزام تام بالمواعيد',
-      'إنارة واضحة وقوية',
-      'مرافق نظيفة ومرتبة'
+      'أرضية ممتازة ونظيفة',
+      'إضاءة قوية ورائعة',
+      'تعامل راقٍ من الإدارة',
+      'مرافق وخدمات متكاملة',
+      'التزام تام بالمواعيد'
     ];
     String selectedTag = quickTags.first;
     int rating = 5;
@@ -253,14 +269,15 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
   @override
   Widget build(BuildContext context) {
     final currencyFormatter = NumberFormat('#,###');
+    final phoneVariants = _getPhoneVariants(widget.userPhone);
 
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: StreamBuilder<QuerySnapshot>(
+        // إزالة orderBy من الاستعلام لتجنب أخطاء الفهارس أو فقدان الوثائق
         stream: FirebaseFirestore.instance
             .collection('bookings')
-            .where('phone', isEqualTo: widget.userPhone)
-            .orderBy('createdAt', descending: true)
+            .where('phone', whereIn: phoneVariants)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -284,6 +301,20 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
               activeBookings.add(item);
             }
           }
+
+          // فرز الحجوزات محلياً حسب التاريخ والتوقيت
+          int sortBookings(Map<String, dynamic> a, Map<String, dynamic> b) {
+            final dateA = (a['date'] ?? '').toString();
+            final dateB = (b['date'] ?? '').toString();
+            final timeA = (a['startTime'] ?? '').toString();
+            final timeB = (b['startTime'] ?? '').toString();
+            final comp = dateB.compareTo(dateA);
+            if (comp != 0) return comp;
+            return timeB.compareTo(timeA);
+          }
+
+          activeBookings.sort(sortBookings);
+          pastBookings.sort(sortBookings);
 
           if (activeBookings.isEmpty && pastBookings.isEmpty) {
             return Center(
@@ -490,7 +521,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  // حصرياً إذا كان مكتمل فقط ولم يقم بالتقييم بعد
                   if (status == 'completed' && b['pitchRating'] == null)
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
