@@ -270,12 +270,12 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                             final eTime = times.length > 1 ? times[1].trim() : '';
 
                             try {
-                              // 1. فحص التعارض في الحجوزات العادية والمباريات القائمة
+                              // 1. فحص التعارض في الحجوزات العادية والمباريات القائمة (يشمل confirmed و upcoming)
                               final existingBookings = await firestore
                                   .collection('bookings')
                                   .where('pitchName', isEqualTo: widget.pitchName)
                                   .where('date', isEqualTo: dateStr)
-                                  .where('status', whereIn: ['upcoming', 'completed', 'tournament_match', 'pending'])
+                                  .where('status', whereIn: ['confirmed', 'upcoming', 'completed', 'tournament_match', 'pending'])
                                   .get();
 
                               for (var doc in existingBookings.docs) {
@@ -317,7 +317,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                                 }
                               }
 
-                              // 3. التثبيت في حال عدم وجود أي تعارض
+                              // 3. التثبيت في حال عدم وجود أي تعارض مع ضبط الحالة إلى confirmed لينزل فوراً في الجدول
                               await firestore.collection('bookings').add({
                                 'pitchName': widget.pitchName,
                                 'teamOne': _teamOneController.text.trim(),
@@ -327,7 +327,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                                 'endTime': eTime,
                                 'phone': _phoneController.text.trim(),
                                 'price': double.tryParse(_priceController.text.trim()) ?? widget.defaultRate,
-                                'status': 'upcoming',
+                                'status': 'confirmed',
                                 'createdAt': FieldValue.serverTimestamp(),
                               });
 
@@ -398,6 +398,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
 
   String _getStatusArabic(String? status) {
     switch (status) {
+      case 'confirmed':
       case 'upcoming':
         return 'مباراة مؤكدة ⏳';
       case 'completed':
