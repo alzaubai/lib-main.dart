@@ -79,7 +79,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     final dayNameArabic = TimeParserUtil.getArabicDayName(_selectedDate);
 
     try {
-      // 1. جلب ساعات عمل الملعب إن وجدت
       final pitchDoc = await FirebaseFirestore.instance.collection('pitches').doc(widget.pitchName).get();
       List<String> activeHours = List.from(_allStandardHours);
 
@@ -105,7 +104,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
         }
       }
 
-      // 2. جلب المواعيد المحجوزة والاشتراكات الدائمة دفعة واحدة في الذاكرة
       final bookedSnap = await FirebaseFirestore.instance
           .collection('bookings')
           .where('pitchName', isEqualTo: widget.pitchName)
@@ -151,8 +149,27 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     }
   }
 
+  // حساب وقت النهاية محلياً (إضافة ساعة واحدة) بدون الاعتماد على دوال خارجية مفقودة
   String _calculateEndTime(String start) {
-    return TimeParserUtil.calculateEndTime(start, 60);
+    try {
+      final parts = start.split(' ');
+      final timeParts = parts[0].split(':');
+      int hour = int.parse(timeParts[0]);
+      final minute = timeParts[1];
+      String period = parts.length > 1 ? parts[1] : 'م';
+
+      hour += 1;
+      if (hour == 12) {
+        period = (period == 'م') ? 'ص' : 'م';
+      } else if (hour > 12) {
+        hour = 1;
+      }
+
+      final formattedHour = hour.toString().padLeft(2, '0');
+      return '$formattedHour:$minute $period';
+    } catch (_) {
+      return '';
+    }
   }
 
   Future<void> _submitBooking() async {
@@ -255,7 +272,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ),
               const SizedBox(height: 14),
 
-              // رأس الشيت مع السعر
               Row(
                 children: [
                   Container(
@@ -283,7 +299,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ),
               const SizedBox(height: 16),
 
-              // 1. شريط الأيام الأفقي (14 يوماً)
               const Text('اختر يوم المباراة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155))),
               const SizedBox(height: 8),
               SizedBox(
@@ -329,7 +344,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ),
               const SizedBox(height: 18),
 
-              // 2. شريط الأوقات الأفقي الجديد (Horizontal Capsule Selector)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -375,12 +389,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                           return Padding(
                             padding: const EdgeInsets.only(left: 8),
                             child: InkWell(
-                              onTap: isBooked
-                                  ? null
-                                  : () {
-                                      // تحديد لحظي 0ms بدون انتظار الشبكة
-                                      setState(() => _selectedStartTime = hour);
-                                    },
+                              onTap: isBooked ? null : () => setState(() => _selectedStartTime = hour),
                               borderRadius: BorderRadius.circular(12),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 150),
@@ -419,7 +428,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                     ),
               const SizedBox(height: 18),
 
-              // 3. بيانات الفرق ورقم الهاتف
               TextField(
                 controller: _teamOneCtrl,
                 decoration: InputDecoration(
@@ -452,7 +460,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
               ),
               const SizedBox(height: 20),
 
-              // زر الإرسال
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
