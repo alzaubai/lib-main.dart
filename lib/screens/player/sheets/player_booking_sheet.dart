@@ -10,14 +10,14 @@ import '../../../../services/slot_lock_service.dart';
 class PlayerBookingSheet extends StatefulWidget {
   final String pitchName;
   final String pitchPhone;
-  final double defaultPrice;
+  final double hourlyRate; // تم التصحيح هنا
   final String userPhone;
 
   const PlayerBookingSheet({
     super.key,
     required this.pitchName,
     required this.pitchPhone,
-    required this.defaultPrice,
+    required this.hourlyRate, // تم التصحيح هنا
     required this.userPhone,
   });
 
@@ -39,12 +39,12 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
   @override
   void initState() {
     super.initState();
-    _slots = buildPitchSlots(60); // أو حسب مدة الملعب
+    _slots = buildPitchSlots(60); 
   }
 
   @override
   void dispose() {
-    _releaseCurrentLock(); // فك القفل عند إغلاق النافذة
+    _releaseCurrentLock(); 
     super.dispose();
   }
 
@@ -65,7 +65,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
 
     setState(() => _isLocking = true);
     
-    // فك قفل الوقت السابق إذا كان مختار وقت ثاني
     await _releaseCurrentLock();
 
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -139,7 +138,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 ),
                 const SizedBox(height: 16),
                 
-                // العنوان ومعلومات الملعب
                 Row(
                   children: [
                     Container(
@@ -161,7 +159,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 ),
                 const SizedBox(height: 18),
 
-                // أزرار التواصل المباشر
                 Row(
                   children: [
                     Expanded(
@@ -195,7 +192,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 ),
                 const Divider(height: 24),
 
-                // اختيار التاريخ
                 InkWell(
                   onTap: () async {
                     final picked = await showDatePicker(
@@ -207,7 +203,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                     if (picked != null) {
                       setState(() {
                         _selectedDate = picked;
-                        _releaseCurrentLock(); // تحرير الوقت لو غير اليوم
+                        _releaseCurrentLock(); 
                         _selectedSlot = null;
                       });
                     }
@@ -235,7 +231,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // اختيار الوقت
                 Row(
                   children: [
                     const Text('اختر وقت المباراة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
@@ -278,7 +273,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // اسم الفريق
                 TextFormField(
                   controller: _teamController,
                   decoration: InputDecoration(
@@ -290,7 +284,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                 ),
                 const SizedBox(height: 20),
 
-                // زر التأكيد
                 SizedBox(
                   height: 48,
                   child: ElevatedButton.icon(
@@ -316,9 +309,8 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         final sTime = _selectedSlot!.split(' - ')[0].trim();
                         final eTime = _selectedSlot!.split(' - ').length > 1 ? _selectedSlot!.split(' - ')[1].trim() : '';
                         
-                        // حساب مهلة الانتظار الذكية
                         final matchDateTime = TimeParserUtil.parseMatchDateTime(dateStr, sTime);
-                        int expireMinutes = 60; // افتراضي ساعة
+                        int expireMinutes = 60; 
                         
                         if (matchDateTime != null) {
                           final diff = matchDateTime.difference(DateTime.now());
@@ -340,13 +332,12 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                           'date': dateStr,
                           'startTime': sTime,
                           'endTime': eTime,
-                          'price': widget.defaultPrice,
+                          'price': widget.hourlyRate, // تم التصحيح هنا أيضاً
                           'status': 'pending',
                           'expiresAt': expiresAt,
                           'createdAt': FieldValue.serverTimestamp(),
                         });
 
-                        // تحرير القفل فوراً بعد نجاح الحجز
                         await _releaseCurrentLock();
 
                         if (mounted) {
