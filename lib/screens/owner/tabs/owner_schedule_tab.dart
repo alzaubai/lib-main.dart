@@ -112,6 +112,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
         return const Color(0xFF1B5E20);
       case 'recurring':
         return Colors.purple.shade800;
+      case 'tournament_match':
+        return Colors.orange.shade900;
       default:
         return const Color(0xFF0F172A);
     }
@@ -123,6 +125,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
         return 'حجز مؤكد';
       case 'recurring':
         return 'اشتراك دائم';
+      case 'tournament_match':
+        return 'مباراة بطولة 🏆';
       default:
         return 'محجوز';
     }
@@ -257,7 +261,6 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                       final d = doc.data() as Map<String, dynamic>;
                       if (d['isDeleted'] == true) continue;
                       final st = (d['status'] ?? '').toString();
-                      // إظهار الحجوزات المؤكدة ومباريات البطولات
                       if (st != 'confirmed' && st != 'tournament_match') continue;
 
                       final map = Map<String, dynamic>.from(d);
@@ -350,6 +353,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                         final status = slot['status'] ?? 'confirmed';
                         final price = (slot['price'] as num?)?.toDouble() ?? 25000.0;
                         final isRecurring = slot['isRecurringRule'] == true || status == 'recurring';
+                        final isTournamentMatch = status == 'tournament_match';
 
                         final isTimePassed = TimeParserUtil.isSlotTimePassedFromString(dateStr, '$startTime - $endTime');
 
@@ -361,16 +365,28 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                             ? 'انتهى الوقت - بانتظار الإكمال'
                             : _getStatusArabicText(status);
 
+                        // تحديد لون الكارت بناءً على نوع المباراة
+                        Color cardBgColor = Colors.white;
+                        Color borderColor = const Color(0xFFE2E8F0);
+
+                        if (isTournamentMatch) {
+                          cardBgColor = Colors.orange.shade50;
+                          borderColor = Colors.orange.shade400;
+                        } else if (isTimePassed && !isRecurring) {
+                          borderColor = Colors.orange.shade300;
+                        } else if (isRecurring) {
+                          borderColor = Colors.purple.shade200;
+                        }
+
                         return Card(
                           elevation: 1.5,
                           margin: const EdgeInsets.only(bottom: 12),
+                          color: cardBgColor,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                             side: BorderSide(
-                              color: isTimePassed && !isRecurring
-                                  ? Colors.orange.shade300
-                                  : (isRecurring ? Colors.purple.shade200 : const Color(0xFFE2E8F0)),
-                              width: (isTimePassed || isRecurring) ? 1.5 : 1,
+                              color: borderColor,
+                              width: (isTimePassed || isRecurring || isTournamentMatch) ? 1.5 : 1,
                             ),
                           ),
                           child: Padding(
@@ -384,18 +400,18 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: isTimePassed && !isRecurring
-                                            ? Colors.orange.shade50
-                                            : (isRecurring ? Colors.purple.shade50 : const Color(0xFFE8F5E9)),
+                                        color: isTournamentMatch 
+                                            ? Colors.orange.shade100 
+                                            : (isTimePassed && !isRecurring ? Colors.orange.shade50 : (isRecurring ? Colors.purple.shade50 : const Color(0xFFE8F5E9))),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Icon(
-                                        isRecurring
-                                            ? Icons.repeat_rounded
-                                            : (isTimePassed ? Icons.timer_off_rounded : Icons.sports_soccer_rounded),
-                                        color: isTimePassed && !isRecurring
-                                            ? Colors.orange.shade800
-                                            : (isRecurring ? Colors.purple.shade800 : const Color(0xFF1B5E20)),
+                                        isTournamentMatch 
+                                            ? Icons.emoji_events_rounded
+                                            : (isRecurring ? Icons.repeat_rounded : (isTimePassed ? Icons.timer_off_rounded : Icons.sports_soccer_rounded)),
+                                        color: isTournamentMatch 
+                                            ? Colors.orange.shade900
+                                            : (isTimePassed && !isRecurring ? Colors.orange.shade800 : (isRecurring ? Colors.purple.shade800 : const Color(0xFF1B5E20))),
                                         size: 20,
                                       ),
                                     ),
@@ -440,7 +456,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                         style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10.5),
                                       ),
                                     ),
-                                    if (!isRecurring && !isTimePassed) ...[
+                                    if (!isRecurring && !isTimePassed && !isTournamentMatch) ...[
                                       const SizedBox(width: 4),
                                       PopupMenuButton<String>(
                                         icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
@@ -512,7 +528,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                                       ),
                                     ],
                                     const Spacer(),
-                                    if (!isRecurring)
+                                    if (!isRecurring && !isTournamentMatch)
                                       ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: isTimePassed ? Colors.orange.shade800 : const Color(0xFF1B5E20),
