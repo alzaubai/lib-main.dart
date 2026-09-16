@@ -2,13 +2,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../constants.dart';
 import 'auth_screen.dart';
 import 'player/tabs/player_explore_tab.dart';
 import 'player/tabs/player_bookings_tab.dart';
 import 'tournaments/tournament_screen.dart';
 import 'player/player_archive_screen.dart';
-import '../services/player_notification_service.dart'; // تم استدعاء خدمة الإشعارات
+// تم مسح استدعاء خدمة الإشعارات المزعجة (Popup) من هنا
 
 class PlayerScreen extends StatefulWidget {
   final String userPhone;
@@ -34,19 +35,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _fetchUserData();
-    
-    // تشغيل رادار الإشعارات للاعب (للبطولات وحالة الحجز)
-    PlayerNotificationService.listen(context, widget.userPhone);
+    _cleanGhostNotifications(); // تشغيل منظف الإشعارات الوهمية
   }
 
-  @override
-  void dispose() {
-    // إطفاء الرادار عند الخروج من التطبيق للحفاظ على البطارية
-    PlayerNotificationService.stop();
-    super.dispose();
-  }
-
-  // دالة لجلب كل صيغ رقم الهاتف لتجنب ضياع الإشعارات
+  // دالة لجلب كل صيغ رقم الهاتف
   List<String> _getPhoneVariants(String phone) {
     final clean = phone.replaceAll(RegExp(r'\s+|-'), '');
     final variants = <String>{clean};
@@ -61,6 +53,49 @@ class _PlayerScreenState extends State<PlayerScreen> {
       variants.add(clean.substring(1)); 
     }
     return variants.toList();
+  }
+
+  // فلتر لمعرفة هل الحجز قديم/منتهي (لغرض تنظيف الإشعارات)
+  bool _shouldBeArchived(Map<String, dynamic> data) {
+    try {
+      if (data['isArchived'] == true) return true;
+      final dateStr = (data['date'] ?? '').toString();
+      if (dateStr.isNotEmpty) {
+        final bookingDate = DateFormat('yyyy-MM-dd').parse(dateStr);
+        final todayDateOnly = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+        if (bookingDate.isBefore(todayDateOnly)) return true;
+      }
+      final status = (data['status'] ?? '').toString();
+      if (['rejected', 'removed_from_tournament', 'completed', 'cancelled'].contains(status)) {
+        final createdAt = data['createdAt'];
+        if (createdAt is Timestamp && DateTime.now().difference(createdAt.toDate()).inHours >= 24) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // تنظيف صامت للحجوزات القديمة غير المقروءة لتصفير النقطة الحمراء
+  Future<void> _cleanGhostNotifications() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('phone', whereIn: _getPhoneVariants(widget.userPhone))
+          .where('seenByPlayer', isEqualTo: false)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      bool hasUpdates = false;
+
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        if (_shouldBeArchived(data) || data['isDeleted'] == true) {
+          batch.update(doc.reference, {'seenByPlayer': true});
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) await batch.commit();
+    } catch (_) {}
   }
 
   void _showCenterToast(String message) {
@@ -562,7 +597,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
               label: 'المفضلة',
             ),
             NavigationDestination(
-              // تم تصحيح اسم الحقل إلى seenByPlayer لتعمل النقطة الحمراء
               icon: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('bookings')
@@ -570,11 +604,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     .where('seenByPlayer', isEqualTo: false) 
                     .snapshots(),
                 builder: (context, snapshot) {
-                  final unread = snapshot.data?.docs.length ?? 0;
+                  // تصفية النقطة الحمراء من الحجوزات المؤرشفة والمنتهية
+                  int unreadCount = 0;
+                  if (snapshot.hasData) {
+                    for (var doc in snapshot.docs) {
+                       final d = doc.data() as Map<String, dynamic>;
+                       if (d['isDeleted'] != true && !_shouldBeArchived(d)) {
+                          unreadCount++;
+                       }
+                    }
+                  }
                   return Badge(
-                    isLabelVisible: unread > 0,
+                    isLabelVisible: unreadCount > 0,
                     backgroundColor: Colors.red,
-                    label: Text('$unread', style: const TextStyle(fontSize: 10, color: Colors.white)),
+                    label: Text('$unreadCount', style: const TextStyle(fontSize: 10, color: Colors.white)),
                     child: const Icon(Icons.calendar_month_outlined),
                   );
                 },
