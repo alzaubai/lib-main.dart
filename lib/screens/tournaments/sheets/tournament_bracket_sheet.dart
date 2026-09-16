@@ -2,6 +2,9 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import '../../../../constants.dart';
+import '../../../../utils/time_parser_util.dart';
 
 class TournamentBracketSheet extends StatefulWidget {
   final String tournamentId;
@@ -46,11 +49,13 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
             'scoreB': 0,
             'winner': '',
             'isFinished': false,
+            'scheduled': false,
+            'date': '',
+            'time': '',
             'nextMatchId': 'R2_M${(i ~/ 4) + 1}',
             'nextMatchSlot': (i % 4 == 0) ? 'teamA' : 'teamB',
           });
         } else {
-          // تأهل مباشر
           roundMatches.add({
             'matchId': 'R1_M${(i ~/ 2) + 1}',
             'round': 1,
@@ -60,6 +65,9 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
             'scoreB': 0,
             'winner': shuffled[i],
             'isFinished': true,
+            'scheduled': true,
+            'date': '',
+            'time': '',
             'nextMatchId': 'R2_M${(i ~/ 4) + 1}',
             'nextMatchSlot': (i % 4 == 0) ? 'teamA' : 'teamB',
           });
@@ -80,6 +88,9 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
             'scoreB': 0,
             'winner': '',
             'isFinished': false,
+            'scheduled': false,
+            'date': '',
+            'time': '',
             'nextMatchId': nextRoundMatchesCount > 1 ? 'R${currentRound + 1}_M${(i ~/ 2) + 1}' : null,
             'nextMatchSlot': (i % 2 == 0) ? 'teamA' : 'teamB',
           });
@@ -91,7 +102,7 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
       await FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId).update({
         'matches': roundMatches,
         'status': 'active',
-        'drawCount': FieldValue.increment(1), // زيادة عداد القرعة لتقييده لمرة واحدة
+        'drawCount': FieldValue.increment(1),
       });
 
       _showToast('تم إجراء القرعة بنجاح وتوزيع المباريات');
@@ -119,14 +130,12 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: StreamBuilder<DocumentSnapshot>(
-          // الكود راح يحدث فوري إذا انمسحت البطولة
           stream: FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId).snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
             }
 
-            // إذا انمسحت البطولة من قاعدة البيانات، نقفل النافذة تلقائياً
             if (!snapshot.hasData || !snapshot.data!.exists) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) Navigator.pop(context);
@@ -139,20 +148,14 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
             final matches = List<dynamic>.from(data['matches'] ?? []);
             final int drawCount = (data['drawCount'] as num?)?.toInt() ?? 0;
             final String? champion = data['champion'];
+            final double entryFee = (data['entryFee'] as num?)?.toDouble() ?? 0.0;
 
-            // زر القرعة يختفي إذا انضغط مرتين (أساسي + طوارئ)
             final bool canDraw = drawCount < 2;
 
             return Column(
               children: [
                 const SizedBox(height: 12),
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
                 const SizedBox(height: 12),
 
                 Padding(
@@ -169,11 +172,7 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              widget.tournamentTitle,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            Text(widget.tournamentTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis),
                             Text('الفرق المشاركة: ${teams.length}', style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
                           ],
                         ),
@@ -189,10 +188,7 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                           icon: _isProcessing
                               ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                               : const Icon(Icons.shuffle_rounded, size: 14, color: Colors.white),
-                          label: Text(
-                            drawCount == 0 ? 'إجراء القرعة' : 'إعادة للطوارئ',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
+                          label: Text(drawCount == 0 ? 'إجراء القرعة' : 'إعادة للطوارئ', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                           onPressed: _isProcessing ? null : () {
                             if (drawCount > 0) {
                               showDialog(
@@ -204,10 +200,7 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                                     TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
                                     ElevatedButton(
                                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                      onPressed: () {
-                                        Navigator.pop(ctx);
-                                        _generateRandomDraw(teams);
-                                      },
+                                      onPressed: () { Navigator.pop(ctx); _generateRandomDraw(teams); },
                                       child: const Text('إعادة التوزيع', style: TextStyle(color: Colors.white)),
                                     ),
                                   ],
@@ -220,16 +213,12 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                         ),
                         const SizedBox(width: 4),
                       ],
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                        onPressed: () => Navigator.pop(context),
-                      ),
+                      IconButton(icon: const Icon(Icons.close_rounded, color: Colors.grey), onPressed: () => Navigator.pop(context)),
                     ],
                   ),
                 ),
                 const Divider(height: 16),
 
-                // بانر تتويج البطل يظهر عند انتهاء البطولة
                 if (champion != null && champion.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -256,7 +245,6 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                     ),
                   ),
 
-                // قائمة المباريات المباشرة
                 Expanded(
                   child: matches.isEmpty
                       ? Center(
@@ -267,10 +255,7 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                               const SizedBox(height: 12),
                               const Text('لم يتم إجراء القرعة بعد', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF64748B))),
                               const SizedBox(height: 4),
-                              Text(
-                                widget.isOwner ? 'اضغط على زر إجراء القرعة لتوزيع الفرق' : 'بانتظار قيام المنظم بإجراء القرعة',
-                                style: const TextStyle(fontSize: 11.5, color: Colors.grey),
-                              ),
+                              Text(widget.isOwner ? 'اضغط على زر إجراء القرعة لتوزيع الفرق' : 'بانتظار قيام المنظم بإجراء القرعة', style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
                             ],
                           ),
                         )
@@ -284,7 +269,10 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                               matchIndex: index,
                               allMatches: matches,
                               tournamentId: widget.tournamentId,
+                              tournamentTitle: widget.tournamentTitle,
+                              pitchName: widget.pitchName,
                               isOwner: widget.isOwner,
+                              entryFee: entryFee,
                             );
                           },
                         ),
@@ -298,20 +286,25 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
   }
 }
 
-// كارت المباراة مع نظام التسجيل المباشر السريع (بدون ديالوك مزعج)
 class _InlineMatchCard extends StatefulWidget {
   final Map<String, dynamic> match;
   final int matchIndex;
   final List<dynamic> allMatches;
   final String tournamentId;
+  final String tournamentTitle;
+  final String pitchName;
   final bool isOwner;
+  final double entryFee;
 
   const _InlineMatchCard({
     required this.match,
     required this.matchIndex,
     required this.allMatches,
     required this.tournamentId,
+    required this.tournamentTitle,
+    required this.pitchName,
     required this.isOwner,
+    required this.entryFee,
   });
 
   @override
@@ -332,7 +325,7 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
 
   void _saveScore() async {
     if (scoreA == scoreB) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('مباريات البطولة لا تقبل التعادل، يجب حسم الفائز!'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يجب حسم الفائز، لا يوجد تعادل!'), backgroundColor: Colors.red));
       return;
     }
 
@@ -342,7 +335,6 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
     final winner = scoreA > scoreB ? teamA : teamB;
 
     final updatedMatches = List<Map<String, dynamic>>.from(widget.allMatches);
-    
     updatedMatches[widget.matchIndex] = {
       ...widget.match,
       'scoreA': scoreA,
@@ -368,14 +360,108 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
     final tournamentRef = FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId);
 
     batch.update(tournamentRef, {'matches': updatedMatches});
-
     if (nextMatchId == null) {
       batch.update(tournamentRef, {'status': 'completed', 'champion': winner});
     }
 
-    await batch.commit();
+    // إذا كانت المباراة مجدولة بجدول الملعب، نحدث نتيجتها هناك لتنتهي
+    final bookingQuery = await FirebaseFirestore.instance.collection('bookings')
+        .where('tournamentId', isEqualTo: widget.tournamentId)
+        .where('tournamentMatchId', isEqualTo: widget.match['matchId'])
+        .get();
+        
+    for (var doc in bookingQuery.docs) {
+      batch.update(doc.reference, {'status': 'completed'});
+    }
 
+    await batch.commit();
     if (mounted) setState(() => isSaving = false);
+  }
+
+  void _scheduleMatch() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final String dateStr = DateFormat('yyyy-MM-dd').format(pickedDate);
+    final List<String> availableSlots = buildPitchSlots(60);
+
+    String? selectedSlot = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: AlertDialog(
+          title: Text('تحديد وقت المباراة: ${DateFormat('yyyy-MM-dd').format(pickedDate)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: availableSlots.length,
+              itemBuilder: (context, index) {
+                final slot = availableSlots[index];
+                return ListTile(
+                  title: Text(slot, style: const TextStyle(fontSize: 13)),
+                  onTap: () => Navigator.pop(ctx, slot),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (selectedSlot == null || !mounted) return;
+
+    setState(() => isSaving = true);
+
+    try {
+      final sTime = selectedSlot.split(' - ')[0].trim();
+      final eTime = selectedSlot.split(' - ').length > 1 ? selectedSlot.split(' - ')[1].trim() : '';
+
+      final batch = FirebaseFirestore.instance.batch();
+      
+      // 1. تحديث بيانات المباراة في البطولة
+      final updatedMatches = List<Map<String, dynamic>>.from(widget.allMatches);
+      updatedMatches[widget.matchIndex] = {
+        ...widget.match,
+        'scheduled': true,
+        'date': dateStr,
+        'time': selectedSlot,
+      };
+      
+      batch.update(FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId), {
+        'matches': updatedMatches,
+      });
+
+      // 2. إنشاء حجز فعلي ورسمي في جدول المالك
+      final newBookingRef = FirebaseFirestore.instance.collection('bookings').doc();
+      batch.set(newBookingRef, {
+        'pitchName': widget.pitchName,
+        'tournamentId': widget.tournamentId,
+        'tournamentTitle': widget.tournamentTitle,
+        'tournamentMatchId': widget.match['matchId'],
+        'teamOne': widget.match['teamA'],
+        'teamTwo': widget.match['teamB'],
+        'date': dateStr,
+        'startTime': sTime,
+        'endTime': eTime,
+        'price': widget.entryFee, // رسوم المباراة
+        'status': 'tournament_match', // حالة مخصصة تظهر بالجدول كبطولة
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت جدولة المباراة وإضافتها لجدول الملعب بنجاح'), backgroundColor: Color(0xFF1B5E20)));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء الجدولة'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => isSaving = false);
+    }
   }
 
   @override
@@ -384,20 +470,26 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
     final teamB = widget.match['teamB'] ?? '';
     final winner = widget.match['winner'] ?? '';
     final isFinished = widget.match['isFinished'] == true;
+    final isScheduled = widget.match['scheduled'] == true;
+    final date = widget.match['date'] ?? '';
+    final time = widget.match['time'] ?? '';
     final isFinalMatch = widget.match['nextMatchId'] == null;
     final roundName = isFinalMatch ? 'المباراة النهائية 🏆' : 'الدور ${widget.match['round']}';
 
-    final bool canEdit = widget.isOwner && !isFinished && teamB != 'تأهل مباشر' && !teamA.contains('بانتظار') && !teamB.contains('بانتظار');
+    final bool isTeamsReady = !teamA.contains('بانتظار') && !teamB.contains('بانتظار') && teamB != 'تأهل مباشر';
+    final bool canEditScore = widget.isOwner && !isFinished && isTeamsReady && isScheduled;
+    final bool canSchedule = widget.isOwner && !isFinished && isTeamsReady && !isScheduled;
 
     return Card(
       elevation: 1.5,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: isFinished ? const Color(0xFFE8F5E9) : Colors.transparent, width: isFinished ? 1.5 : 0),
+        side: BorderSide(color: isFinished ? const Color(0xFFE8F5E9) : (isScheduled ? Colors.amber.shade200 : Colors.transparent), width: (isFinished || isScheduled) ? 1.5 : 0),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -405,14 +497,18 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: isFinished ? const Color(0xFFE8F5E9) : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
+                  decoration: BoxDecoration(color: isFinished ? const Color(0xFFE8F5E9) : (isScheduled ? Colors.amber.shade50 : const Color(0xFFF1F5F9)), borderRadius: BorderRadius.circular(6)),
                   child: Text(
-                    isFinished ? 'انتهت' : 'بانتظار اللعب',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isFinished ? const Color(0xFF1B5E20) : const Color(0xFF64748B)),
+                    isFinished ? 'انتهت' : (isScheduled ? 'مُجدولة' : 'بانتظار التحديد'),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isFinished ? const Color(0xFF1B5E20) : (isScheduled ? Colors.amber.shade900 : const Color(0xFF64748B))),
                   ),
                 ),
               ],
             ),
+            if (isScheduled && !isFinished) ...[
+              const SizedBox(height: 6),
+              Text('📅 $date   ⏰ $time', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+            ],
             const SizedBox(height: 10),
 
             Row(
@@ -425,11 +521,9 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
                     style: TextStyle(fontSize: 13, fontWeight: winner == teamA ? FontWeight.bold : FontWeight.normal, color: winner == teamA ? const Color(0xFF1B5E20) : const Color(0xFF0F172A)),
                   ),
                 ),
-                
-                // التحكم المباشر بالنتائج
                 Expanded(
                   flex: 4,
-                  child: canEdit
+                  child: canEditScore
                       ? Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -443,13 +537,12 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
                           decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E8F0))),
                           child: Center(
                             child: Text(
-                              '${widget.match['scoreA'] ?? 0} - ${widget.match['scoreB'] ?? 0}',
+                              teamB == 'تأهل مباشر' ? 'باي' : '${widget.match['scoreA'] ?? 0} - ${widget.match['scoreB'] ?? 0}',
                               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                           ),
                         ),
                 ),
-                
                 Expanded(
                   flex: 3,
                   child: Text(
@@ -461,16 +554,27 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
               ],
             ),
             
-            if (canEdit) ...[
+            if (canSchedule) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0, visualDensity: VisualDensity.compact),
+                  icon: const Icon(Icons.edit_calendar_rounded, size: 16),
+                  onPressed: isSaving ? null : _scheduleMatch,
+                  label: isSaving ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('تحديد موعد المباراة بالجدول', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+
+            if (canEditScore) ...[
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0, visualDensity: VisualDensity.compact),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0, visualDensity: VisualDensity.compact),
                   onPressed: isSaving ? null : _saveScore,
-                  child: isSaving 
-                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                    : const Text('حفظ وصعود الفائز', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                  child: isSaving ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('حفظ وصعود الفائز', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
