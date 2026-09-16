@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../dialogs/tournament_score_dialog.dart';
 
 class TournamentBracketSheet extends StatefulWidget {
   final String tournamentId;
@@ -72,136 +73,6 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
-  }
-
-  void _showScoreDialog(Map<String, dynamic> match, int matchIndex, List<dynamic> allMatches) {
-    if (!widget.isOwner) return;
-
-    final scoreACtrl = TextEditingController(text: '${match['scoreA'] ?? 0}');
-    final scoreBCtrl = TextEditingController(text: '${match['scoreB'] ?? 0}');
-    final teamA = match['teamA'] ?? 'فريق أول';
-    final teamB = match['teamB'] ?? 'فريق ثانٍ';
-
-    if (teamB == 'تأهل مباشر') return;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20), size: 22),
-              SizedBox(width: 8),
-              Text('تسجيل أهداف المباراة', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          teamA,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: scoreACtrl,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10),
-                    child: Text('ضد', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          teamB,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: scoreBCtrl,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B5E20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () async {
-                final sA = int.tryParse(scoreACtrl.text.trim()) ?? 0;
-                final sB = int.tryParse(scoreBCtrl.text.trim()) ?? 0;
-
-                if (sA == sB) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('يجب حسم النتيجة بفائز (لا يمكن التعادل في مباريات خروج المغلوب)'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                  return;
-                }
-
-                Navigator.pop(ctx);
-                final updatedMatches = List<Map<String, dynamic>>.from(allMatches);
-                final winner = sA > sB ? teamA : teamB;
-
-                updatedMatches[matchIndex] = {
-                  ...match,
-                  'scoreA': sA,
-                  'scoreB': sB,
-                  'winner': winner,
-                  'isFinished': true,
-                };
-
-                await FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId).update({
-                  'matches': updatedMatches,
-                });
-
-                _showToast('تم اعتماد نتيجة المباراة وتأهل ($winner)');
-              },
-              child: const Text('حفظ النتيجة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showToast(String message) {
@@ -423,7 +294,15 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                                           ),
                                           icon: const Icon(Icons.edit_note_rounded, size: 16),
                                           label: const Text('تسجيل / تعديل الأهداف', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                                          onPressed: () => _showScoreDialog(m, index, matches),
+                                          onPressed: () {
+                                            TournamentScoreDialog.show(
+                                              context,
+                                              match: m,
+                                              matchIndex: index,
+                                              allMatches: matches,
+                                              tournamentId: widget.tournamentId,
+                                            );
+                                          },
                                         ),
                                       ),
                                     ],
