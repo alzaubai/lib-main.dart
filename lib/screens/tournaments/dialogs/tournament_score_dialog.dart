@@ -15,6 +15,7 @@ class TournamentScoreDialog {
     final teamA = match['teamA'] ?? 'فريق أول';
     final teamB = match['teamB'] ?? 'فريق ثانٍ';
 
+    // لا يمكن تسجيل نتيجة لمباراة بها (تأهل مباشر)
     if (teamB == 'تأهل مباشر') return;
 
     showDialog(
@@ -115,6 +116,7 @@ class TournamentScoreDialog {
                 final updatedMatches = List<Map<String, dynamic>>.from(allMatches);
                 final winner = sA > sB ? teamA : teamB;
 
+                // تحديث المباراة الحالية بالنتيجة واسم الفائز
                 updatedMatches[matchIndex] = {
                   ...match,
                   'scoreA': sA,
@@ -123,18 +125,55 @@ class TournamentScoreDialog {
                   'isFinished': true,
                 };
 
-                await FirebaseFirestore.instance.collection('tournaments').doc(tournamentId).update({
-                  'matches': updatedMatches,
-                });
+                // محرك البطولة الذكي (Tournament Engine)
+                // البحث عن المباراة القادمة (إن وجدت) وتصعيد الفائز إليها
+                final String? nextMatchId = match['nextMatchId'];
+                final String? nextMatchSlot = match['nextMatchSlot']; // 'teamA' أو 'teamB'
+
+                if (nextMatchId != null && nextMatchSlot != null) {
+                  final nextMatchIndex = updatedMatches.indexWhere((m) => m['matchId'] == nextMatchId);
+                  if (nextMatchIndex != -1) {
+                    updatedMatches[nextMatchIndex] = {
+                      ...updatedMatches[nextMatchIndex],
+                      nextMatchSlot: winner, // تحديث اسم الفريق في المباراة القادمة
+                    };
+                  }
+                }
+
+                final batch = FirebaseFirestore.instance.batch();
+                final tournamentRef = FirebaseFirestore.instance.collection('tournaments').doc(tournamentId);
+
+                // حفظ الجدول المحدث
+                batch.update(tournamentRef, {'matches': updatedMatches});
+
+                // إذا كانت المباراة هي النهائية (لا توجد مباراة بعدها)، يتم إعلان بطل البطولة
+                if (nextMatchId == null) {
+                  batch.update(tournamentRef, {
+                    'status': 'completed',
+                    'champion': winner,
+                  });
+                }
+
+                await batch.commit();
 
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('تم اعتماد نتيجة المباراة وتأهل ($winner)'),
-                      backgroundColor: Colors.black87,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                  if (nextMatchId == null) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('🎉 مبروك! انتهت البطولة وتتويج ($winner) باللقب'),
+                        backgroundColor: Colors.amber.shade900,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  } else {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('تم اعتماد النتيجة وصعود ($winner) للدور القادم'),
+                        backgroundColor: Colors.black87,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('حفظ النتيجة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
