@@ -7,7 +7,8 @@ import 'auth_screen.dart';
 import 'player/tabs/player_explore_tab.dart';
 import 'player/tabs/player_bookings_tab.dart';
 import 'tournaments/tournament_screen.dart';
-import 'player/player_archive_screen.dart'; // تمت إضافة ملف الأرشيف
+import 'player/player_archive_screen.dart';
+import '../services/player_notification_service.dart'; // تم استدعاء خدمة الإشعارات
 
 class PlayerScreen extends StatefulWidget {
   final String userPhone;
@@ -33,6 +34,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _fetchUserData();
+    
+    // تشغيل رادار الإشعارات للاعب (للبطولات وحالة الحجز)
+    PlayerNotificationService.listen(context, widget.userPhone);
+  }
+
+  @override
+  void dispose() {
+    // إطفاء الرادار عند الخروج من التطبيق للحفاظ على البطارية
+    PlayerNotificationService.stop();
+    super.dispose();
   }
 
   // دالة لجلب كل صيغ رقم الهاتف لتجنب ضياع الإشعارات
@@ -180,7 +191,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             child: Container(
               height: MediaQuery.of(context).size.height * 0.85,
               decoration: const BoxDecoration(
-                color: Color(0xFFF1F5F9),
+                color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
@@ -193,7 +204,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // شريط العنوان
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -220,7 +230,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // كرت الفريق ومقابله زر تسجيل الخروج
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -271,7 +280,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     ],
                                   ),
                                 ),
-                                // زر تسجيل الخروج
                                 InkWell(
                                   onTap: () {
                                     Navigator.pop(sheetCtx);
@@ -303,7 +311,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // الحقول
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -515,7 +522,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ],
           ),
           actions: [
-            // تمت إضافة أيقونة الأرشيف هنا بصف الإعدادات
             IconButton(
               icon: const Icon(Icons.history_rounded, color: Colors.white),
               tooltip: 'أرشيف المباريات',
@@ -556,12 +562,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
               label: 'المفضلة',
             ),
             NavigationDestination(
-              // تم تحديث الـ StreamBuilder ليعمل بشكل صحيح مع التنبيهات الجديدة
+              // تم تصحيح اسم الحقل إلى seenByPlayer لتعمل النقطة الحمراء
               icon: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('bookings')
                     .where('phone', whereIn: phoneVariants)
-                    .where('isSeenByPlayer', isEqualTo: false)
+                    .where('seenByPlayer', isEqualTo: false) 
                     .snapshots(),
                 builder: (context, snapshot) {
                   final unread = snapshot.data?.docs.length ?? 0;
