@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../dialogs/pitch_evaluation_dialog.dart';
 
 class PlayerBookingsTab extends StatefulWidget {
   final String userPhone;
@@ -15,7 +16,6 @@ class PlayerBookingsTab extends StatefulWidget {
 class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
   bool _showPastBookings = true;
 
-  // توليد جميع الأشكال المحتملة للرقم لضمان عدم ضياع أي حجز
   List<String> _getPhoneVariants(String phone) {
     final clean = phone.replaceAll(RegExp(r'\s+|-'), '');
     final variants = <String>{clean};
@@ -36,37 +36,25 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'confirmed':
-        return const Color(0xFF1B5E20);
-      case 'pending':
-        return Colors.amber.shade800;
-      case 'completed':
-        return Colors.blue.shade700;
+      case 'confirmed': return const Color(0xFF1B5E20);
+      case 'pending': return Colors.amber.shade800;
+      case 'completed': return Colors.blue.shade700;
       case 'cancelled':
       case 'rejected':
-      case 'removed_from_tournament':
-        return Colors.red.shade700;
-      default:
-        return const Color(0xFF64748B);
+      case 'removed_from_tournament': return Colors.red.shade700;
+      default: return const Color(0xFF64748B);
     }
   }
 
   String _getStatusArabicText(String status) {
     switch (status) {
-      case 'confirmed':
-        return 'مؤكد';
-      case 'pending':
-        return 'قيد الانتظار';
-      case 'completed':
-        return 'مكتمل';
-      case 'cancelled':
-        return 'ملغي';
-      case 'rejected':
-        return 'مرفوض';
-      case 'removed_from_tournament':
-        return 'تمت الإزالة من البطولة';
-      default:
-        return status;
+      case 'confirmed': return 'مؤكد';
+      case 'pending': return 'قيد الانتظار';
+      case 'completed': return 'مكتمل';
+      case 'cancelled': return 'ملغي';
+      case 'rejected': return 'مرفوض';
+      case 'removed_from_tournament': return 'تمت الإزالة من البطولة';
+      default: return status;
     }
   }
 
@@ -80,186 +68,18 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
         final bookingDate = DateFormat('yyyy-MM-dd').parse(dateStr);
         final now = DateTime.now();
         final todayDateOnly = DateTime(now.year, now.month, now.day);
-        if (bookingDate.isBefore(todayDateOnly)) {
-          return true;
-        }
+        if (bookingDate.isBefore(todayDateOnly)) return true;
       }
 
       if (status == 'rejected' || status == 'removed_from_tournament' || status == 'completed' || status == 'cancelled') {
         final createdAt = data['createdAt'];
         if (createdAt is Timestamp) {
           final difference = DateTime.now().difference(createdAt.toDate());
-          if (difference.inHours >= 24) {
-            return true;
-          }
+          if (difference.inHours >= 24) return true;
         }
       }
     } catch (_) {}
     return false;
-  }
-
-  Future<void> _submitPitchEvaluation({
-    required String bookingId,
-    required String pitchName,
-    required int rating,
-    required String tag,
-    required String note,
-  }) async {
-    try {
-      await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({
-        'isArchived': true,
-        'pitchRating': rating,
-        'pitchReviewTag': tag,
-        'pitchReviewNote': note,
-      });
-
-      final pitchQuery = await FirebaseFirestore.instance
-          .collection('pitches')
-          .where('name', isEqualTo: pitchName)
-          .limit(1)
-          .get();
-
-      if (pitchQuery.docs.isNotEmpty) {
-        final pitchDoc = pitchQuery.docs.first;
-        final pitchData = pitchDoc.data();
-
-        final currentTotalRatings = (pitchData['totalRatings'] as num?)?.toInt() ?? 0;
-        final currentRatingSum = (pitchData['ratingSum'] as num?)?.toDouble() ?? 0.0;
-
-        final newTotal = currentTotalRatings + 1;
-        final newSum = currentRatingSum + rating;
-        final newAverage = double.parse((newSum / newTotal).toStringAsFixed(1));
-
-        await pitchDoc.reference.update({
-          'rating': newAverage,
-          'totalRatings': newTotal,
-          'ratingSum': newSum,
-          'reviews': FieldValue.arrayUnion([
-            {
-              'rating': rating,
-              'tag': tag,
-              'note': note,
-              'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-            }
-          ]),
-        });
-      }
-    } catch (e) {
-      debugPrint('Error updating pitch review: $e');
-    }
-  }
-
-  void _showPitchEvaluationDialog(String bookingId, String pitchName) {
-    final List<String> quickTags = [
-      'أرضية ممتازة ونظيفة',
-      'إضاءة قوية ورائعة',
-      'تعامل راقٍ من الإدارة',
-      'مرافق وخدمات متكاملة',
-      'التزام تام بالمواعيد'
-    ];
-    String selectedTag = quickTags.first;
-    int rating = 5;
-    final noteCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => Directionality(
-          textDirection: ui.TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text(
-              'تقييم تجربة اللعب: $pitchName',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('التقييم العام بالنجوم:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(5, (index) {
-                      final starVal = index + 1;
-                      return IconButton(
-                        icon: Icon(
-                          starVal <= rating ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: starVal <= rating ? const Color(0xFFF59E0B) : Colors.grey,
-                          size: 30,
-                        ),
-                        onPressed: () => setDialogState(() => rating = starVal),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text('اختر انطباعك الأساسي:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: selectedTag,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    items: quickTags.map((tag) => DropdownMenuItem(value: tag, child: Text(tag, style: const TextStyle(fontSize: 12.5)))).toList(),
-                    onChanged: (val) {
-                      if (val != null) setDialogState(() => selectedTag = val);
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('ملاحظات إضافية (اختياري):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: noteCtrl,
-                    maxLines: 2,
-                    style: const TextStyle(fontSize: 12),
-                    decoration: InputDecoration(
-                      hintText: 'اكتب ملاحظتك الموضوعية عن الملعب...',
-                      hintStyle: const TextStyle(fontSize: 11.5, color: Colors.grey),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'isArchived': true});
-                },
-                child: const Text('تخطي', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B5E20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await _submitPitchEvaluation(
-                    bookingId: bookingId,
-                    pitchName: pitchName,
-                    rating: rating,
-                    tag: selectedTag,
-                    note: noteCtrl.text.trim(),
-                  );
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('تم إرسال تقييمك للملعب بنجاح'), backgroundColor: Color(0xFF1B5E20)),
-                    );
-                  }
-                },
-                child: const Text('تأكيد التقييم', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _moveToArchive(String bookingId) async {
@@ -274,7 +94,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: StreamBuilder<QuerySnapshot>(
-        // إزالة orderBy من الاستعلام لتجنب أخطاء الفهارس أو فقدان الوثائق
         stream: FirebaseFirestore.instance
             .collection('bookings')
             .where('phone', whereIn: phoneVariants)
@@ -302,7 +121,6 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
             }
           }
 
-          // فرز الحجوزات محلياً حسب التاريخ والتوقيت
           int sortBookings(Map<String, dynamic> a, Map<String, dynamic> b) {
             final dateA = (a['date'] ?? '').toString();
             final dateB = (b['date'] ?? '').toString();
@@ -344,7 +162,7 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
                 const Padding(
                   padding: EdgeInsets.only(bottom: 10, right: 4),
                   child: Text(
-                    'الحجوزات القادمة والنشطة',
+                        'الحجوزات القادمة والنشطة',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
                   ),
                 ),
@@ -532,7 +350,12 @@ class _PlayerBookingsTabState extends State<PlayerBookingsTab> {
                       ),
                       icon: const Icon(Icons.star_rate_rounded, size: 15),
                       label: const Text('تقييم الملعب', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      onPressed: () => _showPitchEvaluationDialog(bookingId, pitchName),
+                      onPressed: () => PitchEvaluationDialog.show(
+                        context,
+                        bookingId: bookingId,
+                        pitchName: pitchName,
+                        userPhone: widget.userPhone,
+                      ),
                     ),
                   if (status == 'rejected' || status == 'removed_from_tournament' || status == 'completed') ...[
                     const SizedBox(width: 8),
