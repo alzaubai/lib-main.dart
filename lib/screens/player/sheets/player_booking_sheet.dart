@@ -10,14 +10,14 @@ import '../../../../services/slot_lock_service.dart';
 class PlayerBookingSheet extends StatefulWidget {
   final String pitchName;
   final String pitchPhone;
-  final double hourlyRate; // تم التصحيح هنا
+  final double hourlyRate;
   final String userPhone;
 
   const PlayerBookingSheet({
     super.key,
     required this.pitchName,
     required this.pitchPhone,
-    required this.hourlyRate, // تم التصحيح هنا
+    required this.hourlyRate,
     required this.userPhone,
   });
 
@@ -48,6 +48,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     super.dispose();
   }
 
+  // تحرير الوقت في حال اللاعب سد الواجهة بدون ما يكمل حجز
   Future<void> _releaseCurrentLock() async {
     if (_selectedSlot != null) {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -60,6 +61,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
     }
   }
 
+  // معالجة اختيار الوقت وقفل الوقت حصرياً له
   Future<void> _handleSlotSelection(String slot) async {
     if (_selectedSlot == slot) return;
 
@@ -240,37 +242,88 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                SizedBox(
-                  height: 42,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _slots.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final slot = _slots[index];
-                      final isPassed = TimeParserUtil.isSlotTimePassed(_selectedDate, slot);
-                      final isSelected = _selectedSlot == slot;
+                
+                // إضافة StreamBuilder لجلب الحجوزات والأوقات المقفولة بشكل مباشر
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('bookings')
+                      .where('pitchName', isEqualTo: widget.pitchName)
+                      .where('date', isEqualTo: DateFormat('yyyy-MM-dd').format(_selectedDate))
+                      .snapshots(),
+                  builder: (context, bookingSnap) {
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('slot_locks')
+                          .where('pitchName', isEqualTo: widget.pitchName)
+                          .where('date', isEqualTo: DateFormat('yyyy-MM-dd').format(_selectedDate))
+                          .snapshots(),
+                      builder: (context, lockSnap) {
+                        
+                        // 1. تجميع الأوقات المحجوزة
+                        final bookedSlots = <String>{};
+                        for (var doc in bookingSnap.data?.docs ?? []) {
+                          final d = doc.data() as Map<String, dynamic>;
+                          if (d['status'] != 'rejected' && d['isDeleted'] != true) {
+                            bookedSlots.add('${d['startTime']} - ${d['endTime']}');
+                          }
+                        }
 
-                      return ChoiceChip(
-                        label: Text(
-                          isPassed ? '$slot (مضى)' : slot,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: isPassed ? Colors.grey.shade400 : (isSelected ? Colors.white : Colors.black87),
+                        // 2. تجميع الأوقات المقفولة من قبل مستخدمين آخرين
+                        final lockedSlots = <String>{};
+                        final now = DateTime.now();
+                        for (var doc in lockSnap.data?.docs ?? []) {
+                          final d = doc.data() as Map<String, dynamic>;
+                          final expiresAt = (d['expiresAt'] as Timestamp?)?.toDate();
+                          if (expiresAt != null && expiresAt.isAfter(now)) {
+                            lockedSlots.add(d['timeSlot'] ?? '');
+                          }
+                        }
+
+                        return SizedBox(
+                          height: 42,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _slots.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (context, index) {
+                              final slot = _slots[index];
+                              final isPassed = TimeParserUtil.isSlotTimePassed(_selectedDate, slot);
+                              final isBooked = bookedSlots.contains(slot);
+                              final isLockedByOther = lockedSlots.contains(slot) && _selectedSlot != slot;
+                              final isSelected = _selectedSlot == slot;
+                              
+                              final bool isDisabled = isPassed || isBooked || isLockedByOther;
+
+                              String label = slot;
+                              if (isPassed) label += ' (مضى)';
+                              else if (isBooked) label += ' (محجوز)';
+                              else if (isLockedByOther) label += ' (قيد المراجعة)';
+
+                              return ChoiceChip(
+                                label: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDisabled ? Colors.grey.shade400 : (isSelected ? Colors.white : Colors.black87),
+                                  ),
+                                ),
+                                selected: isSelected && !isDisabled,
+                                selectedColor: const Color(0xFF1B5E20),
+                                backgroundColor: isDisabled ? Colors.grey.shade200 : Colors.grey.shade100,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                onSelected: (isDisabled || _isLocking) ? null : (val) {
+                                  if (val) _handleSlotSelection(slot);
+                                },
+                              );
+                            },
                           ),
-                        ),
-                        selected: isSelected && !isPassed,
-                        selectedColor: const Color(0xFF1B5E20),
-                        backgroundColor: isPassed ? Colors.grey.shade200 : Colors.grey.shade100,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        onSelected: (isPassed || _isLocking) ? null : (val) {
-                          if (val) _handleSlotSelection(slot);
-                        },
-                      );
-                    },
-                  ),
+                        );
+                      }
+                    );
+                  }
                 ),
+                
                 const SizedBox(height: 16),
 
                 TextFormField(
@@ -299,7 +352,7 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                     onPressed: _isSaving ? null : () async {
                       if (!_formKey.currentState!.validate()) return;
                       if (_selectedSlot == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى اختيار وقت المباراة')));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى اختيار وقت المباراة المتاح')));
                         return;
                       }
 
@@ -309,21 +362,6 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         final sTime = _selectedSlot!.split(' - ')[0].trim();
                         final eTime = _selectedSlot!.split(' - ').length > 1 ? _selectedSlot!.split(' - ')[1].trim() : '';
                         
-                        final matchDateTime = TimeParserUtil.parseMatchDateTime(dateStr, sTime);
-                        int expireMinutes = 60; 
-                        
-                        if (matchDateTime != null) {
-                          final diff = matchDateTime.difference(DateTime.now());
-                          if (diff.inHours >= 3) {
-                            expireMinutes = 60;
-                          } else if (diff.inHours >= 1) {
-                            expireMinutes = 30;
-                          } else {
-                            expireMinutes = 10;
-                          }
-                        }
-                        final expiresAt = DateTime.now().add(Duration(minutes: expireMinutes));
-
                         await FirebaseFirestore.instance.collection('bookings').add({
                           'pitchName': widget.pitchName,
                           'teamOne': _teamController.text.trim(),
@@ -332,9 +370,8 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                           'date': dateStr,
                           'startTime': sTime,
                           'endTime': eTime,
-                          'price': widget.hourlyRate, // تم التصحيح هنا أيضاً
+                          'price': widget.hourlyRate,
                           'status': 'pending',
-                          'expiresAt': expiresAt,
                           'createdAt': FieldValue.serverTimestamp(),
                         });
 
@@ -343,10 +380,9 @@ class _PlayerBookingSheetState extends State<PlayerBookingSheet> {
                         if (mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('تم إرسال الطلب. سيتم الإلغاء التلقائي إذا لم يوافق المالك خلال $expireMinutes دقيقة.'),
-                              backgroundColor: const Color(0xFF1B5E20),
-                              duration: const Duration(seconds: 4),
+                            const SnackBar(
+                              content: Text('تم إرسال الطلب بنجاح إلى إدارة الملعب.'),
+                              backgroundColor: Color(0xFF1B5E20),
                             ),
                           );
                         }
