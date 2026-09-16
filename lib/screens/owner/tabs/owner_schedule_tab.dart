@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../utils/time_parser_util.dart';
+import '../../../../utils/time_parser_util.dart';
 import '../sheets/add_manual_booking_sheet.dart';
 import '../../common/dialogs/match_evaluation_dialog.dart';
 import '../widgets/today_financial_card.dart';
@@ -73,6 +73,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                 await FirebaseFirestore.instance.collection('bookings').doc(docId).update({
                   'isDeleted': true,
                   'status': 'cancelled',
+                  'cancelledByOwner': true,
+                  'cancelledAt': FieldValue.serverTimestamp(),
                 });
                 if (mounted) {
                   _showCenterToast('تم إلغاء الحجز بنجاح وتفريغ الوقت');
@@ -255,7 +257,8 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                       final d = doc.data() as Map<String, dynamic>;
                       if (d['isDeleted'] == true) continue;
                       final st = (d['status'] ?? '').toString();
-                      if (st != 'confirmed') continue;
+                      // إظهار الحجوزات المؤكدة ومباريات البطولات
+                      if (st != 'confirmed' && st != 'tournament_match') continue;
 
                       final map = Map<String, dynamic>.from(d);
                       map['docId'] = doc.id;
@@ -273,7 +276,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
                           'docId': rDoc.id,
                           'pitchName': widget.pitchName,
                           'teamOne': rd['teamName'] ?? 'فريق دائم',
-                          'teamTwo': '',
+                          'teamTwo': rd['teamTwo'] ?? '',
                           'phone': rd['phone'] ?? '',
                           'date': dateStr,
                           'startTime': startTime,
