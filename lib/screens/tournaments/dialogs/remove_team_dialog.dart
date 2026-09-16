@@ -13,6 +13,10 @@ class RemoveTeamDialog {
     final reasonController = TextEditingController();
     bool isSubmitting = false;
 
+    // الخيارات الجاهزة والسريعة
+    final quickReasons = ['انسحاب الفريق', 'تأخر عن الحضور', 'مخالفة القوانين / شغب', 'سبب آخر...'];
+    String selectedReason = quickReasons[0];
+
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
@@ -35,19 +39,43 @@ class RemoveTeamDialog {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'يرجى كتابة سبب الاستبعاد لإرسال إشعار رسمي إلى كابتن الفريق:',
+                  'حدد سبب الاستبعاد لإرسال إشعار فوري للكابتن:',
                   style: TextStyle(fontSize: 12, color: Color(0xFF475569)),
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: reasonController,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'اكتب سبب الاستبعاد هنا...',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.all(12),
-                  ),
+                
+                // عرض الخيارات السريعة
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: quickReasons.map((r) {
+                    final isSelected = selectedReason == r;
+                    return ChoiceChip(
+                      label: Text(r, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                      selected: isSelected,
+                      selectedColor: Colors.red.shade700,
+                      backgroundColor: Colors.grey.shade100,
+                      onSelected: (val) {
+                        if (val) setState(() => selectedReason = r);
+                      },
+                    );
+                  }).toList(),
                 ),
+                
+                // مربع النص يظهر فقط إذا اختار "سبب آخر..."
+                if (selectedReason == 'سبب آخر...') ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'اكتب تفاصيل سبب الاستبعاد هنا...',
+                      hintStyle: const TextStyle(fontSize: 11),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
               ],
             ),
             actions: [
@@ -64,8 +92,8 @@ class RemoveTeamDialog {
                 onPressed: isSubmitting
                     ? null
                     : () async {
-                        final reason = reasonController.text.trim();
-                        if (reason.isEmpty) return;
+                        final finalReason = selectedReason == 'سبب آخر...' ? reasonController.text.trim() : selectedReason;
+                        if (finalReason.isEmpty) return;
 
                         setState(() => isSubmitting = true);
 
@@ -84,12 +112,12 @@ class RemoveTeamDialog {
                         if (captainPhone.isNotEmpty && !captainPhone.startsWith('manual_')) {
                           final notifRef = firestore.collection('notifications').doc();
                           batch.set(notifRef, {
-                            'targetPhone': captainPhone,
+                            'userPhone': captainPhone, 
                             'title': 'تحديث بخصوص اشتراك البطولة',
-                            'body': 'تم استبعاد فريقك ($teamName) من بطولة ($tournamentName). السبب: $reason',
+                            'body': 'تم استبعاد فريقك ($teamName) من بطولة ($tournamentName). السبب: $finalReason',
                             'type': 'tournament_rejection',
                             'tournamentId': tournamentId,
-                            'isRead': false,
+                            'seen': false,
                             'createdAt': FieldValue.serverTimestamp(),
                           });
                         }
