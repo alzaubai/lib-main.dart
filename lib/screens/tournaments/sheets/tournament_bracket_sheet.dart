@@ -47,8 +47,11 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
             'scoreB': 0,
             'winner': '',
             'isFinished': false,
+            'nextMatchId': 'R2_M${(i ~/ 4) + 1}',
+            'nextMatchSlot': (i % 4 == 0) ? 'teamA' : 'teamB',
           });
         } else {
+          // نظام (الباي) أو التأهل المباشر إذا كان عدد الفرق فردي
           roundMatches.add({
             'matchId': 'R1_M${(i ~/ 2) + 1}',
             'round': 1,
@@ -58,8 +61,33 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
             'scoreB': 0,
             'winner': shuffled[i],
             'isFinished': true,
+            'nextMatchId': 'R2_M${(i ~/ 4) + 1}',
+            'nextMatchSlot': (i % 4 == 0) ? 'teamA' : 'teamB',
           });
         }
+      }
+
+      // إضافة المباريات الفارغة للأدوار القادمة (نصف نهائي ونهائي) حتى يتصاعد الفائزون تلقائياً
+      int numMatchesInCurrentRound = roundMatches.length;
+      int currentRound = 2;
+      while (numMatchesInCurrentRound > 1) {
+        int nextRoundMatchesCount = (numMatchesInCurrentRound / 2).ceil();
+        for (int i = 0; i < nextRoundMatchesCount; i++) {
+          roundMatches.add({
+            'matchId': 'R${currentRound}_M${i + 1}',
+            'round': currentRound,
+            'teamA': 'بانتظار الفائز',
+            'teamB': 'بانتظار الفائز',
+            'scoreA': 0,
+            'scoreB': 0,
+            'winner': '',
+            'isFinished': false,
+            'nextMatchId': nextRoundMatchesCount > 1 ? 'R${currentRound + 1}_M${(i ~/ 2) + 1}' : null,
+            'nextMatchSlot': (i % 2 == 0) ? 'teamA' : 'teamB',
+          });
+        }
+        numMatchesInCurrentRound = nextRoundMatchesCount;
+        currentRound++;
       }
 
       await FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId).update({
@@ -67,7 +95,7 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
         'status': 'active',
       });
 
-      _showToast('تمت إجراء القرعة بنجاح');
+      _showToast('تم إجراء وتوليد القرعة بنجاح');
     } catch (_) {
       _showToast('حدث خطأ أثناء إجراء القرعة');
     } finally {
@@ -84,6 +112,17 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  // فحص هل البطولة بدأت فعلياً (لمنع إعادة القرعة عن طريق الخطأ)
+  bool _isTournamentStarted(List<dynamic> matches) {
+    if (matches.isEmpty) return false;
+    for (var m in matches) {
+      if (m['teamB'] != 'تأهل مباشر' && m['isFinished'] == true) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
@@ -106,6 +145,7 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
             final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
             final teams = List<String>.from(data['teams'] ?? []);
             final matches = List<dynamic>.from(data['matches'] ?? []);
+            final bool hasStarted = _isTournamentStarted(matches);
 
             return Column(
               children: [
@@ -146,10 +186,10 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                           ],
                         ),
                       ),
-                      if (widget.isOwner) ...[
+                      if (widget.isOwner && !hasStarted) ...[
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1B5E20),
+                            backgroundColor: matches.isEmpty ? const Color(0xFF1B5E20) : Colors.orange.shade800,
                             elevation: 0,
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -158,10 +198,32 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                               ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                               : const Icon(Icons.shuffle_rounded, size: 14, color: Colors.white),
                           label: Text(
-                            matches.isEmpty ? 'إجراء القرعة' : 'إعادة القرعة',
+                            matches.isEmpty ? 'إجراء القرعة' : 'إعادة القرعة للطوارئ',
                             style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                           ),
-                          onPressed: _isProcessing ? null : () => _generateRandomDraw(teams),
+                          onPressed: _isProcessing ? null : () {
+                            if (matches.isNotEmpty) {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('إعادة القرعة؟', style: TextStyle(color: Colors.red)),
+                                  content: const Text('تحذير: سيتم مسح الجدول الحالي وتوزيع الفرق من جديد.'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.pop(ctx);
+                                        _generateRandomDraw(teams);
+                                      },
+                                      child: const Text('إعادة التوزيع'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            } else {
+                              _generateRandomDraw(teams);
+                            }
+                          },
                         ),
                         const SizedBox(width: 4),
                       ],
@@ -209,6 +271,11 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                             final scoreB = m['scoreB'] ?? 0;
                             final winner = m['winner'] ?? '';
                             final isFinished = m['isFinished'] == true;
+                            
+                            // الحصول على اسم الدور بطريقة ديناميكية
+                            final isFinalMatch = m['nextMatchId'] == null;
+                            String roundName = 'الدور ${m['round']}';
+                            if (isFinalMatch) roundName = 'المباراة النهائية 🏆';
 
                             return Card(
                               elevation: 1.5,
@@ -220,8 +287,8 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                                     Row(
                                       children: [
                                         Text(
-                                          'المباراة ${index + 1}',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                                          roundName,
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
                                         ),
                                         const Spacer(),
                                         Container(
@@ -282,7 +349,8 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                                       ],
                                     ),
 
-                                    if (widget.isOwner && teamB != 'تأهل مباشر') ...[
+                                    // إظهار زر التعديل فقط للمالك وإذا كانت الفرق محددة وليست (بانتظار الفائز)
+                                    if (widget.isOwner && teamB != 'تأهل مباشر' && !teamA.contains('بانتظار') && !teamB.contains('بانتظار')) ...[
                                       const Divider(height: 16),
                                       Align(
                                         alignment: Alignment.centerLeft,
