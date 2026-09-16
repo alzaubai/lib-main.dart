@@ -7,6 +7,7 @@ import 'auth_screen.dart';
 import 'player/tabs/player_explore_tab.dart';
 import 'player/tabs/player_bookings_tab.dart';
 import 'tournaments/tournament_screen.dart';
+import 'player/player_archive_screen.dart'; // تمت إضافة ملف الأرشيف
 
 class PlayerScreen extends StatefulWidget {
   final String userPhone;
@@ -32,6 +33,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _fetchUserData();
+  }
+
+  // دالة لجلب كل صيغ رقم الهاتف لتجنب ضياع الإشعارات
+  List<String> _getPhoneVariants(String phone) {
+    final clean = phone.replaceAll(RegExp(r'\s+|-'), '');
+    final variants = <String>{clean};
+    if (clean.startsWith('07')) { 
+      variants.add('964${clean.substring(1)}'); 
+      variants.add('+964${clean.substring(1)}'); 
+    } else if (clean.startsWith('964')) { 
+      variants.add('0${clean.substring(3)}'); 
+      variants.add('+$clean'); 
+    } else if (clean.startsWith('+964')) { 
+      variants.add('0${clean.substring(4)}'); 
+      variants.add(clean.substring(1)); 
+    }
+    return variants.toList();
   }
 
   void _showCenterToast(String message) {
@@ -253,7 +271,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     ],
                                   ),
                                 ),
-                                // زر تسجيل الخروج في الجهة المقابلة لكرت الفريق
+                                // زر تسجيل الخروج
                                 InkWell(
                                   onTap: () {
                                     Navigator.pop(sheetCtx);
@@ -433,6 +451,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final phoneVariants = _getPhoneVariants(widget.userPhone);
+
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
@@ -495,6 +515,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ],
           ),
           actions: [
+            // تمت إضافة أيقونة الأرشيف هنا بصف الإعدادات
+            IconButton(
+              icon: const Icon(Icons.history_rounded, color: Colors.white),
+              tooltip: 'أرشيف المباريات',
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerArchiveScreen(userPhone: widget.userPhone)));
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.settings_outlined, color: Colors.white),
               tooltip: 'إعدادات الحساب',
@@ -528,11 +556,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
               label: 'المفضلة',
             ),
             NavigationDestination(
+              // تم تحديث الـ StreamBuilder ليعمل بشكل صحيح مع التنبيهات الجديدة
               icon: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('bookings')
-                    .where('phone', isEqualTo: widget.userPhone)
-                    .where('seenByPlayer', isEqualTo: false)
+                    .where('phone', whereIn: phoneVariants)
+                    .where('isSeenByPlayer', isEqualTo: false)
                     .snapshots(),
                 builder: (context, snapshot) {
                   final unread = snapshot.data?.docs.length ?? 0;
