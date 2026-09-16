@@ -126,7 +126,8 @@ class PlayerBookingsTab extends StatelessWidget {
               final price = (b['price'] as num?)?.toDouble() ?? 25000.0;
               
               // برمجة الإشعارات (التظليل بالألوان)
-              final bool isUnseen = b['isSeenByPlayer'] == false;
+              // التعديل صار هنا: مسحنا كلمة is
+              final bool isUnseen = b['seenByPlayer'] == false;
               Color cardColor = Colors.white;
               Color borderColor = const Color(0xFFCBD5E1);
 
@@ -150,8 +151,8 @@ class PlayerBookingsTab extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: InkWell(
                   onTap: isUnseen ? () async {
-                    // بمجرد الضغط: يتحدث الداتا بيس، يروح اللون، ويتصفر العداد!
-                    await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'isSeenByPlayer': true});
+                    // التعديل صار هنا أيضاً: مسحنا كلمة is
+                    await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'seenByPlayer': true});
                   } : null,
                   borderRadius: BorderRadius.circular(14),
                   child: Card(
