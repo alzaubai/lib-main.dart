@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class RemoveTeamDialog {
   static void show(
@@ -13,7 +14,6 @@ class RemoveTeamDialog {
     final reasonController = TextEditingController();
     bool isSubmitting = false;
 
-    // الخيارات الجاهزة والسريعة
     final quickReasons = ['انسحاب الفريق', 'تأخر عن الحضور', 'مخالفة القوانين / شغب', 'سبب آخر...'];
     String selectedReason = quickReasons[0];
 
@@ -38,13 +38,8 @@ class RemoveTeamDialog {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'حدد سبب الاستبعاد لإرسال إشعار فوري للكابتن:',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF475569)),
-                ),
+                const Text('حدد سبب الاستبعاد لإرسال إشعار فوري للكابتن:', style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
                 const SizedBox(height: 10),
-                
-                // عرض الخيارات السريعة
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -61,8 +56,6 @@ class RemoveTeamDialog {
                     );
                   }).toList(),
                 ),
-                
-                // مربع النص يظهر فقط إذا اختار "سبب آخر..."
                 if (selectedReason == 'سبب آخر...') ...[
                   const SizedBox(height: 12),
                   TextField(
@@ -100,7 +93,7 @@ class RemoveTeamDialog {
                         final firestore = FirebaseFirestore.instance;
                         final batch = firestore.batch();
 
-                        // 1. إزالة الفريق وتفريغ تسجيل الكابتن
+                        // 1. إزالة الفريق من البطولة
                         final tourRef = firestore.collection('tournaments').doc(tournamentId);
                         batch.update(tourRef, {
                           'teams': FieldValue.arrayRemove([teamName]),
@@ -108,16 +101,22 @@ class RemoveTeamDialog {
                             'registeredPlayers.$captainPhone': FieldValue.delete(),
                         });
 
-                        // 2. إرسال إشعار فوري ومسجل في حساب الكابتن
+                        // 2. إرسال كارت (استبعاد) يظهر في حجوزات اللاعب لتنبيهه فوراً بالنقطة الحمراء
                         if (captainPhone.isNotEmpty && !captainPhone.startsWith('manual_')) {
-                          final notifRef = firestore.collection('notifications').doc();
-                          batch.set(notifRef, {
-                            'userPhone': captainPhone, 
-                            'title': 'تحديث بخصوص اشتراك البطولة',
-                            'body': 'تم استبعاد فريقك ($teamName) من بطولة ($tournamentName). السبب: $finalReason',
-                            'type': 'tournament_rejection',
-                            'tournamentId': tournamentId,
-                            'seen': false,
+                          final bookingRef = firestore.collection('bookings').doc();
+                          batch.set(bookingRef, {
+                            'pitchName': 'بطولة: $tournamentName',
+                            'teamOne': teamName,
+                            'teamTwo': 'استبعاد من البطولة',
+                            'phone': captainPhone,
+                            'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                            'startTime': '--:--',
+                            'endTime': '--:--',
+                            'price': 0,
+                            'status': 'removed_from_tournament',
+                            'rejectionReason': finalReason, // سبب الاستبعاد
+                            'seenByPlayer': false, // حتى تطلعله نقطة حمراء
+                            'isDeleted': false,
                             'createdAt': FieldValue.serverTimestamp(),
                           });
                         }
@@ -127,12 +126,7 @@ class RemoveTeamDialog {
                         if (dialogCtx.mounted) Navigator.pop(dialogCtx);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('تم استبعاد فريق ($teamName) وإشعار الكابتن'),
-                              backgroundColor: Colors.black87,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
+                            SnackBar(content: Text('تم استبعاد الفريق وإرسال الإشعار للكابتن'), backgroundColor: Colors.black87, behavior: SnackBarBehavior.floating),
                           );
                         }
                       },
