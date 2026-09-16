@@ -30,14 +30,12 @@ class _OwnerRequestsTabState extends State<OwnerRequestsTab> {
 
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. تحديث حالة الحجز إلى confirmed لينزل فوراً بجدول المالك
       batch.update(doc.reference, {
         'status': 'confirmed',
         'seenByPlayer': false,
         'approvedAt': FieldValue.serverTimestamp(),
       });
 
-      // 2. إرسال إشعار فوري للاعب
       if (userPhone.isNotEmpty) {
         final notifRef = FirebaseFirestore.instance.collection('notifications').doc();
         batch.set(notifRef, {
@@ -77,78 +75,105 @@ class _OwnerRequestsTabState extends State<OwnerRequestsTab> {
     final reasonCtrl = TextEditingController();
     final data = doc.data() as Map<String, dynamic>;
     final teamOne = data['teamOne']?.toString() ?? 'فريق كابتن';
+    
+    final quickReasons = ['الملعب محجوز مسبقاً', 'وقت غير مناسب', 'صيانة في الملعب', 'سبب آخر...'];
+    String selectedReason = quickReasons[0];
 
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
         textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('رفض طلب حجز ($teamOne)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('يرجى تحديد سبب الرفض لإبلاغ الكابتن:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              const SizedBox(height: 10),
-              TextField(
-                controller: reasonCtrl,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: 'مثلاً: صيانة أرضية الملعب، أو الموعد محجوز مسبقاً...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.all(10),
-                ),
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text('رفض طلب حجز ($teamOne)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('حدد سبب الرفض لإبلاغ الكابتن:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: quickReasons.map((r) {
+                      final isSelected = selectedReason == r;
+                      return ChoiceChip(
+                        label: Text(r, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                        selected: isSelected,
+                        selectedColor: Colors.red.shade700,
+                        backgroundColor: Colors.grey.shade100,
+                        onSelected: (val) {
+                          if (val) setDialogState(() => selectedReason = r);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  if (selectedReason == 'سبب آخر...') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: reasonCtrl,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        hintText: 'اكتب السبب هنا...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.all(10),
+                        hintStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع', style: TextStyle(color: Colors.grey))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
-              onPressed: () async {
-                final reason = reasonCtrl.text.trim();
-                if (reason.isEmpty) return;
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع', style: TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  onPressed: () async {
+                    final finalReason = selectedReason == 'سبب آخر...' ? reasonCtrl.text.trim() : selectedReason;
+                    if (finalReason.isEmpty) return;
 
-                Navigator.pop(ctx);
-                final docId = doc.id;
-                setState(() => _processingDocs.add(docId));
+                    Navigator.pop(ctx);
+                    final docId = doc.id;
+                    setState(() => _processingDocs.add(docId));
 
-                try {
-                  final userPhone = data['phone']?.toString() ?? '';
-                  final date = data['date']?.toString() ?? '';
-                  final startTime = data['startTime']?.toString() ?? '';
+                    try {
+                      final userPhone = data['phone']?.toString() ?? '';
+                      final date = data['date']?.toString() ?? '';
+                      final startTime = data['startTime']?.toString() ?? '';
 
-                  final batch = FirebaseFirestore.instance.batch();
+                      final batch = FirebaseFirestore.instance.batch();
 
-                  batch.update(doc.reference, {
-                    'status': 'rejected',
-                    'rejectionReason': reason,
-                    'seenByPlayer': false,
-                    'rejectedAt': FieldValue.serverTimestamp(),
-                  });
+                      batch.update(doc.reference, {
+                        'status': 'rejected',
+                        'rejectionReason': finalReason, // حفظ السبب
+                        'seenByPlayer': false,
+                        'rejectedAt': FieldValue.serverTimestamp(),
+                      });
 
-                  if (userPhone.isNotEmpty) {
-                    final notifRef = FirebaseFirestore.instance.collection('notifications').doc();
-                    batch.set(notifRef, {
-                      'userPhone': userPhone,
-                      'type': 'booking_rejected',
-                      'title': 'تم الاعتذار عن موعد الحجز',
-                      'body': 'نعتذر عن حجز موعد $date ($startTime). السبب: $reason',
-                      'bookingId': docId,
-                      'seen': false,
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
-                  }
+                      if (userPhone.isNotEmpty) {
+                        final notifRef = FirebaseFirestore.instance.collection('notifications').doc();
+                        batch.set(notifRef, {
+                          'userPhone': userPhone,
+                          'type': 'booking_rejected',
+                          'title': 'تم الاعتذار عن موعد الحجز',
+                          'body': 'نعتذر عن حجز موعد $date ($startTime). السبب: $finalReason',
+                          'bookingId': docId,
+                          'seen': false,
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+                      }
 
-                  await batch.commit();
-                } catch (_) {} finally {
-                  if (mounted) setState(() => _processingDocs.remove(docId));
-                }
-              },
-              child: const Text('تأكيد الرفض', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
+                      await batch.commit();
+                    } catch (_) {} finally {
+                      if (mounted) setState(() => _processingDocs.remove(docId));
+                    }
+                  },
+                  child: const Text('تأكيد الرفض', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
