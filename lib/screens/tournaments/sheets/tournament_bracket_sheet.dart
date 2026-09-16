@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../../../constants.dart';
-import '../../../../utils/time_parser_util.dart';
 
 class TournamentBracketSheet extends StatefulWidget {
   final String tournamentId;
@@ -35,6 +34,17 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
 
     setState(() => _isProcessing = true);
     try {
+      final firestore = FirebaseFirestore.instance;
+      final batch = firestore.batch();
+
+      // **الميزة الجديدة**: تنظيف كل الحجوزات المجدولة بجدول الملعب قبل إعادة القرعة
+      final oldBookings = await firestore.collection('bookings')
+          .where('tournamentId', isEqualTo: widget.tournamentId)
+          .get();
+      for (var doc in oldBookings.docs) {
+        batch.delete(doc.reference);
+      }
+
       final shuffled = List<String>.from(teams)..shuffle(Random());
       final List<Map<String, dynamic>> roundMatches = [];
 
@@ -99,13 +109,16 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
         currentRound++;
       }
 
-      await FirebaseFirestore.instance.collection('tournaments').doc(widget.tournamentId).update({
+      final tournamentRef = firestore.collection('tournaments').doc(widget.tournamentId);
+      batch.update(tournamentRef, {
         'matches': roundMatches,
         'status': 'active',
         'drawCount': FieldValue.increment(1),
       });
 
-      _showToast('تم إجراء القرعة بنجاح وتوزيع المباريات');
+      await batch.commit();
+
+      _showToast('تم إجراء القرعة وتصفير الجداول السابقة بنجاح');
     } catch (_) {
       _showToast('حدث خطأ أثناء إجراء القرعة');
     } finally {
@@ -195,13 +208,13 @@ class _TournamentBracketSheetState extends State<TournamentBracketSheet> {
                                 context: context,
                                 builder: (ctx) => AlertDialog(
                                   title: const Text('تحذير: إعادة القرعة!', style: TextStyle(color: Colors.red)),
-                                  content: const Text('هذه آخر فرصة لإعادة القرعة. سيتم تصفير الجدول الحالي وتوزيع الفرق من جديد.'),
+                                  content: const Text('سيتم تصفير الجدول الحالي وحذف جميع مبارياته المجدولة في الملعب وتوزيع الفرق من جديد.'),
                                   actions: [
                                     TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
                                     ElevatedButton(
                                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                                       onPressed: () { Navigator.pop(ctx); _generateRandomDraw(teams); },
-                                      child: const Text('إعادة التوزيع', style: TextStyle(color: Colors.white)),
+                                      child: const Text('تأكيد الإعادة', style: TextStyle(color: Colors.white)),
                                     ),
                                   ],
                                 ),
@@ -364,7 +377,6 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
       batch.update(tournamentRef, {'status': 'completed', 'champion': winner});
     }
 
-    // إذا كانت المباراة مجدولة بجدول الملعب، نحدث نتيجتها هناك لتنتهي
     final bookingQuery = await FirebaseFirestore.instance.collection('bookings')
         .where('tournamentId', isEqualTo: widget.tournamentId)
         .where('tournamentMatchId', isEqualTo: widget.match['matchId'])
@@ -424,7 +436,6 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
 
       final batch = FirebaseFirestore.instance.batch();
       
-      // 1. تحديث بيانات المباراة في البطولة
       final updatedMatches = List<Map<String, dynamic>>.from(widget.allMatches);
       updatedMatches[widget.matchIndex] = {
         ...widget.match,
@@ -437,7 +448,6 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
         'matches': updatedMatches,
       });
 
-      // 2. إنشاء حجز فعلي ورسمي في جدول المالك
       final newBookingRef = FirebaseFirestore.instance.collection('bookings').doc();
       batch.set(newBookingRef, {
         'pitchName': widget.pitchName,
@@ -449,14 +459,14 @@ class _InlineMatchCardState extends State<_InlineMatchCard> {
         'date': dateStr,
         'startTime': sTime,
         'endTime': eTime,
-        'price': widget.entryFee, // رسوم المباراة
-        'status': 'tournament_match', // حالة مخصصة تظهر بالجدول كبطولة
+        'price': widget.entryFee,
+        'status': 'tournament_match',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       await batch.commit();
 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت جدولة المباراة وإضافتها لجدول الملعب بنجاح'), backgroundColor: Color(0xFF1B5E20)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت الجدولة بنجاح'), backgroundColor: Color(0xFF1B5E20)));
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ أثناء الجدولة'), backgroundColor: Colors.red));
     } finally {
