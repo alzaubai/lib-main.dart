@@ -14,7 +14,6 @@ class MatchEvaluationDialog {
     String selectedTag = '';
     final noteCtrl = TextEditingController();
 
-    // خيارات التقييم السريع للمالك
     final positiveOwnerTags = [
       'التزام تام بالوقت',
       'أخلاق وروح رياضية عالية',
@@ -29,7 +28,6 @@ class MatchEvaluationDialog {
       'ترك مخلفات في الملعب',
     ];
 
-    // خيارات التقييم السريع للاعب (في حال كان المقيم كابتن الفريق)
     final positivePlayerTags = [
       'أرضية ممتازة ونظيفة',
       'إضاءة قوية ورائعة',
@@ -96,7 +94,6 @@ class MatchEvaluationDialog {
                     ),
                     const SizedBox(height: 14),
 
-                    // شريط النجوم
                     Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -135,7 +132,6 @@ class MatchEvaluationDialog {
                     ),
                     const SizedBox(height: 8),
 
-                    // شرائح الاختيار السريع
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -186,10 +182,21 @@ class MatchEvaluationDialog {
               ),
               actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               actions: [
-                // زر إكمال الحجز فقط دون فرض التقييم
                 TextButton(
                   onPressed: () async {
                     Navigator.pop(ctx);
+                    
+                    // زيادة العداد
+                    final bookingSnap = await FirebaseFirestore.instance.collection('bookings').doc(bookingDocId).get();
+                    if (bookingSnap.exists) {
+                      final phone = bookingSnap.data()?['phone'];
+                      if (phone != null && phone.toString().isNotEmpty) {
+                        await FirebaseFirestore.instance.collection('users').doc(phone).update({
+                          'matchesPlayed': FieldValue.increment(1),
+                        });
+                      }
+                    }
+
                     await FirebaseFirestore.instance.collection('bookings').doc(bookingDocId).update({
                       'status': 'completed',
                     });
@@ -199,7 +206,6 @@ class MatchEvaluationDialog {
                     style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
-                // زر الإرسال والتقييم
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B5E20),
@@ -209,6 +215,18 @@ class MatchEvaluationDialog {
                   ),
                   onPressed: () async {
                     Navigator.pop(ctx);
+                    
+                    // زيادة العداد
+                    final bookingSnap = await FirebaseFirestore.instance.collection('bookings').doc(bookingDocId).get();
+                    if (bookingSnap.exists) {
+                      final phone = bookingSnap.data()?['phone'];
+                      if (phone != null && phone.toString().isNotEmpty) {
+                        await FirebaseFirestore.instance.collection('users').doc(phone).update({
+                          'matchesPlayed': FieldValue.increment(1),
+                        });
+                      }
+                    }
+
                     await FirebaseFirestore.instance.collection('match_evaluations').add({
                       'bookingId': bookingDocId,
                       'pitchName': pitchName,
