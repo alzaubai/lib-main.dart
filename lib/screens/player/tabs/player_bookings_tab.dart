@@ -124,9 +124,8 @@ class PlayerBookingsTab extends StatelessWidget {
               final time = '${b['startTime']} - ${b['endTime']}';
               final status = b['status'] ?? 'pending';
               final price = (b['price'] as num?)?.toDouble() ?? 25000.0;
+              final rejectionReason = b['rejectionReason'] ?? ''; // سبب الرفض
               
-              // برمجة الإشعارات (التظليل بالألوان)
-              // التعديل صار هنا: مسحنا كلمة is
               final bool isUnseen = b['seenByPlayer'] == false;
               Color cardColor = Colors.white;
               Color borderColor = const Color(0xFFCBD5E1);
@@ -135,7 +134,7 @@ class PlayerBookingsTab extends StatelessWidget {
                 if (status == 'confirmed') {
                   cardColor = Colors.green.shade50;
                   borderColor = Colors.green.shade400;
-                } else if (status == 'rejected') {
+                } else if (status == 'rejected' || status == 'cancelled') {
                   cardColor = Colors.red.shade50;
                   borderColor = Colors.red.shade400;
                 } else if (status == 'removed_from_tournament') {
@@ -151,7 +150,6 @@ class PlayerBookingsTab extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: InkWell(
                   onTap: isUnseen ? () async {
-                    // التعديل صار هنا أيضاً: مسحنا كلمة is
                     await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update({'seenByPlayer': true});
                   } : null,
                   borderRadius: BorderRadius.circular(14),
@@ -207,6 +205,35 @@ class PlayerBookingsTab extends StatelessWidget {
                               ),
                             ],
                           ),
+                          
+                          // إضافة سبب الرفض داخل الكارت
+                          if (status == 'rejected' && rejectionReason.toString().isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.info_outline_rounded, size: 14, color: Colors.red.shade800),
+                                      const SizedBox(width: 4),
+                                      Text('سبب الرفض:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(rejectionReason, style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ],
+
                           const Divider(height: 18),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
