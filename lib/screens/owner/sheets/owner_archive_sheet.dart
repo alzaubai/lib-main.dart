@@ -56,11 +56,10 @@ class OwnerArchiveSheet extends StatelessWidget {
             const Divider(height: 22),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
+                // الحل الجذري: جلب البيانات الأساسية فقط لمنع فشل الـ Stream
                 stream: FirebaseFirestore.instance
                     .collection('bookings')
                     .where('pitchName', isEqualTo: pitchName)
-                    .where('status', isEqualTo: 'completed')
-                    .orderBy('date', descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -68,10 +67,21 @@ class OwnerArchiveSheet extends StatelessWidget {
                   }
 
                   final docs = snapshot.data?.docs ?? [];
-                  final completedList = docs
-                      .map((d) => d.data() as Map<String, dynamic>)
-                      .where((d) => d['isDeleted'] != true)
-                      .toList();
+                  final completedList = <Map<String, dynamic>>[];
+
+                  // الفلترة والترتيب محلياً داخل التطبيق لضمان استقرار الواجهة وعدم الرمشة
+                  for (var doc in docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    if (data['status'] == 'completed' && data['isDeleted'] != true) {
+                      completedList.add(data);
+                    }
+                  }
+
+                  completedList.sort((a, b) {
+                    final dateComp = (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString());
+                    if (dateComp != 0) return dateComp;
+                    return (b['startTime'] ?? '').toString().compareTo((a['startTime'] ?? '').toString());
+                  });
 
                   if (completedList.isEmpty) {
                     return Center(
