@@ -9,7 +9,6 @@ import 'player/tabs/player_explore_tab.dart';
 import 'player/tabs/player_bookings_tab.dart';
 import 'tournaments/tournament_screen.dart';
 import 'player/player_archive_screen.dart';
-// تم مسح استدعاء خدمة الإشعارات المزعجة (Popup) من هنا
 
 class PlayerScreen extends StatefulWidget {
   final String userPhone;
@@ -35,10 +34,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _fetchUserData();
-    _cleanGhostNotifications(); // تشغيل منظف الإشعارات الوهمية
+    _cleanGhostNotifications();
   }
 
-  // دالة لجلب كل صيغ رقم الهاتف
   List<String> _getPhoneVariants(String phone) {
     final clean = phone.replaceAll(RegExp(r'\s+|-'), '');
     final variants = <String>{clean};
@@ -55,7 +53,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return variants.toList();
   }
 
-  // فلتر لمعرفة هل الحجز قديم/منتهي (لغرض تنظيف الإشعارات)
   bool _shouldBeArchived(Map<String, dynamic> data) {
     try {
       if (data['isArchived'] == true) return true;
@@ -74,7 +71,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return false;
   }
 
-  // تنظيف صامت للحجوزات القديمة غير المقروءة لتصفير النقطة الحمراء
   Future<void> _cleanGhostNotifications() async {
     try {
       final snap = await FirebaseFirestore.instance
@@ -604,10 +600,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     .where('seenByPlayer', isEqualTo: false) 
                     .snapshots(),
                 builder: (context, snapshot) {
-                  // تصفية النقطة الحمراء من الحجوزات المؤرشفة والمنتهية
                   int unreadCount = 0;
                   if (snapshot.hasData) {
-                    for (var doc in snapshot.docs) {
+                    for (var doc in snapshot.data!.docs) { // تم التصحيح هنا: snapshot.data!.docs
                        final d = doc.data() as Map<String, dynamic>;
                        if (d['isDeleted'] != true && !_shouldBeArchived(d)) {
                           unreadCount++;
