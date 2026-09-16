@@ -232,6 +232,7 @@ class PitchExploreCard extends StatelessWidget {
                         pitchName: pName,
                         hourlyRate: price,
                         userPhone: userPhone,
+                        pitchPhone: phone, // التعديل الوحيد تم هنا
                       ),
                     );
                   },
