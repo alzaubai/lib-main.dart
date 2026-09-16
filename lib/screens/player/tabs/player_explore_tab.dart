@@ -95,12 +95,24 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
           final userData = userSnap.data?.data() as Map<String, dynamic>?;
           final List<String> favoritePitches = List<String>.from(userData?['favorites'] ?? []);
 
+          // بناء الاستعلام بذكاء لتقليل قراءات قاعدة البيانات (Firestore Reads)
+          Query query = _firestore.collection('pitches');
+          if (_selectedGov != 'الكل') {
+            query = query.where('governorate', isEqualTo: _selectedGov);
+          }
+          if (_selectedArea != 'الكل') {
+            query = query.where('area', isEqualTo: _selectedArea);
+          }
+          if (_selectedSurface != 'الكل') {
+            query = query.where('surfaceType', isEqualTo: _selectedSurface);
+          }
+
           return Column(
             children: [
               if (!widget.showOnlyFavorites) _buildFilterHeader(),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: _firestore.collection('pitches').snapshots(),
+                  stream: query.snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)));
@@ -113,44 +125,38 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                       final d = doc.data() as Map<String, dynamic>;
                       final pName = (d['name'] ?? doc.id).toString();
                       final nameLower = pName.toLowerCase();
-                      final gov = (d['governorate'] ?? '').toString();
-                      final area = (d['area'] ?? '').toString();
-                      final surface = (d['surfaceType'] ?? '').toString();
 
+                      // فلترة المفضلة
                       if (widget.showOnlyFavorites && !favoritePitches.contains(pName)) {
                         continue;
                       }
 
-                      final matchesQuery = _searchQuery.isEmpty ||
-                          nameLower.contains(_searchQuery) ||
-                          gov.toLowerCase().contains(_searchQuery) ||
-                          area.toLowerCase().contains(_searchQuery);
-
-                      final matchesGov = _selectedGov == 'الكل' || gov == _selectedGov;
-                      final matchesArea = _selectedArea == 'الكل' || area == _selectedArea;
-                      final matchesSurface = _selectedSurface == 'الكل' || surface == _selectedSurface;
-
-                      if (matchesQuery && matchesGov && matchesArea && matchesSurface) {
-                        double? distKm;
-                        final lat = (d['latitude'] as num?)?.toDouble();
-                        final lng = (d['longitude'] as num?)?.toDouble();
-
-                        if (_currentPosition != null && lat != null && lng != null) {
-                          distKm = LocationService.calculateDistanceKm(
-                            startLatitude: _currentPosition!.latitude,
-                            startLongitude: _currentPosition!.longitude,
-                            endLatitude: lat,
-                            endLongitude: lng,
-                          );
-                        }
-
-                        final mapItem = Map<String, dynamic>.from(d);
-                        mapItem['name'] = pName;
-                        mapItem['calculatedDistance'] = distKm;
-                        pitchesWithDistance.add(mapItem);
+                      // الفلترة الخاصة بالنص المكتوب (Search Query)
+                      if (_searchQuery.isNotEmpty && !nameLower.contains(_searchQuery)) {
+                        continue;
                       }
+
+                      // حساب المسافة
+                      double? distKm;
+                      final lat = (d['latitude'] as num?)?.toDouble();
+                      final lng = (d['longitude'] as num?)?.toDouble();
+
+                      if (_currentPosition != null && lat != null && lng != null) {
+                        distKm = LocationService.calculateDistanceKm(
+                          startLatitude: _currentPosition!.latitude,
+                          startLongitude: _currentPosition!.longitude,
+                          endLatitude: lat,
+                          endLongitude: lng,
+                        );
+                      }
+
+                      final mapItem = Map<String, dynamic>.from(d);
+                      mapItem['name'] = pName;
+                      mapItem['calculatedDistance'] = distKm;
+                      pitchesWithDistance.add(mapItem);
                     }
 
+                    // الترتيب حسب المسافة (الأقرب أولاً)
                     pitchesWithDistance.sort((a, b) {
                       final double? d1 = a['calculatedDistance'];
                       final double? d2 = b['calculatedDistance'];
@@ -216,7 +222,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
         children: [
           TextField(
             decoration: InputDecoration(
-              hintText: 'ابحث باسم الملعب، المنطقة، أو المحافظة...',
+              hintText: 'ابحث باسم الملعب...',
               prefixIcon: const Icon(Icons.search, color: Color(0xFF1B5E20)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               filled: true,
@@ -267,6 +273,7 @@ class _PlayerExploreTabState extends State<PlayerExploreTab> {
                         _selectedGov = 'الكل';
                         _selectedArea = 'الكل';
                         _selectedSurface = 'الكل';
+                        _searchQuery = '';
                       });
                     },
                   ),
