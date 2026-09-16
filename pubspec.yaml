@@ -16,7 +16,6 @@ dependencies:
   firebase_core: ^3.6.0
   cloud_firestore: ^5.4.4
   firebase_auth: ^5.3.1
-  firebase_storage: ^12.3.7  # ضيف هذا السطر هنا
 
   # Local Storage & Utilities
   shared_preferences: ^2.3.2
