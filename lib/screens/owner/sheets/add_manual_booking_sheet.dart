@@ -2,8 +2,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import '../../../constants.dart';
-import '../../../utils/time_parser_util.dart';
+import '../../../../constants.dart';
+import '../../../../utils/time_parser_util.dart';
 
 class ModernAddBookingSheet extends StatefulWidget {
   final String pitchName;
@@ -29,7 +29,7 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
   late final TextEditingController _priceController;
 
   DateTime _selectedDate = DateTime.now();
-  late String _selectedSlot;
+  String? _selectedSlot; // تم التعديل لتكون قابلة للفراغ في حال كل الأوقات محجوزة
   late List<String> _slots;
   bool _isSaving = false;
 
@@ -42,11 +42,14 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
   }
 
   void _selectFirstAvailableSlot() {
-    final available = _slots.firstWhere(
-      (s) => !TimeParserUtil.isSlotTimePassed(_selectedDate, s),
-      orElse: () => _slots.isNotEmpty ? _slots.first : '08:00 م - 09:00 م',
-    );
-    _selectedSlot = available;
+    try {
+      final available = _slots.firstWhere(
+        (s) => !TimeParserUtil.isSlotTimePassed(_selectedDate, s),
+      );
+      _selectedSlot = available;
+    } catch (_) {
+      _selectedSlot = null; // إذا كل الأوقات مضت
+    }
   }
 
   String _getArabicDayName(DateTime date) {
@@ -55,6 +58,8 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate); // نحتاجه للبحث الذكي
+
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Container(
@@ -189,41 +194,66 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                 const SizedBox(height: 14),
                 const Text('اختر فترة وتوقيت المباراة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1B5E20))),
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: 42,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _slots.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final slot = _slots[index];
-                      final isPassed = TimeParserUtil.isSlotTimePassed(_selectedDate, slot);
-                      final isSelected = _selectedSlot == slot;
+                
+                // هنا الإضافة الذكية: StreamBuilder يقرأ الحجوزات ويقفلها مباشرة
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('bookings')
+                      .where('pitchName', isEqualTo: widget.pitchName)
+                      .where('date', isEqualTo: dateStr)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final bookedSlots = <String>{};
+                    if (snapshot.hasData) {
+                      for (var doc in snapshot.data!.docs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final status = data['status'] ?? '';
+                        if (!['cancelled', 'rejected', 'removed_from_tournament'].contains(status) && data['isDeleted'] != true) {
+                          bookedSlots.add((data['startTime'] ?? '').toString().trim());
+                        }
+                      }
+                    }
 
-                      return ChoiceChip(
-                        label: Text(
-                          isPassed ? '$slot (مضى)' : slot,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: isPassed
-                                ? Colors.grey.shade400
-                                : (isSelected ? Colors.white : Colors.black87),
-                          ),
-                        ),
-                        selected: isSelected && !isPassed,
-                        selectedColor: const Color(0xFF1B5E20),
-                        backgroundColor: isPassed ? Colors.grey.shade200 : Colors.grey.shade100,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        onSelected: isPassed
-                            ? null
-                            : (val) {
-                                if (val) setState(() => _selectedSlot = slot);
-                              },
-                      );
-                    },
-                  ),
+                    return SizedBox(
+                      height: 42,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _slots.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final slot = _slots[index];
+                          final sTime = slot.split(' - ')[0].trim();
+                          
+                          final isPassed = TimeParserUtil.isSlotTimePassed(_selectedDate, slot);
+                          final isBooked = bookedSlots.contains(sTime);
+                          final isDisabled = isPassed || isBooked; // يقفل إذا مضى أو محجوز
+                          final isSelected = _selectedSlot == slot;
+
+                          return ChoiceChip(
+                            label: Text(
+                              isBooked ? '$slot (محجوز)' : (isPassed ? '$slot (مضى)' : slot),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isDisabled ? Colors.grey.shade400 : (isSelected ? Colors.white : Colors.black87),
+                              ),
+                            ),
+                            selected: isSelected && !isDisabled,
+                            selectedColor: const Color(0xFF1B5E20),
+                            backgroundColor: isDisabled ? Colors.grey.shade200 : Colors.grey.shade100,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            onSelected: isDisabled
+                                ? null
+                                : (val) {
+                                    if (val) setState(() => _selectedSlot = slot);
+                                  },
+                          );
+                        },
+                      ),
+                    );
+                  },
                 ),
+                
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -270,8 +300,12 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
                         ? null
                         : () async {
                             if (!_formKey.currentState!.validate()) return;
+                            if (_selectedSlot == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى اختيار وقت')));
+                              return;
+                            }
 
-                            if (TimeParserUtil.isSlotTimePassed(_selectedDate, _selectedSlot)) {
+                            if (TimeParserUtil.isSlotTimePassed(_selectedDate, _selectedSlot!)) {
                               _showConflictDialog(
                                 context,
                                 conflictReason: 'الوقت المحدد قد مضى بالفعل!',
@@ -282,13 +316,13 @@ class _ModernAddBookingSheetState extends State<ModernAddBookingSheet> {
 
                             setState(() => _isSaving = true);
                             final firestore = FirebaseFirestore.instance;
-                            final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
                             final dayNameArabic = _getArabicDayName(_selectedDate);
-                            final times = _selectedSlot.split(' - ');
+                            final times = _selectedSlot!.split(' - ');
                             final sTime = times[0].trim();
                             final eTime = times.length > 1 ? times[1].trim() : '';
 
                             try {
+                              // الفحص الإضافي (الديالوك) بقى كما هو لحماية مضاعفة
                               final existingBookings = await firestore
                                   .collection('bookings')
                                   .where('pitchName', isEqualTo: widget.pitchName)
