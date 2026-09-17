@@ -124,7 +124,7 @@ class PlayerBookingsTab extends StatelessWidget {
               final time = '${b['startTime']} - ${b['endTime']}';
               final status = b['status'] ?? 'pending';
               final price = (b['price'] as num?)?.toDouble() ?? 25000.0;
-              final rejectionReason = b['rejectionReason'] ?? ''; // سبب الرفض
+              final rejectionReason = b['rejectionReason'] ?? ''; 
               
               final bool isUnseen = b['seenByPlayer'] == false;
               Color cardColor = Colors.white;
@@ -172,10 +172,7 @@ class PlayerBookingsTab extends StatelessWidget {
                               children: [
                                 Icon(Icons.notifications_active_rounded, size: 14, color: borderColor),
                                 const SizedBox(width: 6),
-                                Text(
-                                  'تحديث جديد من الإدارة! (اضغط للإخفاء)',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: borderColor),
-                                ),
+                                Text('تحديث جديد من الإدارة! (اضغط للإخفاء)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: borderColor)),
                               ],
                             ),
                             const SizedBox(height: 8),
@@ -206,8 +203,8 @@ class PlayerBookingsTab extends StatelessWidget {
                             ],
                           ),
                           
-                          // إضافة سبب الرفض داخل الكارت
-                          if (status == 'rejected' && rejectionReason.toString().isNotEmpty) ...[
+                          // هنا ضفنا حالة (طرد من البطولة) حتى يظهر السبب
+                          if ((status == 'rejected' || status == 'removed_from_tournament') && rejectionReason.toString().isNotEmpty) ...[
                             const SizedBox(height: 12),
                             Container(
                               width: double.infinity,
@@ -224,7 +221,7 @@ class PlayerBookingsTab extends StatelessWidget {
                                     children: [
                                       Icon(Icons.info_outline_rounded, size: 14, color: Colors.red.shade800),
                                       const SizedBox(width: 4),
-                                      Text('سبب الرفض:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800)),
+                                      Text('السبب:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800)),
                                     ],
                                   ),
                                   const SizedBox(height: 4),
