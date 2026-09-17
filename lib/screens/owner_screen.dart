@@ -261,7 +261,11 @@ class _OwnerScreenState extends State<OwnerScreen> with SingleTickerProviderStat
             showModalBottomSheet(
               context: context,
               backgroundColor: Colors.transparent,
-              builder: (ctx) => OwnerQuickActionsSheet(pitchName: widget.pitchName),
+              builder: (ctx) => OwnerQuickActionsSheet(
+                pitchName: widget.pitchName,
+                durationMinutes: 60, // تم إضافة المدة
+                defaultRate: 25000,  // تم إضافة السعر
+              ),
             );
           },
           tooltip: 'إجراء سريع',
