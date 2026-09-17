@@ -1,36 +1,59 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
-import '../../../constants.dart';
 
 class CreateTournamentSheet extends StatefulWidget {
   final String pitchName;
-  const CreateTournamentSheet({super.key, required this.pitchName});
+  final String ownerPhone;
+
+  const CreateTournamentSheet({
+    super.key,
+    required this.pitchName,
+    required this.ownerPhone,
+  });
 
   @override
   State<CreateTournamentSheet> createState() => _CreateTournamentSheetState();
 }
 
 class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _prizeController = TextEditingController(text: 'كأس البطولة + جوائز عينية');
-  final _feeController = TextEditingController(text: '50000');
-  final _customCapacityController = TextEditingController();
-  
-  int _maxTeams = 8;
-  bool _isCustomCapacity = false;
-  DateTime _startDate = DateTime.now().add(const Duration(days: 2));
-  late final List<String> _slots;
-  late String _defaultSlot;
-  bool _isCreating = false;
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _feeCtrl = TextEditingController(text: '25000');
+  String _selectedSize = '4 فرق';
+  bool _isSaving = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _slots = buildPitchSlots(60);
-    _defaultSlot = _slots.isNotEmpty ? _slots.first : '08:00 م - 09:00 م';
+  final sizes = ['4 فرق', '8 فرق', '16 فريق'];
+
+  void _submit() async {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى كتابة اسم البطولة'), backgroundColor: Colors.red));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final docRef = FirebaseFirestore.instance.collection('tournaments').doc();
+      int capacity = int.parse(_selectedSize.split(' ')[0]);
+      
+      await docRef.set({
+        'pitchName': widget.pitchName,
+        'ownerPhone': widget.ownerPhone,
+        'title': title,
+        'description': _descCtrl.text.trim(),
+        'entryFee': double.tryParse(_feeCtrl.text.trim()) ?? 0,
+        'capacity': capacity,
+        'status': 'registration', // registration, active, completed
+        'teams': [],
+        'registeredPlayers': {},
+        'matches': [],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -38,265 +61,144 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Container(
+        height: MediaQuery.of(context).size.height * 0.88,
         decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          color: Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        padding: EdgeInsets.only(
-          top: 14,
-          left: 20,
-          right: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 5,
-                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10)),
+                    child: Icon(Icons.emoji_events_rounded, color: Colors.orange.shade900, size: 22),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.amber.shade300),
-                      ),
-                      child: const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 28),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('إطلاق بطولة رسمية جديدة 🏆', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                        Text('الملعب: ${widget.pitchName}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text('إنشاء بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
+                        Text('نظم بطولة تنافسية في ملعبك', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
                       ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                TextFormField(
-                  controller: _titleController,
-                  decoration: InputDecoration(
-                    labelText: 'اسم أو عنوان البطولة',
-                    hintText: 'مثال: بطولة رمضان الكبرى',
-                    prefixIcon: const Icon(Icons.military_tech_rounded, color: Color(0xFF1B5E20)),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  validator: (v) => v!.trim().isEmpty ? 'يرجى كتابة اسم البطولة' : null,
-                ),
-                const SizedBox(height: 14),
-
-                // سعة الفرق (4، 8، 16 وخيار مخصص)
-                const Text('عدد الفرق المشاركة بالبطولة:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    ...[4, 8, 16].map((capacity) {
-                      final isSel = !_isCustomCapacity && _maxTeams == capacity;
-                      return Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          child: ChoiceChip(
-                            label: Center(
-                              child: Text(
-                                '$capacity فرق',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.black87),
-                              ),
-                            ),
-                            selected: isSel,
-                            selectedColor: const Color(0xFF1B5E20),
-                            backgroundColor: Colors.grey.shade100,
-                            onSelected: (val) {
-                              if (val) {
-                                setState(() {
-                                  _isCustomCapacity = false;
-                                  _maxTeams = capacity;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                      );
-                    }),
-                    Expanded(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        child: ChoiceChip(
-                          label: Center(
-                            child: Text(
-                              'مخصص ✍️',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isCustomCapacity ? Colors.white : Colors.black87),
-                            ),
-                          ),
-                          selected: _isCustomCapacity,
-                          selectedColor: const Color(0xFF1B5E20),
-                          backgroundColor: Colors.grey.shade100,
-                          onSelected: (val) {
-                            if (val) setState(() => _isCustomCapacity = true);
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_isCustomCapacity) ...[
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _customCapacityController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'اكتب عدد الفرق المشاركة (مثلاً: 10 أو 20 أو 50)',
-                      prefixIcon: const Icon(Icons.groups_rounded, color: Color(0xFF1B5E20)),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    validator: (v) {
-                      final n = int.tryParse(v?.trim() ?? '');
-                      if (n == null || n < 2) return 'يرجى كتابة عدد فرق صحيح (2 فأكثر)';
-                      return null;
-                    },
-                  ),
+                  IconButton(icon: const Icon(Icons.close_rounded, color: Colors.grey), onPressed: () => Navigator.pop(context)),
                 ],
-                const SizedBox(height: 14),
-
-                Row(
+              ),
+            ),
+            const Divider(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _feeController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'رسوم الاشتراك (د.ع)',
-                          prefixIcon: const Icon(Icons.payments_rounded, color: Colors.teal),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
+                    const Text('معلومات البطولة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.orange)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _titleCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'اسم البطولة (مثال: كأس الصيف)',
+                        prefixIcon: const Icon(Icons.tour_rounded, color: Colors.orange),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _prizeController,
-                        decoration: InputDecoration(
-                          labelText: 'جوائز البطولة',
-                          prefixIcon: const Icon(Icons.workspace_premium_rounded, color: Colors.amber),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _descCtrl,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'وصف أو جوائز البطولة (اختياري)',
+                        alignLabelWithHint: true,
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    const Text('إعدادات الاشتراك', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.orange)),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedSize,
+                            decoration: InputDecoration(
+                              labelText: 'عدد الفرق',
+                              prefixIcon: const Icon(Icons.groups_rounded, color: Colors.orange),
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                            ),
+                            items: sizes.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13)))).toList(),
+                            onChanged: (v) { if (v != null) setState(() => _selectedSize = v); },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _feeCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'رسوم المباراة',
+                              suffixText: 'د.ع',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade200)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: Colors.orange.shade800, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text('الفرق ستسجل عبر التطبيق مجاناً، ويتم دفع رسوم المباراة عند الحضور للعب.', style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange.shade800,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        onPressed: _isSaving ? null : _submit,
+                        child: _isSaving
+                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('إطلاق البطولة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
+                    ),
+                    const SizedBox(height: 30),
                   ],
                 ),
-                const SizedBox(height: 14),
-
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7FAF7),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.calendar_month_rounded, size: 18, color: Color(0xFF1B5E20)),
-                          SizedBox(width: 6),
-                          Text('تاريخ افتتاح البطولة وساعة الانطلاق:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1B5E20))),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.event_note, size: 14),
-                              label: Text(DateFormat('yyyy-MM-dd').format(_startDate), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                              onPressed: () async {
-                                final p = await showDatePicker(
-                                  context: context,
-                                  initialDate: _startDate,
-                                  firstDate: DateTime.now(),
-                                  lastDate: DateTime.now().add(const Duration(days: 90)),
-                                );
-                                if (p != null) setState(() => _startDate = p);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _defaultSlot,
-                              decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), border: OutlineInputBorder()),
-                              items: _slots.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 10)))).toList(),
-                              onChanged: (v) => setState(() => _defaultSlot = v!),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    onPressed: _isCreating
-                        ? null
-                        : () async {
-                            if (_formKey.currentState!.validate()) {
-                              setState(() => _isCreating = true);
-                              final feeVal = double.tryParse(_feeController.text.trim()) ?? 0.0;
-                              final dateStr = DateFormat('yyyy-MM-dd').format(_startDate);
-
-                              int finalCapacity = _isCustomCapacity
-                                  ? int.parse(_customCapacityController.text.trim())
-                                  : _maxTeams;
-
-                              await FirebaseFirestore.instance.collection('tournaments').add({
-                                'title': _titleController.text.trim(),
-                                'pitchName': widget.pitchName,
-                                'maxTeams': finalCapacity,
-                                'entryFee': feeVal,
-                                'prize': _prizeController.text.trim(),
-                                'status': 'registering',
-                                'startDate': dateStr,
-                                'defaultSlot': _defaultSlot,
-                                'teams': <String>[],
-                                'registeredPlayers': <String, String>{},
-                                'matches': [],
-                                'champion': null,
-                                'createdAt': FieldValue.serverTimestamp(),
-                              });
-
-                              if (mounted) {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تم إطلاق البطولة بنجاح! 🏆'), backgroundColor: Color(0xFF1B5E20)),
-                                );
-                              }
-                            }
-                          },
-                    child: _isCreating
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('نشر البطولة وفتح التسجيل 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
