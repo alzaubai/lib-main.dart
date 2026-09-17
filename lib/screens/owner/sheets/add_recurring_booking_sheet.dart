@@ -37,7 +37,6 @@ class _ModernAddRecurringSheetState extends State<ModernAddRecurringSheet> {
     _fetchPitchHours();
   }
 
-  // دالة لجلب أوقات الفتح والإغلاق الحقيقية للملعب
   Future<void> _fetchPitchHours() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('pitches').doc(widget.pitchName).get();
@@ -54,7 +53,6 @@ class _ModernAddRecurringSheetState extends State<ModernAddRecurringSheet> {
     }
   }
 
-  // توليد الأوقات
   void _generateSlots(String openStr, String closeStr, int duration) {
     List<String> slots = [];
     try {
@@ -138,13 +136,13 @@ class _ModernAddRecurringSheetState extends State<ModernAddRecurringSheet> {
       child: Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9), // حد أقصى للارتفاع
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
           decoration: const BoxDecoration(
             color: Color(0xFFF8FAFC),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min, // تاخذ حجمها المناسب فقط
+            mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 12),
               Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
@@ -164,7 +162,7 @@ class _ModernAddRecurringSheetState extends State<ModernAddRecurringSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('إضافة اشتراك دائم', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
-                          Text('يتم تكرار الحجز أسبوعياً بشكل تلقائي', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                          Text('حجز يتكرر أسبوعياً بشكل تلقائي', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
                         ],
                       ),
                     ),
@@ -173,99 +171,123 @@ class _ModernAddRecurringSheetState extends State<ModernAddRecurringSheet> {
                 ),
               ),
               const Divider(height: 16),
-              Flexible( // للسماح بالـ Scroll براحة
+              Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('بيانات المشترك', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purple)),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _teamCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'اسم الفريق / الشخص',
-                          prefixIcon: const Icon(Icons.groups_rounded, color: Colors.purple),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextField(
+                              controller: _teamCtrl,
+                              decoration: InputDecoration(
+                                labelText: 'اسم المشترك',
+                                prefixIcon: const Icon(Icons.groups_rounded, size: 18, color: Colors.purple),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: TextField(
+                              controller: _phoneCtrl,
+                              keyboardType: TextInputType.phone,
+                              decoration: InputDecoration(
+                                labelText: 'الهاتف',
+                                prefixIcon: const Icon(Icons.phone_rounded, size: 18, color: Colors.grey),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _phoneCtrl,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          labelText: 'رقم الهاتف (اختياري)',
-                          prefixIcon: const Icon(Icons.phone_rounded, color: Colors.grey),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text('تحديد يوم ووقت الاشتراك', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purple)),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         value: _selectedDay,
                         decoration: InputDecoration(
-                          labelText: 'اليوم (أسبوعياً)',
+                          labelText: 'يوم اللعب (كل أسبوع)',
                           prefixIcon: const Icon(Icons.calendar_month_rounded, color: Colors.purple),
                           filled: true,
                           fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                         ),
                         items: daysOfWeek.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
                         onChanged: (v) { if (v != null) setState(() => _selectedDay = v); },
                       ),
-                      const SizedBox(height: 16),
-                      const Text('اختر وقت اللعب المعتاد:', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 20),
+                      
+                      const Text('اختر وقت اللعب المعتاد', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purple)),
                       const SizedBox(height: 10),
                       
-                      // ترتيب الأوقات بشكل سطور عمودية 
                       _isLoadingSlots
                           ? Center(child: CircularProgressIndicator(color: Colors.purple.shade700))
                           : _availableSlots.isEmpty
                               ? const Center(child: Text('لا توجد أوقات متاحة', style: TextStyle(color: Colors.red)))
-                              : Column(
-                                  children: _availableSlots.map((slot) {
+                              : GridView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    childAspectRatio: 2.1,
+                                    crossAxisSpacing: 10,
+                                    mainAxisSpacing: 10,
+                                  ),
+                                  itemCount: _availableSlots.length,
+                                  itemBuilder: (context, index) {
+                                    final slot = _availableSlots[index];
                                     final isSelected = _selectedSlot == slot;
+                                    final times = slot.split(' - ');
+                                    final sTime = times[0];
+                                    final eTime = times.length > 1 ? times[1] : '';
+
                                     return InkWell(
                                       onTap: () => setState(() => _selectedSlot = slot),
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        margin: const EdgeInsets.only(bottom: 8),
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
                                         decoration: BoxDecoration(
                                           color: isSelected ? Colors.purple.shade700 : Colors.white,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: isSelected ? Colors.purple.shade700 : const Color(0xFFE2E8F0)),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isSelected ? Colors.purple.shade700 : const Color(0xFFE2E8F0),
+                                            width: isSelected ? 1.5 : 1,
+                                          ),
+                                          boxShadow: isSelected
+                                              ? [BoxShadow(color: Colors.purple.shade700.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))]
+                                              : [],
                                         ),
-                                        child: Row(
+                                        child: Stack(
+                                          alignment: Alignment.center,
                                           children: [
-                                            Icon(Icons.schedule_rounded, color: isSelected ? Colors.white : Colors.grey, size: 20),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              slot,
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                                color: isSelected ? Colors.white : const Color(0xFF0F172A),
-                                              ),
+                                            Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(sTime, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isSelected ? Colors.white : const Color(0xFF0F172A))),
+                                                if (eTime.isNotEmpty)
+                                                  Text('إلى $eTime', style: TextStyle(fontSize: 9.5, color: isSelected ? Colors.white70 : Colors.grey)),
+                                              ],
                                             ),
-                                            const Spacer(),
                                             if (isSelected)
-                                              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 22)
-                                            else
-                                              const Icon(Icons.circle_outlined, color: Colors.grey, size: 22),
+                                              const Positioned(top: 4, right: 4, child: Icon(Icons.check_circle_rounded, color: Colors.white, size: 12)),
                                           ],
                                         ),
                                       ),
                                     );
-                                  }).toList(),
+                                  },
                                 ),
                       const SizedBox(height: 24),
                       SizedBox(
