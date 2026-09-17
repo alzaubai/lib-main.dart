@@ -6,8 +6,15 @@ import '../../tournaments/sheets/create_tournament_sheet.dart';
 
 class OwnerQuickActionsSheet extends StatelessWidget {
   final String pitchName;
+  final int durationMinutes;
+  final double defaultRate;
 
-  const OwnerQuickActionsSheet({super.key, required this.pitchName});
+  const OwnerQuickActionsSheet({
+    super.key,
+    required this.pitchName,
+    required this.durationMinutes,
+    required this.defaultRate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -21,87 +28,41 @@ class OwnerQuickActionsSheet extends StatelessWidget {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'إجراء سريع',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-            ),
-            const SizedBox(height: 14),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            const Text('إجراءات سريعة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            const SizedBox(height: 20),
             ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1B5E20)),
-              ),
-              title: const Text('تثبيت حجز عادي يدوي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: const Text('حجز ساعة مباشرة لكابتن بدون تطبيق', style: TextStyle(fontSize: 11)),
+              leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF1B5E20))),
+              title: const Text('إضافة حجز يدوي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: const Text('تثبيت وقت محدد لفريق معين', style: TextStyle(fontSize: 12, color: Colors.grey)),
               onTap: () {
                 Navigator.pop(context);
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => ModernAddBookingSheet(
-                    pitchName: pitchName,
-                    durationMinutes: 60,
-                    defaultRate: 25000,
-                  ),
-                );
+                showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => ModernAddBookingSheet(pitchName: pitchName, durationMinutes: durationMinutes, defaultRate: defaultRate));
               },
             ),
-            const Divider(height: 1),
+            const Divider(),
             ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.repeat_rounded, color: Colors.purple.shade800),
-              ),
-              title: const Text('تثبيت حجز دائم (أسبوعي)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: const Text('حجز يوم وساعة ثابتة أسبوعياً لفريق', style: TextStyle(fontSize: 11)),
+              leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(10)), child: Icon(Icons.repeat_rounded, color: Colors.purple.shade800)),
+              title: const Text('إضافة اشتراك دائم', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: const Text('تكرار الحجز أسبوعياً تلقائياً', style: TextStyle(fontSize: 12, color: Colors.grey)),
               onTap: () {
                 Navigator.pop(context);
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => AddRecurringBookingSheet(
-                    pitchName: pitchName,
-                    defaultRate: 25000,
-                  ),
-                );
+                showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => ModernAddRecurringSheet(pitchName: pitchName, durationMinutes: durationMinutes, defaultRate: defaultRate));
               },
             ),
-            const Divider(height: 1),
+            const Divider(),
             ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.emoji_events_rounded, color: Colors.amber),
-              ),
-              title: const Text('إنشاء وإقامة بطولة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: const Text('بدء دورة كروية وفتح التسجيل للفرق', style: TextStyle(fontSize: 11)),
+              leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10)), child: Icon(Icons.emoji_events_rounded, color: Colors.orange.shade900)),
+              title: const Text('إنشاء بطولة جديدة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: const Text('تنظيم بطولة تنافسية في ملعبك', style: TextStyle(fontSize: 12, color: Colors.grey)),
               onTap: () {
                 Navigator.pop(context);
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => CreateTournamentSheet(pitchName: pitchName),
-                );
+                showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => CreateTournamentSheet(pitchName: pitchName));
               },
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
