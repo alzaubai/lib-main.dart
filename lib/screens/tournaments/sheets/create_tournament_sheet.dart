@@ -4,12 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CreateTournamentSheet extends StatefulWidget {
   final String pitchName;
-  final String ownerPhone;
 
   const CreateTournamentSheet({
     super.key,
     required this.pitchName,
-    required this.ownerPhone,
   });
 
   @override
@@ -39,12 +37,11 @@ class _CreateTournamentSheetState extends State<CreateTournamentSheet> {
       
       await docRef.set({
         'pitchName': widget.pitchName,
-        'ownerPhone': widget.ownerPhone,
         'title': title,
         'description': _descCtrl.text.trim(),
         'entryFee': double.tryParse(_feeCtrl.text.trim()) ?? 0,
         'capacity': capacity,
-        'status': 'registration', // registration, active, completed
+        'status': 'registration',
         'teams': [],
         'registeredPlayers': {},
         'matches': [],
