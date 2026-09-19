@@ -1,0 +1,142 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Prepare Permanent Keystore
+        run: |
+          if [ ! -f "keystore.jks" ]; then
+            keytool -genkeypair -v \
+              -keystore keystore.jks \
+              -storepass "malabi_secure_2026" \
+              -alias "malabi_key" \
+              -keypass "malabi_secure_2026" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Malabi, OU=App, O=Malabi, L=Baghdad, ST=Baghdad, C=IQ"
+            
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add keystore.jks
+            git commit -m "chore: save permanent keystore [skip ci]" || true
+            git push origin main || true
+          fi
+
+      - name: Create Clean Android Platform
+        run: |
+          rm -rf android
+          flutter create . --project-name football --platforms=android --org com.example
+          mkdir -p android/app
+          cp google-services.json android/app/
+          cp keystore.jks android/app/upload-keystore.jks
+
+      - name: Configure Android SDK and Gradle Properties
+        run: |
+          echo "android.useAndroidX=true" >> android/gradle.properties
+          echo "android.enableJetifier=true" >> android/gradle.properties
+          echo "flutter.compileSdkVersion=35" >> android/gradle.properties
+          echo "flutter.targetSdkVersion=35" >> android/gradle.properties
+          echo "flutter.minSdkVersion=23" >> android/gradle.properties
+
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle || true
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle || true
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle || true
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle || true
+
+      - name: Configure Gradle Signing
+        run: |
+          cat << 'EOF' > configure_signing.py
+          import re
+          path = 'android/app/build.gradle'
+          with open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          signing_config = """
+              signingConfigs {
+                  release {
+                      storeFile file("upload-keystore.jks")
+                      storePassword "malabi_secure_2026"
+                      keyAlias "malabi_key"
+                      keyPassword "malabi_secure_2026"
+                  }
+              }
+          """
+          if 'signingConfigs {' not in content:
+              content = content.replace('buildTypes {', signing_config + '\n    buildTypes {')
+
+          content = re.sub(r'signingConfig\s*=\s*signingConfigs\.debug', 'signingConfig = signingConfigs.release', content)
+          content = re.sub(r'signingConfig\s+signingConfigs\.debug', 'signingConfig signingConfigs.release', content)
+
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(content)
+          EOF
+          python3 configure_signing.py
+          rm configure_signing.py
+
+      - name: Set App Name To ملعبي
+        run: |
+          sed -i 's/android:label="football"/android:label="ملعبي"/g' android/app/src/main/AndroidManifest.xml
+
+      - name: Inject Android Queries And Permissions
+        run: |
+          sed -i '/<\/manifest>/i \    <queries>\n        <intent>\n            <action android:name="android.intent.action.DIAL" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n        <package android:name="com.waze" />\n    </queries>' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Generate Football Icon
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          curl -s -L -o ball.png "https://cdn-icons-png.flaticon.com/512/861/861512.png"
+          for dir in android/app/src/main/res/mipmap-*; do
+            convert ball.png -resize 192x192 "$dir/ic_launcher.png"
+          done
+
+      - name: Inject Firebase Gradle Config
+        run: |
+          sed -i '/id "org.jetbrains.kotlin.android"/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
+          sed -i '/id "dev.flutter.flutter-gradle-plugin"/a \    id "com.google.gms.google-services"' android/app/build.gradle
+          sed -i 's/services.gradle.org\/distributions/downloads.gradle.org\/distributions/g' android/gradle/wrapper/gradle-wrapper.properties || true
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+
+      - name: Build Signed APK With Auto-Increment Version
+        run: |
+          flutter build apk --release --no-tree-shake-icons --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
